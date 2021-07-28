@@ -45,17 +45,23 @@ impl Link {
     }
 
     fn status(&self) -> LinkStatus {
-        if self.head.exists() {
-            return match self.head.read_link() {
-                Ok(target) if target == self.tail => LinkStatus::Exists,
-                Ok(_) => LinkStatus::Invalid(Error::new(
-                    ErrorKind::AlreadyExists,
-                    "link source points to wrong target",
-                )),
-                Err(e) => LinkStatus::Invalid(e),
-            };
+        if !self.tail.exists() {
+            return LinkStatus::Invalid(Error::new(
+                ErrorKind::NotFound,
+                "link target does not exist",
+            ));
         }
-        LinkStatus::NotExists
+        if !self.head.exists() {
+            return LinkStatus::NotExists;
+        }
+        match self.head.read_link() {
+            Ok(target) if target == self.tail => LinkStatus::Exists,
+            Ok(target) => LinkStatus::Invalid(Error::new(
+                ErrorKind::AlreadyExists,
+                format!("link source points to wrong target: {:?}", target),
+            )),
+            Err(e) => LinkStatus::Invalid(e),
+        }
     }
 
     fn link(&self) -> std::io::Result<()> {
