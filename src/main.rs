@@ -1,6 +1,9 @@
 use clap::{crate_version, App, AppSettings, Arg};
+use serde::{Deserialize, Serialize};
+use serde_yaml::Value;
 use shellexpand;
-use std::io::{Error, ErrorKind};
+use std::fs::File;
+use std::io::{BufReader, Error, ErrorKind};
 use std::path::PathBuf;
 use symlink;
 
@@ -9,12 +12,23 @@ fn parse_path(path: &str) -> PathBuf {
     PathBuf::from(shellexpand::full(path).unwrap().as_ref())
 }
 
+fn parse_yaml(path: PathBuf) -> std::io::Result<()> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+    for document in serde_yaml::Deserializer::from_reader(reader) {
+        let value = Value::deserialize(document);
+        println!("{:?}", value);
+    }
+    Ok(())
+}
+
 enum LinkStatus {
     Exists,
     NotExists,
     Invalid(Error),
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 struct Link {
     // head@ -> tail
     head: PathBuf,
@@ -44,7 +58,7 @@ impl Link {
         LinkStatus::NotExists
     }
 
-    fn link(&self) -> Result<(), Error> {
+    fn link(&self) -> std::io::Result<()> {
         match self.status() {
             LinkStatus::Exists => Ok(()),
             LinkStatus::NotExists => {
@@ -55,7 +69,7 @@ impl Link {
         }
     }
 
-    fn unlink(&self) -> Result<(), Error> {
+    fn unlink(&self) -> std::io::Result<()> {
         match self.status() {
             LinkStatus::Exists => {
                 println!("Unlinking {:?}@->{:?}", self.head, self.tail);
@@ -66,7 +80,7 @@ impl Link {
     }
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> std::io::Result<()> {
     let matches = App::new("dots")
         .version(crate_version!())
         .setting(AppSettings::ArgRequiredElseHelp)
@@ -83,6 +97,8 @@ fn main() -> Result<(), Error> {
 
     let root = parse_path(matches.value_of("root").unwrap());
     println!("ROOT: {:?}", root);
+    let yaml = PathBuf::from(root).join("install.yaml");
+    parse_yaml(yaml)?;
 
     match matches.subcommand_name() {
         Some("install") => {
