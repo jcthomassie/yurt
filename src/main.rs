@@ -1,8 +1,13 @@
-use clap::{crate_version, App, AppSettings};
+use clap::{crate_version, App, AppSettings, Arg};
 use shellexpand;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use symlink;
+
+#[inline]
+fn parse_path(path: &str) -> PathBuf {
+    PathBuf::from(shellexpand::full(path).unwrap().as_ref())
+}
 
 enum LinkStatus {
     Exists,
@@ -20,8 +25,8 @@ impl Link {
     // Performs shell expansion on input paths
     fn new(head: &str, tail: &str) -> Self {
         Link {
-            head: PathBuf::from(shellexpand::full(head).unwrap().as_ref()),
-            tail: PathBuf::from(shellexpand::full(tail).unwrap().as_ref()),
+            head: parse_path(head),
+            tail: parse_path(tail),
         }
     }
 
@@ -67,7 +72,17 @@ fn main() -> Result<(), Error> {
         .setting(AppSettings::ArgRequiredElseHelp)
         .subcommand(App::new("install").about("install dotfiles"))
         .subcommand(App::new("uninstall").about("uninstall dotfiles"))
+        .arg(
+            Arg::new("root")
+                .about("dotfile repo root directory")
+                .short('r')
+                .long("root")
+                .default_value("$HOME/dotfiles"),
+        )
         .get_matches();
+
+    let root = parse_path(matches.value_of("root").unwrap());
+    println!("ROOT: {:?}", root);
 
     match matches.subcommand_name() {
         Some("install") => {
