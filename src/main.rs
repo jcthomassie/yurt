@@ -1,4 +1,4 @@
-use clap::{crate_version, App, AppSettings, Arg};
+use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 use serde::{Deserialize, Serialize};
 use serde_yaml::Value;
 use shellexpand;
@@ -82,13 +82,16 @@ impl Link {
 
 fn main() -> std::io::Result<()> {
     let matches = App::new("dots")
+        .author(crate_authors!())
         .version(crate_version!())
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .subcommand(App::new("install").about("install dotfiles"))
-        .subcommand(App::new("uninstall").about("uninstall dotfiles"))
+        .about("Simple CLI tool for dotfile management.")
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand(App::new("install").about("Installs dotfiles"))
+        .subcommand(App::new("uninstall").about("Uninstalls dotfiles"))
+        .subcommand(App::new("update").about("Updates dotfiles and/or system"))
         .arg(
             Arg::new("root")
-                .about("dotfile repo root directory")
+                .about("Dotfile repo root directory")
                 .short('r')
                 .long("root")
                 .default_value("$HOME/dotfiles"),
@@ -108,6 +111,10 @@ fn main() -> std::io::Result<()> {
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
             Link::new("~/test-source", "~/test-target").unlink()
+        }
+        Some("update") => {
+            println!("Updating dotfiles...");
+            Ok(())
         }
         _ => unreachable!(),
     }
