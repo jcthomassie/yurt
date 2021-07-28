@@ -8,7 +8,12 @@ use std::path::PathBuf;
 use symlink;
 
 #[inline]
-fn parse_path(path: &str) -> PathBuf {
+fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> PathBuf {
+    _expand_path(path.as_ref())
+}
+
+#[inline]
+fn _expand_path(path: &str) -> PathBuf {
     PathBuf::from(shellexpand::full(path).unwrap().as_ref())
 }
 
@@ -36,12 +41,20 @@ struct Link {
 }
 
 impl Link {
-    // Performs shell expansion on input paths
-    fn new(head: &str, tail: &str) -> Self {
-        Link {
-            head: parse_path(head),
-            tail: parse_path(tail),
+    fn _new(head: PathBuf, tail: PathBuf) -> Self {
+        Self {
+            head: head,
+            tail: tail,
         }
+    }
+
+    fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
+        Self::_new(head.into(), tail.into())
+    }
+
+    // Performs shell expansion on input paths
+    fn expand<S: ?Sized + AsRef<str>>(head: &S, tail: &S) -> Self {
+        Self::_new(expand_path(head), expand_path(tail))
     }
 
     fn status(&self) -> LinkStatus {
@@ -104,19 +117,19 @@ fn main() -> std::io::Result<()> {
         )
         .get_matches();
 
-    let root = parse_path(matches.value_of("root").unwrap());
+    let root = expand_path(matches.value_of("root").unwrap());
     println!("ROOT: {:?}", root);
-    let yaml = PathBuf::from(root).join("install.yaml");
+    let yaml = root.join("install.yaml");
     parse_yaml(yaml)?;
 
     match matches.subcommand_name() {
         Some("install") => {
             println!("Installing dotfiles...");
-            Link::new("~/test-source", "~/test-target").link()
+            Link::expand("~/test-source", "~/test-target").link()
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
-            Link::new("~/test-source", "~/test-target").unlink()
+            Link::expand("~/test-source", "~/test-target").unlink()
         }
         Some("update") => {
             println!("Updating dotfiles...");
