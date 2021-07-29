@@ -16,7 +16,6 @@ impl fmt::Display for DotsError {
         match self {
             Self::Upstream(e) => write!(f, "{}", e),
             Self::Message(e) => write!(f, "{}", e),
-            _ => write!(f, "unspecified error"),
         }
     }
 }

@@ -7,12 +7,7 @@ use symlink;
 
 #[inline]
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
-    _expand_path(path.as_ref())
-}
-
-#[inline]
-fn _expand_path(path: &str) -> DotsResult<PathBuf> {
-    Ok(PathBuf::from(shellexpand::full(path)?.as_ref()))
+    Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
 pub enum LinkStatus {
@@ -29,20 +24,16 @@ pub struct Link {
 }
 
 impl Link {
-    fn _new(head: PathBuf, tail: PathBuf) -> Self {
-        Self {
-            head: head,
-            tail: tail,
-        }
-    }
-
     pub fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
-        Self::_new(head.into(), tail.into())
+        Self {
+            head: head.into(),
+            tail: tail.into(),
+        }
     }
 
     // Returns new link with paths expanded
     pub fn expand(&self) -> DotsResult<Self> {
-        Ok(Self::_new(
+        Ok(Self::new(
             expand_path(self.head.to_str().ok_or("")?)?,
             expand_path(self.tail.to_str().ok_or("")?)?,
         ))
