@@ -3,7 +3,7 @@ mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), yaml::YamlError> {
     let matches = App::new("dots")
         .author(crate_authors!())
         .version(crate_version!())
