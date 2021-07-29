@@ -9,13 +9,18 @@ use yaml::{Directive, YamlBuild};
 fn install(build: YamlBuild) -> DotsResult<()> {
     for item in build.build.iter() {
         match item {
-            Directive::Link(ln) => ln.link()?,
+            Directive::Link(ln) => ln.expand()?.link()?,
         };
     }
     Ok(())
 }
 
 fn uninstall(build: YamlBuild) -> DotsResult<()> {
+    for item in build.build.iter() {
+        match item {
+            Directive::Link(ln) => ln.expand()?.unlink()?,
+        };
+    }
     Ok(())
 }
 

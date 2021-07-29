@@ -40,9 +40,12 @@ impl Link {
         Self::_new(head.into(), tail.into())
     }
 
-    // Performs shell expansion on input paths
-    pub fn expand<S: ?Sized + AsRef<str>>(head: &S, tail: &S) -> DotsResult<Self> {
-        Ok(Self::_new(expand_path(head)?, expand_path(tail)?))
+    // Returns new link with paths expanded
+    pub fn expand(&self) -> DotsResult<Self> {
+        Ok(Self::_new(
+            expand_path(self.head.to_str().ok_or("")?)?,
+            expand_path(self.tail.to_str().ok_or("")?)?,
+        ))
     }
 
     // Get current status of link

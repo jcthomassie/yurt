@@ -7,6 +7,7 @@ pub type DotsResult<T> = Result<T, DotsError>;
 
 #[derive(Debug)]
 pub enum DotsError {
+    Message(String),
     Upstream(Box<dyn Error>),
 }
 
@@ -14,6 +15,7 @@ impl fmt::Display for DotsError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Upstream(e) => write!(f, "{}", e),
+            Self::Message(e) => write!(f, "{}", e),
             _ => write!(f, "unspecified error"),
         }
     }
@@ -25,6 +27,18 @@ impl Error for DotsError {
             Self::Upstream(e) => Some(e.as_ref()),
             _ => None,
         }
+    }
+}
+
+impl From<&str> for DotsError {
+    fn from(e: &str) -> Self {
+        Self::Message(e.to_string())
+    }
+}
+
+impl From<String> for DotsError {
+    fn from(e: String) -> Self {
+        Self::Message(e)
     }
 }
 
