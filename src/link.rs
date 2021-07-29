@@ -1,17 +1,18 @@
-use serde::{Deserialize, Serialize};
+use super::error::DotsResult;
+use serde::Deserialize;
 use shellexpand;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use symlink;
 
 #[inline]
-pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> PathBuf {
+pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
     _expand_path(path.as_ref())
 }
 
 #[inline]
-fn _expand_path(path: &str) -> PathBuf {
-    PathBuf::from(shellexpand::full(path).unwrap().as_ref())
+fn _expand_path(path: &str) -> DotsResult<PathBuf> {
+    Ok(PathBuf::from(shellexpand::full(path)?.as_ref()))
 }
 
 pub enum LinkStatus {
@@ -20,7 +21,7 @@ pub enum LinkStatus {
     Invalid(Error),
 }
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Link {
     // head@ -> tail
     head: PathBuf,
@@ -40,8 +41,8 @@ impl Link {
     }
 
     // Performs shell expansion on input paths
-    pub fn expand<S: ?Sized + AsRef<str>>(head: &S, tail: &S) -> Self {
-        Self::_new(expand_path(head), expand_path(tail))
+    pub fn expand<S: ?Sized + AsRef<str>>(head: &S, tail: &S) -> DotsResult<Self> {
+        Ok(Self::_new(expand_path(head)?, expand_path(tail)?))
     }
 
     // Get current status of link

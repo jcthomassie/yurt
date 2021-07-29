@@ -1,9 +1,29 @@
+mod error;
 mod link;
 mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
+use error::DotsResult;
+use yaml::{Directive, YamlBuild};
 
-fn main() -> Result<(), yaml::YamlError> {
+fn install(build: YamlBuild) -> DotsResult<()> {
+    for item in build.build.iter() {
+        match item {
+            Directive::Link(ln) => ln.link()?,
+        };
+    }
+    Ok(())
+}
+
+fn uninstall(build: YamlBuild) -> DotsResult<()> {
+    Ok(())
+}
+
+fn update() -> DotsResult<()> {
+    Ok(())
+}
+
+fn main() -> DotsResult<()> {
     let matches = App::new("dots")
         .author(crate_authors!())
         .version(crate_version!())
@@ -21,22 +41,20 @@ fn main() -> Result<(), yaml::YamlError> {
         )
         .get_matches();
 
-    let root = link::expand_path(matches.value_of("root").unwrap());
-    println!("ROOT: {:?}", root);
-    yaml::parse(root.join("install.yaml"))?;
+    let root = link::expand_path(matches.value_of("root").unwrap()).unwrap();
 
     match matches.subcommand_name() {
         Some("install") => {
             println!("Installing dotfiles...");
-            Ok(())
+            install(yaml::parse(root.join("install.yaml"))?)
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
-            Ok(())
+            uninstall(yaml::parse(root.join("install.yaml"))?)
         }
         Some("update") => {
             println!("Updating dotfiles...");
-            Ok(())
+            update()
         }
         _ => unreachable!(),
     }
