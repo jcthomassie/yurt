@@ -3,25 +3,38 @@ mod link;
 mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
-use error::DotsResult;
-use yaml::{Directive, YamlBuild};
+use error::{DotsError, DotsResult};
+use git2::Repository;
+use std::path::PathBuf;
+use yaml::BuildCase;
 
-fn install(build: YamlBuild) -> DotsResult<()> {
-    for item in build.build.iter() {
-        match item {
-            Directive::Link(ln) => ln.expand()?.link()?,
-        };
+fn open_dotfiles(local: &PathBuf) -> DotsResult<Repository> {
+    let repo = Repository::open(local);
+    match repo {
+        Err(e) => Err(DotsError::Upstream(Box::new(e))),
+        Ok(r) => Ok(r),
     }
-    Ok(())
 }
 
-fn uninstall(build: YamlBuild) -> DotsResult<()> {
-    for item in build.build.iter() {
-        match item {
-            Directive::Link(ln) => ln.expand()?.unlink()?,
-        };
+fn clone_dotfiles(local: &PathBuf, remote: &str) -> DotsResult<()> {
+    match Repository::clone_recurse(remote, local) {
+        Err(e) => Err(DotsError::Upstream(Box::new(e))),
+        Ok(_) => Ok(()),
     }
-    Ok(())
+}
+
+fn install(case: &BuildCase) -> DotsResult<()> {
+    case.link
+        .iter()
+        .map(|ln| Ok(ln).and_then(|ln| ln.expand()).and_then(|ln| ln.link()))
+        .collect()
+}
+
+fn uninstall(case: &BuildCase) -> DotsResult<()> {
+    case.link
+        .iter()
+        .map(|ln| Ok(ln).and_then(|ln| ln.expand()).and_then(|ln| ln.unlink()))
+        .collect()
 }
 
 fn update() -> DotsResult<()> {
@@ -51,11 +64,15 @@ fn main() -> DotsResult<()> {
     match matches.subcommand_name() {
         Some("install") => {
             println!("Installing dotfiles...");
-            install(yaml::parse(root.join("install.yaml"))?)
+            // TODO: handle errors correctly
+            yaml::parse(root.join("install.yaml"))?.apply(install);
+            Ok(())
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
-            uninstall(yaml::parse(root.join("install.yaml"))?)
+            // TODO: handle errors correctly
+            yaml::parse(root.join("install.yaml"))?.apply(uninstall);
+            Ok(())
         }
         Some("update") => {
             println!("Updating dotfiles...");
