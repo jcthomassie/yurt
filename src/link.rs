@@ -61,23 +61,23 @@ impl Link {
     }
 
     // Try to create link if it does not already exist
-    pub fn link(&self) -> std::io::Result<()> {
+    pub fn link(&self) -> DotsResult<()> {
         match self.status() {
             LinkStatus::Exists => Ok(()),
             LinkStatus::NotExists => {
                 println!("Linking {:?}@->{:?}", &self.head, &self.tail);
-                symlink::symlink_file(&self.tail, &self.head)
+                Ok(symlink::symlink_file(&self.tail, &self.head)?)
             }
-            LinkStatus::Invalid(e) => Err(e),
+            LinkStatus::Invalid(e) => Err(e.into()),
         }
     }
 
     // Try to remove link if it exists
-    pub fn unlink(&self) -> std::io::Result<()> {
+    pub fn unlink(&self) -> DotsResult<()> {
         match self.status() {
             LinkStatus::Exists => {
                 println!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
-                symlink::remove_symlink_file(&self.head)
+                Ok(symlink::remove_symlink_file(&self.head)?)
             }
             _ => Ok(()),
         }
