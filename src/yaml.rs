@@ -1,40 +1,67 @@
 use super::error::DotsResult;
 use super::link::Link;
 use super::repo::Repo;
+use lazy_static::lazy_static;
 use serde::Deserialize;
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use whoami;
 
-#[derive(Debug, PartialEq, Deserialize)]
-pub struct Locale {
-    user: Option<String>,
-    platform: Option<String>,
-    distro: Option<String>,
+lazy_static! {
+    pub static ref LOCALE: Locale<Cow<'static, str>> = Locale {
+        user: Cow::Owned(whoami::username()),
+        platform: Cow::Owned(format!("{:?}", whoami::platform())),
+        distro: Cow::Owned(
+            whoami::distro()
+                .split(" ")
+                .next()
+                .map(String::from)
+                .expect("failed to determine distro"),
+        ),
+    };
 }
 
-impl Locale {
-    pub fn auto() -> Self {
-        Self {
-            user: Some(whoami::username()),
-            platform: Some(format!("{:?}", whoami::platform())),
-            distro: whoami::distro().split(" ").next().map(String::from),
-        }
-    }
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Locale<T> {
+    user: T,
+    platform: T,
+    distro: T,
+}
 
-    pub fn is_subset(&self, other: &Self) -> bool {
-        (self.user.is_none() || self.user == other.user)
-            && (self.platform.is_none() || self.platform == other.platform)
-            && (self.distro.is_none() || self.distro == other.distro)
+impl Locale<Option<String>> {
+    pub fn is_local(&self) -> bool {
+        let s_vals = vec![
+            self.user.as_deref(),
+            self.platform.as_deref(),
+            self.distro.as_deref(),
+        ];
+        let o_vals = vec![
+            LOCALE.user.as_ref(),
+            LOCALE.platform.as_ref(),
+            LOCALE.distro.as_ref(),
+        ];
+        s_vals
+            .into_iter()
+            .zip(o_vals.into_iter())
+            .all(|(s, o)| match s {
+                Some(val) if val != o => false,
+                _ => true,
+            })
     }
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case {
-    Local { spec: Locale, build: Vec<BuildUnit> },
-    Default { build: Vec<BuildUnit> },
+    Local {
+        spec: Locale<Option<String>>,
+        build: Vec<BuildUnit>,
+    },
+    Default {
+        build: Vec<BuildUnit>,
+    },
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -50,14 +77,12 @@ impl BuildUnit {
     pub fn resolve(&self) -> Vec<Link> {
         match self {
             Self::CaseVec(cv) => {
-                // TODO: make locale static
-                let locale = Locale::auto();
                 let mut default = true;
                 // Build flat vec of links
                 let mut ln: Vec<Link> = Vec::new();
                 for case in cv.iter() {
                     match case {
-                        Case::Local { spec, build } if spec.is_subset(&locale) => {
+                        Case::Local { spec, build } if spec.is_local() => {
                             default = false;
                             for unit in build.iter() {
                                 ln.extend(unit.resolve())

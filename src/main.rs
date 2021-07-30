@@ -36,6 +36,8 @@ fn main() -> DotsResult<()> {
 
     match matches.subcommand_name() {
         Some("show") => {
+            println!("Locale:\n{:#?}", *yaml::LOCALE);
+            println!("_______________________________________");
             println!("Build:\n{:#?}", build);
             println!("_______________________________________");
             println!("Links:\n{:#?}", links);
