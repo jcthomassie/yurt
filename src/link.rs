@@ -16,7 +16,7 @@ pub enum LinkStatus {
     Invalid(Error),
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Link {
     // head@ -> tail
     head: PathBuf,
