@@ -1,5 +1,6 @@
 mod error;
 mod link;
+mod pack;
 mod repo;
 mod yaml;
 
@@ -38,21 +39,22 @@ fn main() -> DotsResult<()> {
             println!("Build:\n{:#?}", build);
             println!("_______________________________________");
             println!("Links:\n{:#?}", links);
-            Ok(())
         }
         Some("install") => {
             println!("Installing dotfiles...");
             build.repo.require()?;
-            link::install_links(links)
+            link::install_links(links)?;
+            pack::Shell::Zsh.chsh()?;
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
-            link::uninstall_links(links)
+            link::uninstall_links(links)?;
         }
         Some("update") => {
             println!("Updating dotfiles...");
-            update()
+            update()?;
         }
         _ => unreachable!(),
     }
+    Ok(())
 }
