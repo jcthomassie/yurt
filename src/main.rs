@@ -43,6 +43,7 @@ fn main() -> DotsResult<()> {
         }
         Some("install") => {
             println!("Installing dotfiles...");
+            build.repo.require()?;
             link::install_links(links)
         }
         Some("uninstall") => {

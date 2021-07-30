@@ -18,10 +18,17 @@ impl Repo {
         }
     }
 
-    pub fn clone(&self) -> DotsResult<()> {
+    pub fn clone(&self) -> DotsResult<Repository> {
         match Repository::clone_recurse(self.remote.as_ref(), expand_path(self.local.as_str())?) {
             Err(e) => Err(DotsError::Upstream(Box::new(e))),
-            Ok(_) => Ok(()),
+            Ok(r) => Ok(r),
+        }
+    }
+
+    pub fn require(&self) -> DotsResult<Repository> {
+        match self.open() {
+            Err(_) => self.clone(),
+            Ok(r) => Ok(r),
         }
     }
 }
