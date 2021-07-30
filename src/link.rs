@@ -10,6 +10,20 @@ pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
     Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
+pub fn install_links(links: Vec<Link>) -> DotsResult<()> {
+    links
+        .iter()
+        .map(|ln| ln.expand().and_then(|ln| ln.link()))
+        .collect()
+}
+
+pub fn uninstall_links(links: Vec<Link>) -> DotsResult<()> {
+    links
+        .iter()
+        .map(|ln| ln.expand().and_then(|ln| ln.unlink()))
+        .collect()
+}
+
 pub enum LinkStatus {
     Exists,
     NotExists,

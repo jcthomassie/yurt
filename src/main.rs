@@ -1,41 +1,11 @@
 #![feature(drain_filter)]
 mod error;
 mod link;
+mod repo;
 mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg};
-use error::{DotsError, DotsResult};
-use git2::Repository;
-use std::path::PathBuf;
-
-fn open_dotfiles(local: &PathBuf) -> DotsResult<Repository> {
-    let repo = Repository::open(local);
-    match repo {
-        Err(e) => Err(DotsError::Upstream(Box::new(e))),
-        Ok(r) => Ok(r),
-    }
-}
-
-fn clone_dotfiles(local: &PathBuf, remote: &str) -> DotsResult<()> {
-    match Repository::clone_recurse(remote, local) {
-        Err(e) => Err(DotsError::Upstream(Box::new(e))),
-        Ok(_) => Ok(()),
-    }
-}
-
-fn install_links(links: Vec<link::Link>) -> DotsResult<()> {
-    links
-        .iter()
-        .map(|ln| ln.expand().and_then(|ln| ln.link()))
-        .collect()
-}
-
-fn uninstall_links(links: Vec<link::Link>) -> DotsResult<()> {
-    links
-        .iter()
-        .map(|ln| ln.expand().and_then(|ln| ln.unlink()))
-        .collect()
-}
+use error::DotsResult;
 
 fn update() -> DotsResult<()> {
     Ok(())
@@ -73,13 +43,11 @@ fn main() -> DotsResult<()> {
         }
         Some("install") => {
             println!("Installing dotfiles...");
-            // TODO: handle errors correctly
-            install_links(links)
+            link::install_links(links)
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
-            // TODO: handle errors correctly
-            uninstall_links(links)
+            link::uninstall_links(links)
         }
         Some("update") => {
             println!("Updating dotfiles...");

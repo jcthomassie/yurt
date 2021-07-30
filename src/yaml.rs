@@ -1,16 +1,11 @@
 use super::error::DotsResult;
 use super::link::Link;
+use super::repo::Repo;
 use serde::Deserialize;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use whoami;
-
-#[derive(Debug, PartialEq, Deserialize)]
-pub struct Repo {
-    local: String,
-    remote: String,
-}
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Locale {
