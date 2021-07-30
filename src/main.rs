@@ -1,4 +1,3 @@
-#![feature(drain_filter)]
 mod error;
 mod link;
 mod repo;
