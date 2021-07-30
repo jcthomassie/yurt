@@ -44,7 +44,14 @@ pub enum BuildScope {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
+pub struct Repo {
+    local: String,
+    remote: String,
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Build {
+    repo: Repo,
     build: Vec<BuildScope>,
 }
 

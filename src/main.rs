@@ -50,28 +50,34 @@ fn main() -> DotsResult<()> {
         .subcommand(App::new("install").about("Installs dotfiles"))
         .subcommand(App::new("uninstall").about("Uninstalls dotfiles"))
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
+        .subcommand(App::new("show").about("Shows the build config"))
         .arg(
-            Arg::new("root")
-                .about("Dotfile repo root directory")
-                .short('r')
-                .long("root")
-                .default_value("$HOME/dotfiles"),
+            Arg::new("yaml")
+                .about("YAML build file path")
+                .short('y')
+                .long("yaml")
+                .default_value("$HOME/dotfiles/install.yaml"),
         )
         .get_matches();
 
-    let root = link::expand_path(matches.value_of("root").unwrap()).unwrap();
+    let yaml = link::expand_path(matches.value_of("yaml").unwrap()).unwrap();
+    let build = yaml::parse(yaml)?;
 
     match matches.subcommand_name() {
+        Some("show") => {
+            println!("{:#?}", build);
+            Ok(())
+        }
         Some("install") => {
             println!("Installing dotfiles...");
             // TODO: handle errors correctly
-            yaml::parse(root.join("install.yaml"))?.apply(install);
+            build.apply(install);
             Ok(())
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
             // TODO: handle errors correctly
-            yaml::parse(root.join("install.yaml"))?.apply(uninstall);
+            build.apply(uninstall);
             Ok(())
         }
         Some("update") => {
