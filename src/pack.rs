@@ -1,34 +1,43 @@
 use super::error::DotsResult;
+use lazy_static::lazy_static;
+use std::borrow::Cow;
+use std::env;
 use std::process::{Command, Stdio};
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 const PM: PackageManager = PackageManager::Brew;
 #[cfg(target_os = "windows")]
 const PM: PackageManager = PackageManager::Choco;
-#[cfg(target_os = "macos")]
-const PM: PackageManager = PackageManager::Brew;
 
-// TODO: read environment variable
-static SH: Shell = Shell::Zsh;
+lazy_static! {
+    static ref SH: Shell<'static> = match env::var("SHELL").expect("failed to read shell").as_ref()
+    {
+        "sh" => Shell::Sh,
+        "bash" => Shell::Bash,
+        "zsh" => Shell::Zsh,
+        "pwsh" => Shell::Powershell,
+        other => Shell::Other(Cow::Owned(other.to_string())),
+    };
+}
 
 enum PackageManager {
+    Apt,
+    AptGet,
     Brew,
     Cargo,
     Choco,
     Yum,
-    Apt,
-    AptGet,
 }
 
 impl PackageManager {
     fn name(&self) -> &str {
         match self {
+            Self::Apt => "apt",
+            Self::AptGet => "apt-get",
             Self::Brew => "brew",
             Self::Cargo => "cargo",
             Self::Choco => "choco",
             Self::Yum => "yum",
-            Self::Apt => "apt",
-            Self::AptGet => "apt-get",
         }
     }
 
@@ -54,9 +63,9 @@ impl PackageManager {
     // Install a package
     pub fn install(&self, package: &str) -> DotsResult<()> {
         match self {
-            Self::Yum => self._sudo_install(package),
             Self::Apt => self._sudo_install(package),
             Self::AptGet => self._sudo_install(package),
+            Self::Yum => self._sudo_install(package),
             _ => self._install(package),
         }
     }
@@ -64,24 +73,25 @@ impl PackageManager {
     // Install the package manager and perform setup
     pub fn bootstrap(&self) -> DotsResult<()> {
         match self {
+            Self::Apt => Ok(()),
+            Self::AptGet => Ok(()),
             Self::Brew => Ok(()),
             Self::Cargo => Ok(()),
             Self::Choco => Ok(()),
             Self::Yum => Ok(()),
-            Self::Apt => Ok(()),
-            Self::AptGet => Ok(()),
         }
     }
 }
 
-pub enum Shell {
+pub enum Shell<'a> {
     Sh,
     Bash,
     Zsh,
     Powershell,
+    Other(Cow<'a, str>),
 }
 
-impl Shell {
+impl<'a> Shell<'a> {
     #[inline(always)]
     fn path(&self) -> &str {
         match self {
@@ -89,6 +99,7 @@ impl Shell {
             Self::Bash => "bash",
             Self::Zsh => "zsh",
             Self::Powershell => "pwsh",
+            Self::Other(name) => name,
         }
     }
 
@@ -117,6 +128,7 @@ impl Shell {
             Self::Bash => Ok(()),
             Self::Zsh => Ok(()),
             Self::Powershell => Ok(()),
+            Self::Other(_) => Ok(()),
         }
     }
 }
