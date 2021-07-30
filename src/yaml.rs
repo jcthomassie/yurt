@@ -4,6 +4,7 @@ use super::repo::Repo;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -74,31 +75,32 @@ pub enum BuildUnit {
 
 impl BuildUnit {
     // Recursively resolve all case units; collect into single vec
-    pub fn resolve(&self) -> Vec<Link> {
+    pub fn resolve(&self) -> DotsResult<Vec<Link>> {
         match self {
+            // Recursively filter case units
             Self::CaseVec(cv) => {
                 let mut default = true;
-                // Build flat vec of links
                 let mut ln: Vec<Link> = Vec::new();
                 for case in cv.iter() {
                     match case {
                         Case::Local { spec, build } if spec.is_local() => {
                             default = false;
                             for unit in build.iter() {
-                                ln.extend(unit.resolve())
+                                ln.extend(unit.resolve()?)
                             }
                         }
                         Case::Default { build } if default => {
                             for unit in build.iter() {
-                                ln.extend(unit.resolve())
+                                ln.extend(unit.resolve()?)
                             }
                         }
                         _ => (),
                     };
                 }
-                ln
+                Ok(ln)
             }
-            Self::LinkVec(ln) => ln.clone(),
+            // Expand links
+            Self::LinkVec(ln) => ln.iter().map(|ln| ln.expand()).collect(),
         }
     }
 }
@@ -110,12 +112,14 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn resolve(&self) -> Vec<Link> {
+    pub fn resolve(&self) -> DotsResult<Vec<Link>> {
+        let repo = self.repo.resolve()?;
+        env::set_var("DOTS_REPO_LOCAL", repo.local);
         let mut ln: Vec<Link> = Vec::new();
         for unit in self.build.iter() {
-            ln.extend(unit.resolve());
+            ln.extend(unit.resolve()?);
         }
-        ln
+        Ok(ln)
     }
 }
 

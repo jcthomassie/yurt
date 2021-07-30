@@ -5,23 +5,19 @@ use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use symlink;
 
-#[inline]
+#[inline(always)]
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
     Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
+#[inline(always)]
 pub fn install_links(links: Vec<Link>) -> DotsResult<()> {
-    links
-        .iter()
-        .map(|ln| ln.expand().and_then(|ln| ln.link()))
-        .collect()
+    links.iter().map(|ln| ln.link()).collect()
 }
 
+#[inline(always)]
 pub fn uninstall_links(links: Vec<Link>) -> DotsResult<()> {
-    links
-        .iter()
-        .map(|ln| ln.expand().and_then(|ln| ln.unlink()))
-        .collect()
+    links.iter().map(|ln| ln.unlink()).collect()
 }
 
 pub enum LinkStatus {
@@ -68,7 +64,10 @@ impl Link {
             Ok(target) if target == self.tail => LinkStatus::Exists,
             Ok(target) => LinkStatus::Invalid(Error::new(
                 ErrorKind::AlreadyExists,
-                format!("link source points to wrong target: {:?}", target),
+                format!(
+                    "link source points to wrong target: {:?}@=>{:?} != {:?}",
+                    self.head, target, self.tail
+                ),
             )),
             Err(e) => LinkStatus::Invalid(e),
         }

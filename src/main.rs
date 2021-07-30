@@ -32,7 +32,7 @@ fn main() -> DotsResult<()> {
 
     let yaml = link::expand_path(matches.value_of("yaml").unwrap()).unwrap();
     let build = yaml::parse(yaml.clone())?;
-    let links = build.resolve();
+    let links = build.resolve()?;
 
     match matches.subcommand_name() {
         Some("show") => {

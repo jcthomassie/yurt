@@ -15,4 +15,5 @@ serde_yaml = "0.8"
 shellexpand = "2.1.0"
 symlink = "0.1.0"
 tempfile = "3.2.0"
+url = { version = "2", features = ["serde"] }
 whoami = "1.1.2"
