@@ -6,6 +6,8 @@ mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
+use std::env;
+use std::process::Command;
 
 #[inline(always)]
 fn parse_build(matches: &ArgMatches) -> DotsResult<yaml::Build> {
@@ -56,6 +58,13 @@ fn clean(matches: ArgMatches) -> DotsResult<()> {
     Ok(())
 }
 
+fn edit() -> DotsResult<()> {
+    Command::new(env::var("EDITOR").expect("system editor is unset"))
+        .arg(env::var("DOTS_REPO_ROOT").expect("dotfile repo root is unset"))
+        .output()?;
+    Ok(())
+}
+
 fn update() -> DotsResult<()> {
     println!("Updating dotfiles...");
     Ok(())
@@ -67,6 +76,7 @@ fn main() -> DotsResult<()> {
         .version(crate_version!())
         .about("Simple CLI tool for dotfile management.")
         .setting(AppSettings::SubcommandRequiredElseHelp)
+        .setting(AppSettings::ColoredHelp)
         .subcommand(
             App::new("install").about("Installs dotfiles").arg(
                 Arg::new("clean")
@@ -77,8 +87,9 @@ fn main() -> DotsResult<()> {
             ),
         )
         .subcommand(App::new("uninstall").about("Uninstalls dotfiles"))
-        .subcommand(App::new("clean").about("Cleans output destinations"))
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
+        .subcommand(App::new("clean").about("Cleans output destinations"))
+        .subcommand(App::new("edit").about("Opens dotfile repo in system editor"))
         .subcommand(App::new("show").about("Shows the build config"))
         .arg(
             Arg::new("yaml")
@@ -95,6 +106,7 @@ fn main() -> DotsResult<()> {
         Some("uninstall") => uninstall(matches),
         Some("clean") => clean(matches),
         Some("update") => update(),
+        Some("edit") => edit(),
         _ => unreachable!(),
     }
 }
