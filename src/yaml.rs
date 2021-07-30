@@ -112,14 +112,14 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn resolve(&self) -> DotsResult<Vec<Link>> {
+    pub fn resolve(&self) -> DotsResult<(Repo, Vec<Link>)> {
         let repo = self.repo.resolve()?;
-        env::set_var("DOTS_REPO_LOCAL", repo.local);
+        env::set_var("DOTS_REPO_LOCAL", &repo.local);
         let mut ln: Vec<Link> = Vec::new();
         for unit in self.build.iter() {
             ln.extend(unit.resolve()?);
         }
-        Ok(ln)
+        Ok((repo, ln))
     }
 }
 

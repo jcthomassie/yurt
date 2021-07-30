@@ -4,10 +4,55 @@ mod pack;
 mod repo;
 mod yaml;
 
-use clap::{crate_authors, crate_version, App, AppSettings, Arg};
+use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
 
+#[inline(always)]
+fn parse_build(matches: ArgMatches) -> DotsResult<yaml::Build> {
+    yaml::parse(link::expand_path(matches.value_of("yaml").unwrap())?)
+}
+
+#[inline(always)]
+fn parse_resolve_build(matches: ArgMatches) -> DotsResult<(repo::Repo, Vec<link::Link>)> {
+    parse_build(matches)?.resolve()
+}
+
+fn show(matches: ArgMatches) -> DotsResult<()> {
+    let build = parse_build(matches)?;
+    let (_, links) = build.resolve()?;
+    println!("Locale:\n{:#?}", *yaml::LOCALE);
+    println!("_______________________________________");
+    println!("Build:\n{:#?}", build);
+    println!("_______________________________________");
+    println!("Links:\n{:#?}", links);
+    Ok(())
+}
+
+fn install(matches: ArgMatches) -> DotsResult<()> {
+    let (repo, links) = parse_resolve_build(matches)?;
+    println!("Installing dotfiles...");
+    repo.require()?;
+    link::install_links(links)?;
+    pack::Shell::Zsh.chsh()?;
+    Ok(())
+}
+
+fn uninstall(matches: ArgMatches) -> DotsResult<()> {
+    let (_, links) = parse_resolve_build(matches)?;
+    println!("Unstalling dotfiles...");
+    link::uninstall_links(links)?;
+    Ok(())
+}
+
+fn clean(matches: ArgMatches) -> DotsResult<()> {
+    let (_, links) = parse_resolve_build(matches)?;
+    println!("Cleaning invalid links...");
+    link::clean_links(links)?;
+    Ok(())
+}
+
 fn update() -> DotsResult<()> {
+    println!("Updating dotfiles...");
     Ok(())
 }
 
@@ -31,37 +76,12 @@ fn main() -> DotsResult<()> {
         )
         .get_matches();
 
-    let yaml = link::expand_path(matches.value_of("yaml").unwrap()).unwrap();
-    let build = yaml::parse(yaml.clone())?;
-    let links = build.resolve()?;
-
     match matches.subcommand_name() {
-        Some("show") => {
-            println!("Locale:\n{:#?}", *yaml::LOCALE);
-            println!("_______________________________________");
-            println!("Build:\n{:#?}", build);
-            println!("_______________________________________");
-            println!("Links:\n{:#?}", links);
-        }
-        Some("install") => {
-            println!("Installing dotfiles...");
-            build.repo.require()?;
-            link::install_links(links)?;
-            pack::Shell::Zsh.chsh()?;
-        }
-        Some("uninstall") => {
-            println!("Unstalling dotfiles...");
-            link::uninstall_links(links)?;
-        }
-        Some("clean") => {
-            println!("Cleaning invalid links...");
-            link::clean_links(links)?;
-        }
-        Some("update") => {
-            println!("Updating dotfiles...");
-            update()?;
-        }
+        Some("show") => show(matches),
+        Some("install") => install(matches),
+        Some("uninstall") => uninstall(matches),
+        Some("clean") => clean(matches),
+        Some("update") => update(),
         _ => unreachable!(),
     }
-    Ok(())
 }
