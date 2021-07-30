@@ -38,17 +38,18 @@ pub enum Case {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-#[serde(rename_all(deserialize = "snake_case"))]
 pub enum BuildUnit {
-    Case(Vec<Case>),
-    Link(Vec<Link>),
+    #[serde(rename = "case")]
+    CaseVec(Vec<Case>),
+    #[serde(rename = "link")]
+    LinkVec(Vec<Link>),
 }
 
 impl BuildUnit {
     // Recursively resolve all case units; collect into single vec
     pub fn resolve(&self) -> Vec<Link> {
         match self {
-            Self::Case(cv) => {
+            Self::CaseVec(cv) => {
                 // TODO: make locale static
                 let locale = Locale::auto();
                 let mut default = true;
@@ -72,7 +73,7 @@ impl BuildUnit {
                 }
                 ln
             }
-            Self::Link(ln) => ln.clone(),
+            Self::LinkVec(ln) => ln.clone(),
         }
     }
 }
