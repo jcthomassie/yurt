@@ -96,27 +96,6 @@ impl Build {
         }
         ln
     }
-
-    // pub fn apply<T>(&self, f: fn(&BuildCase) -> T) -> Vec<T> {
-    //     let locale = BuildCase::auto();
-    //     let mut default = true;
-    //     self.build
-    //         .iter()
-    //         .filter_map(|scope| match scope {
-    //             BuildScope::All(c) => Some(f(c)),
-    //             BuildScope::Case(c) if c == locale => {
-    //                 default = false;
-    //                 Some(f(c))
-    //             }
-    //             BuildScope::Default(c) if default => Some(f(c)),
-    //             BuildScope::Default(_) => {
-    //                 default = true;
-    //                 None
-    //             }
-    //             _ => None,
-    //         })
-    //         .collect()
-    // }
 }
 
 pub fn parse(path: PathBuf) -> DotsResult<Build> {

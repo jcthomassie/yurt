@@ -1,3 +1,4 @@
+#![feature(drain_filter)]
 mod error;
 mod link;
 mod yaml;
@@ -6,7 +7,6 @@ use clap::{crate_authors, crate_version, App, AppSettings, Arg};
 use error::{DotsError, DotsResult};
 use git2::Repository;
 use std::path::PathBuf;
-use yaml::BuildCase;
 
 fn open_dotfiles(local: &PathBuf) -> DotsResult<Repository> {
     let repo = Repository::open(local);
@@ -23,17 +23,17 @@ fn clone_dotfiles(local: &PathBuf, remote: &str) -> DotsResult<()> {
     }
 }
 
-fn install(case: &BuildCase) -> DotsResult<()> {
-    case.link
+fn install_links(links: Vec<link::Link>) -> DotsResult<()> {
+    links
         .iter()
-        .map(|ln| Ok(ln).and_then(|ln| ln.expand()).and_then(|ln| ln.link()))
+        .map(|ln| ln.expand().and_then(|ln| ln.link()))
         .collect()
 }
 
-fn uninstall(case: &BuildCase) -> DotsResult<()> {
-    case.link
+fn uninstall_links(links: Vec<link::Link>) -> DotsResult<()> {
+    links
         .iter()
-        .map(|ln| Ok(ln).and_then(|ln| ln.expand()).and_then(|ln| ln.unlink()))
+        .map(|ln| ln.expand().and_then(|ln| ln.unlink()))
         .collect()
 }
 
@@ -61,24 +61,25 @@ fn main() -> DotsResult<()> {
         .get_matches();
 
     let yaml = link::expand_path(matches.value_of("yaml").unwrap()).unwrap();
-    let build = yaml::parse(yaml)?;
+    let build = yaml::parse(yaml.clone())?;
+    let links = build.resolve();
 
     match matches.subcommand_name() {
         Some("show") => {
-            println!("{:#?}", build);
+            println!("Build:\n{:#?}", build);
+            println!("_______________________________________");
+            println!("Links:\n{:#?}", links);
             Ok(())
         }
         Some("install") => {
             println!("Installing dotfiles...");
             // TODO: handle errors correctly
-            build.apply(install);
-            Ok(())
+            install_links(links)
         }
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
             // TODO: handle errors correctly
-            build.apply(uninstall);
-            Ok(())
+            uninstall_links(links)
         }
         Some("update") => {
             println!("Updating dotfiles...");
