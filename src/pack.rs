@@ -1,13 +1,9 @@
 use super::error::DotsResult;
 use lazy_static::lazy_static;
+use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
 use std::process::{Command, Stdio};
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-const PM: PackageManager = PackageManager::Brew;
-#[cfg(target_os = "windows")]
-const PM: PackageManager = PackageManager::Choco;
 
 lazy_static! {
     static ref SH: Shell<'static> = match env::var("SHELL").expect("failed to read shell").as_ref()
@@ -20,6 +16,36 @@ lazy_static! {
     };
 }
 
+#[inline(always)]
+pub fn install(packages: Vec<Package>) -> DotsResult<()> {
+    packages.iter().map(|p| p.install()).collect()
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Package {
+    name: String,
+    managers: Vec<PackageManager>,
+}
+
+impl Package {
+    pub fn is_installed(&self) -> bool {
+        false
+    }
+
+    pub fn install(&self) -> DotsResult<()> {
+        if !self.is_installed() {
+            for pm in self.managers.iter() {
+                if pm.is_available() {
+                    return pm.install(&self.name);
+                }
+            }
+        }
+        // TODO: return error when no installer is available
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
 enum PackageManager {
     Apt,
     AptGet,
@@ -81,6 +107,11 @@ impl PackageManager {
             Self::Yum => Ok(()),
         }
     }
+
+    // Check if the package manager is available locally
+    pub fn is_available(&self) -> bool {
+        false
+    }
 }
 
 pub enum Shell<'a> {
@@ -121,25 +152,4 @@ impl<'a> Shell<'a> {
             .expect("Failed to change shell");
         Ok(())
     }
-
-    pub fn install(&self) -> DotsResult<()> {
-        match self {
-            Self::Sh => Ok(()),
-            Self::Bash => Ok(()),
-            Self::Zsh => Ok(()),
-            Self::Powershell => Ok(()),
-            Self::Other(_) => Ok(()),
-        }
-    }
-}
-
-// TODO
-pub fn install_essential() -> DotsResult<()> {
-    PM.bootstrap()?;
-    PM.install("zsh").unwrap();
-    PM.install("cargo").unwrap();
-    PM.install("git").unwrap();
-    PM.install("git-delta").unwrap();
-    PM.install("bat").unwrap();
-    Ok(())
 }
