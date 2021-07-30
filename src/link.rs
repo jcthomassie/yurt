@@ -1,6 +1,7 @@
 use super::error::DotsResult;
 use serde::Deserialize;
 use shellexpand;
+use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 use symlink;
@@ -18,6 +19,11 @@ pub fn install_links(links: Vec<Link>) -> DotsResult<()> {
 #[inline(always)]
 pub fn uninstall_links(links: Vec<Link>) -> DotsResult<()> {
     links.iter().map(|ln| ln.unlink()).collect()
+}
+
+#[inline(always)]
+pub fn clean_links(links: Vec<Link>) -> DotsResult<()> {
+    links.iter().map(|ln| ln.clean()).collect()
 }
 
 pub enum LinkStatus {
@@ -91,6 +97,17 @@ impl Link {
             LinkStatus::Exists => {
                 println!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
                 Ok(symlink::remove_symlink_file(&self.head)?)
+            }
+            _ => Ok(()),
+        }
+    }
+
+    // Remove any conflicting files/links at head
+    pub fn clean(&self) -> DotsResult<()> {
+        match self.status() {
+            LinkStatus::Invalid(_) => {
+                println!("Removing {:?}", &self.head);
+                Ok(fs::remove_file(&self.head)?)
             }
             _ => Ok(()),
         }

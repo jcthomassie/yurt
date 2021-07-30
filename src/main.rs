@@ -19,6 +19,7 @@ fn main() -> DotsResult<()> {
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(App::new("install").about("Installs dotfiles"))
         .subcommand(App::new("uninstall").about("Uninstalls dotfiles"))
+        .subcommand(App::new("clean").about("Cleans output destinations"))
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
         .subcommand(App::new("show").about("Shows the build config"))
         .arg(
@@ -51,6 +52,10 @@ fn main() -> DotsResult<()> {
         Some("uninstall") => {
             println!("Unstalling dotfiles...");
             link::uninstall_links(links)?;
+        }
+        Some("clean") => {
+            println!("Cleaning invalid links...");
+            link::clean_links(links)?;
         }
         Some("update") => {
             println!("Updating dotfiles...");
