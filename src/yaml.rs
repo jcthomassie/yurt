@@ -55,16 +55,16 @@ impl BuildUnit {
                 let mut default = true;
                 // Build flat vec of links
                 let mut ln: Vec<Link> = Vec::new();
-                for case in cv.into_iter() {
+                for case in cv.iter() {
                     match case {
                         Case::Local { spec, build } if spec.is_subset(&locale) => {
                             default = false;
-                            for unit in build.into_iter() {
+                            for unit in build.iter() {
                                 ln.extend(unit.resolve())
                             }
                         }
                         Case::Default { build } if default => {
-                            for unit in build.into_iter() {
+                            for unit in build.iter() {
                                 ln.extend(unit.resolve())
                             }
                         }
