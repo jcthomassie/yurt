@@ -7,7 +7,6 @@ mod yaml;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
 use link::Link;
-use pack::Package;
 use std::env;
 use std::process::Command;
 
@@ -41,9 +40,8 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     }
     println!("Installing dotfiles...");
     repo.require()?;
-    yaml::map_units::<Link, _>(units.clone(), |ln| ln.link())?;
+    yaml::apply(units, |ln| ln.link(), |pkg| pkg.install())?;
     pack::Shell::Zsh.chsh()?;
-    yaml::map_units::<Package, _>(units, |pkg| pkg.install())?;
     Ok(())
 }
 
