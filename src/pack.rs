@@ -5,17 +5,22 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
 use std::io::{Read, Write};
+use std::mem::discriminant;
 use std::process::{Command, Stdio};
 
 lazy_static! {
-    static ref SHELL: Shell<'static> =
-        match env::var("SHELL").expect("failed to read shell").as_ref() {
-            "sh" => Shell::Sh,
-            "bash" => Shell::Bash,
-            "zsh" => Shell::Zsh,
-            "pwsh" => Shell::Powershell,
-            other => Shell::Other(Cow::Owned(other.to_string())),
-        };
+    static ref SHELL: Shell<'static> = match env::var("SHELL")
+        .expect("failed to read shell")
+        .split("/")
+        .last()
+    {
+        Some("sh") => Shell::Sh,
+        Some("bash") => Shell::Bash,
+        Some("zsh") => Shell::Zsh,
+        Some("pwsh") => Shell::Powershell,
+        Some(other) => Shell::Other(Cow::Owned(other.to_string())),
+        _ => unreachable!(),
+    };
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -184,6 +189,7 @@ pub fn dpkg_has(cmd: &str) -> bool {
     bool_command("dpkg", &["-s", cmd])
 }
 
+#[derive(PartialEq)]
 pub enum Shell<'a> {
     Sh,
     Bash,
@@ -232,6 +238,10 @@ impl<'a> Shell<'a> {
     }
 
     pub fn chsh(&self) -> DotsResult<()> {
+        info!("Current shell: {}", &*SHELL.path());
+        if discriminant(self) == discriminant(&*SHELL) {
+            return Ok(());
+        }
         info!("Changing shell to: {}", self.path());
         let output = Command::new("which")
             .arg(self.path())
