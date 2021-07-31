@@ -3,17 +3,18 @@ use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
+use std::io::{Read, Write};
 use std::process::{Command, Stdio};
 
 lazy_static! {
-    static ref SH: Shell<'static> = match env::var("SHELL").expect("failed to read shell").as_ref()
-    {
-        "sh" => Shell::Sh,
-        "bash" => Shell::Bash,
-        "zsh" => Shell::Zsh,
-        "pwsh" => Shell::Powershell,
-        other => Shell::Other(Cow::Owned(other.to_string())),
-    };
+    static ref SHELL: Shell<'static> =
+        match env::var("SHELL").expect("failed to read shell").as_ref() {
+            "sh" => Shell::Sh,
+            "bash" => Shell::Bash,
+            "zsh" => Shell::Zsh,
+            "pwsh" => Shell::Powershell,
+            other => Shell::Other(Cow::Owned(other.to_string())),
+        };
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -42,7 +43,7 @@ impl Package {
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
-enum PackageManager {
+pub enum PackageManager {
     Apt,
     AptGet,
     Brew,
@@ -95,13 +96,27 @@ impl PackageManager {
     // Install the package manager and perform setup
     pub fn bootstrap(&self) -> DotsResult<()> {
         match self {
-            Self::Apt => Ok(()),
-            Self::AptGet => Ok(()),
-            Self::Brew => Ok(()),
-            Self::Cargo => Ok(()),
-            Self::Choco => Ok(()),
-            Self::Yum => Ok(()),
+            Self::Brew => Shell::Bash.remote_script(&[
+                "-fsSL",
+                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
+            ]),
+            Self::Cargo => Shell::Sh.remote_script(&[
+                "--proto",
+                "'=https'",
+                "--tlsv1.2",
+                "-sSf",
+                "https://sh.rustup.rs",
+            ]),
+            pm => Err(format!("bootstrap not supported for {}", pm.name()).into()),
         }
+    }
+
+    // Install the package manager if not already installed
+    pub fn require(&self) -> DotsResult<()> {
+        if self.is_available() {
+            return Ok(());
+        }
+        self.bootstrap()
     }
 
     // Check if the package manager is available locally
@@ -135,8 +150,30 @@ impl<'a> Shell<'a> {
         }
     }
 
-    fn command(&self) -> Command {
-        Command::new(self.path())
+    // Use curl to fetch remote script and pipe into shell
+    pub fn remote_script(&self, curl_args: &[&str]) -> DotsResult<()> {
+        let mut cmd_curl = Command::new("curl")
+            .args(curl_args)
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let mut cmd_sh = Command::new(self.path())
+            .stdin(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        if let Some(ref mut stdout) = cmd_curl.stdout {
+            if let Some(ref mut stdin) = cmd_sh.stdin {
+                let mut buf: Vec<u8> = Vec::new();
+                stdout.read_to_end(&mut buf).unwrap();
+                stdin.write_all(&buf).unwrap();
+            }
+        }
+        match cmd_sh.wait_with_output()?.status.success() {
+            true => Ok(()),
+            false => Err("failed to execute remote script".into()),
+        }
     }
 
     pub fn chsh(&self) -> DotsResult<()> {

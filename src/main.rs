@@ -45,7 +45,12 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     }
     println!("Installing dotfiles...");
     repo.require()?;
-    yaml::apply(units, |ln| ln.link(), |pkg| pkg.install())?;
+    yaml::apply(
+        units,
+        |ln| ln.link(),
+        |pkg| pkg.install(),
+        |pm| pm.require(),
+    )?;
     pack::Shell::Zsh.chsh()?;
     Ok(())
 }
@@ -53,14 +58,14 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Unstalling dotfiles...");
-    yaml::apply(units, |ln| ln.unlink(), skip!())?;
+    yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Cleaning invalid links...");
-    yaml::apply(units, |ln| ln.clean(), skip!())?;
+    yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
     Ok(())
 }
 

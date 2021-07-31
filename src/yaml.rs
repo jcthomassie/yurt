@@ -1,6 +1,6 @@
 use super::error::DotsResult;
 use super::link::Link;
-use super::pack::Package;
+use super::pack::{Package, PackageManager};
 use super::repo::Repo;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -37,15 +37,17 @@ where
         .collect()
 }
 
-pub fn apply<RL, RP, E>(
+pub fn apply<RL, RP, RB, E>(
     units: Vec<BuildUnit>,
     lf: fn(Link) -> Result<RL, E>,
     pf: fn(Package) -> Result<RP, E>,
+    bf: fn(PackageManager) -> Result<RB, E>,
 ) -> Result<(), E> {
     for unit in units {
         match unit {
             BuildUnit::Link(ln) => drop(lf(ln)?),
             BuildUnit::Package(pkg) => drop(pf(pkg)?),
+            BuildUnit::Bootstrap(pm) => drop(bf(pm)?),
         }
     }
     Ok(())
@@ -96,6 +98,7 @@ pub enum Case {
 pub enum BuildUnit {
     Link(Link),
     Package(Package),
+    Bootstrap(PackageManager),
 }
 
 impl Into<Option<Link>> for BuildUnit {
@@ -116,6 +119,15 @@ impl Into<Option<Package>> for BuildUnit {
     }
 }
 
+impl Into<Option<PackageManager>> for BuildUnit {
+    fn into(self) -> Option<PackageManager> {
+        match self {
+            Self::Bootstrap(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
 impl From<Link> for BuildUnit {
     fn from(ln: Link) -> BuildUnit {
         BuildUnit::Link(ln)
@@ -128,6 +140,12 @@ impl From<Package> for BuildUnit {
     }
 }
 
+impl From<PackageManager> for BuildUnit {
+    fn from(pkg: PackageManager) -> BuildUnit {
+        BuildUnit::Bootstrap(pkg)
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum BuildSet {
     #[serde(rename = "case")]
@@ -136,6 +154,8 @@ pub enum BuildSet {
     LinkVec(Vec<Link>),
     #[serde(rename = "install")]
     PackageVec(Vec<Package>),
+    #[serde(rename = "bootstrap")]
+    BootstrapVec(Vec<PackageManager>),
 }
 
 impl BuildSet {
@@ -171,8 +191,13 @@ impl BuildSet {
                 .collect(),
             // Clone packages
             Self::PackageVec(pkg_vec) => pkg_vec
-                .iter() // comment
+                .iter() // expand
                 .map(|pkg| Ok(pkg.clone().into()))
+                .collect(),
+            // Clone package managers
+            Self::BootstrapVec(pm_vec) => pm_vec
+                .iter() // expand
+                .map(|pm| Ok(pm.clone().into()))
                 .collect(),
         }
     }
