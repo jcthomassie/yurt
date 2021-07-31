@@ -1,12 +1,14 @@
 use super::error::DotsResult;
 use lazy_static::lazy_static;
-use log::{info, warn};
+use log::{debug, info, warn};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
 use std::io::{Read, Write};
 use std::mem::discriminant;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
+
+pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 lazy_static! {
     static ref SHELL: Shell<'static> = match env::var("SHELL")
@@ -21,6 +23,77 @@ lazy_static! {
         Some(other) => Shell::Other(Cow::Owned(other.to_string())),
         _ => unreachable!(),
     };
+}
+
+trait Cmd {
+    fn name(&self) -> &str;
+
+    #[inline(always)]
+    fn command(&self) -> Command {
+        Command::new(self.name())
+    }
+
+    #[inline(always)]
+    fn call(&self, args: &[&str]) -> DotsResult<Output> {
+        debug!("Calling command: {} {:?}", self.name(), args);
+        Ok(self.command().args(args).output()?)
+    }
+
+    #[inline(always)]
+    fn call_bool(&self, args: &[&str]) -> bool {
+        self.call(args)
+            .expect(&format!("'{}' failed", self.name()))
+            .status
+            .success()
+    }
+
+    #[inline(always)]
+    fn child(&self, args: &[&str]) -> DotsResult<Child> {
+        Ok(self
+            .command()
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()?)
+    }
+}
+
+impl Cmd for &str {
+    fn name(&self) -> &str {
+        self
+    }
+}
+
+fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> DotsResult<()> {
+    if let Some(ref mut stdout) = proc_a.stdout {
+        if let Some(ref mut stdin) = proc_b.stdin {
+            let mut buf: Vec<u8> = Vec::new();
+            stdout.read_to_end(&mut buf).unwrap();
+            stdin.write_all(&buf).unwrap();
+        }
+    }
+    match proc_b.wait_with_output()?.status.success() {
+        true => Ok(()),
+        false => Err("failed to execute piped command".into()),
+    }
+}
+
+fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> DotsResult<()>
+where
+    T: Cmd,
+    U: Cmd,
+{
+    let proc_a = cmd_a
+        .command()
+        .args(args_a)
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let proc_b = cmd_b
+        .command() //
+        .args(args_b)
+        .stdin(Stdio::piped())
+        .spawn()?;
+    pipe_existing(proc_a, proc_b)
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -82,7 +155,7 @@ pub enum PackageManager {
     Yum,
 }
 
-impl PackageManager {
+impl Cmd for PackageManager {
     fn name(&self) -> &str {
         match self {
             Self::Apt => "apt",
@@ -93,12 +166,9 @@ impl PackageManager {
             Self::Yum => "yum",
         }
     }
+}
 
-    #[inline(always)]
-    fn command(&self) -> Command {
-        Command::new(self.name())
-    }
-
+impl PackageManager {
     fn _install(&self, package: &str) -> DotsResult<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.command()
@@ -139,7 +209,7 @@ impl PackageManager {
     // Check if a package is installed
     pub fn has(&self, package: &str) -> bool {
         match self {
-            Self::Brew => bool_command("brew", &["list", package]),
+            Self::Brew => self.call_bool(&["list", package]),
             _ => false,
         }
     }
@@ -148,11 +218,11 @@ impl PackageManager {
     pub fn bootstrap(&self) -> DotsResult<()> {
         info!("Bootstrapping {}", self.name());
         match self {
-            Self::Brew => Shell::Bash.remote_script(&[
+            Self::Brew => Bash.remote_script(&[
                 "-fsSL",
                 "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
             ]),
-            Self::Cargo => Shell::Sh.remote_script(&[
+            Self::Cargo => Sh.remote_script(&[
                 "--proto",
                 "'=https'",
                 "--tlsv1.2",
@@ -176,24 +246,15 @@ impl PackageManager {
     }
 }
 
-pub fn bool_command(cmd: &str, args: &[&str]) -> bool {
-    Command::new(cmd)
-        .args(args)
-        .output()
-        .expect(&format!("'{}' failed", cmd))
-        .status
-        .success()
-}
-
 // Check if a command is available locally
 #[inline(always)]
 pub fn which_has(cmd: &str) -> bool {
-    bool_command("which", &[cmd])
+    "which".call_bool(&[cmd])
 }
 
 #[inline(always)]
 pub fn dpkg_has(cmd: &str) -> bool {
-    bool_command("dpkg", &["-s", cmd])
+    "dpkg".call_bool(&["-s", cmd])
 }
 
 #[derive(PartialEq)]
@@ -205,9 +266,8 @@ pub enum Shell<'a> {
     Other(Cow<'a, str>),
 }
 
-impl<'a> Shell<'a> {
-    #[inline(always)]
-    fn path(&self) -> &str {
+impl<'a> Cmd for Shell<'a> {
+    fn name(&self) -> &str {
         match self {
             Self::Sh => "sh",
             Self::Bash => "bash",
@@ -216,51 +276,22 @@ impl<'a> Shell<'a> {
             Self::Other(name) => name,
         }
     }
+}
 
+impl<'a> Shell<'a> {
     // Use curl to fetch remote script and pipe into shell
-    pub fn remote_script(&self, curl_args: &[&str]) -> DotsResult<()> {
-        info!("Running remote script with curl: {:?}", curl_args);
-        let mut cmd_curl = Command::new("curl")
-            .args(curl_args)
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        let mut cmd_sh = Command::new(self.path())
-            .stdin(Stdio::piped())
-            .spawn()
-            .unwrap();
-
-        if let Some(ref mut stdout) = cmd_curl.stdout {
-            if let Some(ref mut stdin) = cmd_sh.stdin {
-                let mut buf: Vec<u8> = Vec::new();
-                stdout.read_to_end(&mut buf).unwrap();
-                stdin.write_all(&buf).unwrap();
-            }
-        }
-        match cmd_sh.wait_with_output()?.status.success() {
-            true => Ok(()),
-            false => Err("failed to execute remote script".into()),
-        }
+    pub fn remote_script(self, curl_args: &[&str]) -> DotsResult<()> {
+        info!("Running remote script");
+        pipe("curl", curl_args, self, &[])
     }
 
+    // Set self as the default system shell
     pub fn chsh(&self) -> DotsResult<()> {
-        info!("Current shell: {}", &*SHELL.path());
+        info!("Current shell: {}", &*SHELL.name());
         if discriminant(self) == discriminant(&*SHELL) {
             return Ok(());
         }
-        info!("Changing shell to: {}", self.path());
-        let output = Command::new("which")
-            .arg(self.path())
-            .stdout(Stdio::piped())
-            .output()
-            .expect("Failed to locate shell");
-        let path = String::from_utf8_lossy(&output.stdout);
-        Command::new("chsh")
-            .arg("-s")
-            .arg(path.as_ref())
-            .output()
-            .expect("Failed to change shell");
-        Ok(())
+        info!("Changing shell to: {}", self.name());
+        pipe("which", &[], "chsh", &["-s"])
     }
 }
