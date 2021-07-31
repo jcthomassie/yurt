@@ -20,13 +20,13 @@ fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<yaml
 }
 
 #[inline(always)]
-fn filter_links(units: Vec<yaml::BuildUnit>) -> Vec<link::Link> {
+fn filter_units<T>(units: Vec<yaml::BuildUnit>) -> Vec<T>
+where
+    yaml::BuildUnit: Into<Option<T>>,
+{
     units
         .into_iter()
-        .filter_map(|x| match x {
-            yaml::BuildUnit::Link(ln) => Some(ln),
-            _ => None,
-        })
+        .filter_map(yaml::BuildUnit::into)
         .collect()
 }
 
@@ -50,7 +50,7 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     }
     println!("Installing dotfiles...");
     repo.require()?;
-    link::install_links(filter_links(units))?;
+    link::install_links(filter_units::<link::Link>(units))?;
     pack::Shell::Zsh.chsh()?;
     Ok(())
 }
@@ -58,14 +58,14 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Unstalling dotfiles...");
-    link::uninstall_links(filter_links(units))?;
+    link::uninstall_links(filter_units::<link::Link>(units))?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Cleaning invalid links...");
-    link::clean_links(filter_links(units))?;
+    link::clean_links(filter_units::<link::Link>(units))?;
     Ok(())
 }
 

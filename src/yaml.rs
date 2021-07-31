@@ -72,6 +72,36 @@ pub enum BuildUnit {
     Package(Package),
 }
 
+impl Into<Option<Link>> for BuildUnit {
+    fn into(self) -> Option<Link> {
+        match self {
+            Self::Link(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl Into<Option<Package>> for BuildUnit {
+    fn into(self) -> Option<Package> {
+        match self {
+            Self::Package(v) => Some(v),
+            _ => None,
+        }
+    }
+}
+
+impl From<Link> for BuildUnit {
+    fn from(ln: Link) -> BuildUnit {
+        BuildUnit::Link(ln)
+    }
+}
+
+impl From<Package> for BuildUnit {
+    fn from(pkg: Package) -> BuildUnit {
+        BuildUnit::Package(pkg)
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum BuildSet {
     #[serde(rename = "case")]
@@ -86,7 +116,7 @@ impl BuildSet {
     // Recursively resolve all case units; collect into single vec
     pub fn resolve(&self) -> DotsResult<Vec<BuildUnit>> {
         match self {
-            // Recursively filter case units
+            // Recursively filter cases
             Self::CaseVec(case_vec) => {
                 let mut default = true;
                 let mut unit_vec: Vec<BuildUnit> = Vec::new();
@@ -111,12 +141,12 @@ impl BuildSet {
             // Expand links
             Self::LinkVec(link_vec) => link_vec
                 .iter()
-                .map(|la| la.expand().and_then(|lb| Ok(BuildUnit::Link(lb))))
+                .map(|la| la.expand().and_then(|lb| Ok(lb.into())))
                 .collect(),
             // Clone packages
             Self::PackageVec(pkg_vec) => pkg_vec
                 .iter() // comment
-                .map(|pkg| Ok(BuildUnit::Package(pkg.clone())))
+                .map(|pkg| Ok(pkg.clone().into()))
                 .collect(),
         }
     }
