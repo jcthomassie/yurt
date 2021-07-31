@@ -15,23 +15,34 @@ fn parse_build(matches: &ArgMatches) -> DotsResult<yaml::Build> {
 }
 
 #[inline(always)]
-fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<link::Link>)> {
+fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<yaml::BuildUnit>)> {
     parse_build(matches)?.resolve()
+}
+
+#[inline(always)]
+fn filter_links(units: Vec<yaml::BuildUnit>) -> Vec<link::Link> {
+    units
+        .into_iter()
+        .filter_map(|x| match x {
+            yaml::BuildUnit::Link(ln) => Some(ln),
+            _ => None,
+        })
+        .collect()
 }
 
 fn show(matches: ArgMatches) -> DotsResult<()> {
     let build = parse_build(&matches)?;
-    let (_, links) = build.resolve()?;
+    let (_, units) = build.resolve()?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
     println!("_______________________________________");
     println!("Build:\n{:#?}", build);
     println!("_______________________________________");
-    println!("Links:\n{:#?}", links);
+    println!("Steps:\n{:#?}", units);
     Ok(())
 }
 
 fn install(matches: ArgMatches) -> DotsResult<()> {
-    let (repo, links) = parse_resolve_build(&matches)?;
+    let (repo, units) = parse_resolve_build(&matches)?;
     // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
     if sub.is_present("clean") {
@@ -39,22 +50,22 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     }
     println!("Installing dotfiles...");
     repo.require()?;
-    link::install_links(links)?;
+    link::install_links(filter_links(units))?;
     pack::Shell::Zsh.chsh()?;
     Ok(())
 }
 
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
-    let (_, links) = parse_resolve_build(&matches)?;
+    let (_, units) = parse_resolve_build(&matches)?;
     println!("Unstalling dotfiles...");
-    link::uninstall_links(links)?;
+    link::uninstall_links(filter_links(units))?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
-    let (_, links) = parse_resolve_build(&matches)?;
+    let (_, units) = parse_resolve_build(&matches)?;
     println!("Cleaning invalid links...");
-    link::clean_links(links)?;
+    link::clean_links(filter_links(units))?;
     Ok(())
 }
 

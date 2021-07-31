@@ -21,7 +21,7 @@ pub fn install(packages: Vec<Package>) -> DotsResult<()> {
     packages.iter().map(|p| p.install()).collect()
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     name: String,
     managers: Vec<PackageManager>,
@@ -45,7 +45,8 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
 enum PackageManager {
     Apt,
     AptGet,

@@ -1,5 +1,6 @@
 use super::error::DotsResult;
 use super::link::Link;
+use super::pack::Package;
 use super::repo::Repo;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -58,49 +59,65 @@ impl Locale<Option<String>> {
 pub enum Case {
     Local {
         spec: Locale<Option<String>>,
-        build: Vec<BuildUnit>,
+        build: Vec<BuildSet>,
     },
     Default {
-        build: Vec<BuildUnit>,
+        build: Vec<BuildSet>,
     },
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug)]
 pub enum BuildUnit {
+    Link(Link),
+    Package(Package),
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub enum BuildSet {
     #[serde(rename = "case")]
     CaseVec(Vec<Case>),
     #[serde(rename = "link")]
     LinkVec(Vec<Link>),
+    #[serde(rename = "install")]
+    PackageVec(Vec<Package>),
 }
 
-impl BuildUnit {
+impl BuildSet {
     // Recursively resolve all case units; collect into single vec
-    pub fn resolve(&self) -> DotsResult<Vec<Link>> {
+    pub fn resolve(&self) -> DotsResult<Vec<BuildUnit>> {
         match self {
             // Recursively filter case units
-            Self::CaseVec(cv) => {
+            Self::CaseVec(case_vec) => {
                 let mut default = true;
-                let mut ln: Vec<Link> = Vec::new();
-                for case in cv.iter() {
+                let mut unit_vec: Vec<BuildUnit> = Vec::new();
+                for case in case_vec.iter() {
                     match case {
                         Case::Local { spec, build } if spec.is_local() => {
                             default = false;
-                            for unit in build.iter() {
-                                ln.extend(unit.resolve()?)
+                            for set in build.iter() {
+                                unit_vec.extend(set.resolve()?)
                             }
                         }
                         Case::Default { build } if default => {
-                            for unit in build.iter() {
-                                ln.extend(unit.resolve()?)
+                            for set in build.iter() {
+                                unit_vec.extend(set.resolve()?)
                             }
                         }
                         _ => (),
                     };
                 }
-                Ok(ln)
+                Ok(unit_vec)
             }
             // Expand links
-            Self::LinkVec(ln) => ln.iter().map(|ln| ln.expand()).collect(),
+            Self::LinkVec(link_vec) => link_vec
+                .iter()
+                .map(|la| la.expand().and_then(|lb| Ok(BuildUnit::Link(lb))))
+                .collect(),
+            // Clone packages
+            Self::PackageVec(pkg_vec) => pkg_vec
+                .iter() // comment
+                .map(|pkg| Ok(BuildUnit::Package(pkg.clone())))
+                .collect(),
         }
     }
 }
@@ -108,18 +125,18 @@ impl BuildUnit {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Build {
     pub repo: Repo,
-    pub build: Vec<BuildUnit>,
+    pub build: Vec<BuildSet>,
 }
 
 impl Build {
-    pub fn resolve(&self) -> DotsResult<(Repo, Vec<Link>)> {
+    pub fn resolve(&self) -> DotsResult<(Repo, Vec<BuildUnit>)> {
         let repo = self.repo.resolve()?;
         env::set_var("DOTS_REPO_LOCAL", &repo.local);
-        let mut ln: Vec<Link> = Vec::new();
-        for unit in self.build.iter() {
-            ln.extend(unit.resolve()?);
+        let mut build_vec: Vec<BuildUnit> = Vec::new();
+        for set in self.build.iter() {
+            build_vec.extend(set.resolve()?);
         }
-        Ok((repo, ln))
+        Ok((repo, build_vec))
     }
 }
 
