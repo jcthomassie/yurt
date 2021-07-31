@@ -198,6 +198,13 @@ pub struct Build {
 }
 
 impl Build {
+    pub fn from_file(path: PathBuf) -> DotsResult<Self> {
+        let file = File::open(path)?;
+        let reader = BufReader::new(file);
+        let build: Build = serde_yaml::from_reader(reader)?;
+        Ok(build)
+    }
+
     pub fn resolve(&self) -> DotsResult<(Repo, Vec<BuildUnit>)> {
         let repo = self.repo.resolve()?;
         env::set_var("DOTS_REPO_LOCAL", &repo.local);
@@ -207,11 +214,4 @@ impl Build {
         }
         Ok((repo, build_vec))
     }
-}
-
-pub fn parse(path: PathBuf) -> DotsResult<Build> {
-    let file = File::open(path)?;
-    let reader = BufReader::new(file);
-    let build: Build = serde_yaml::from_reader(reader)?;
-    Ok(build)
 }

@@ -8,14 +8,15 @@ use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
 use std::env;
 use std::process::Command;
+use yaml::{Build, BuildUnit};
 
 #[inline(always)]
-fn parse_build(matches: &ArgMatches) -> DotsResult<yaml::Build> {
-    yaml::parse(link::expand_path(matches.value_of("yaml").unwrap())?)
+fn parse_build(matches: &ArgMatches) -> DotsResult<Build> {
+    Build::from_file(link::expand_path(matches.value_of("yaml").unwrap())?)
 }
 
 #[inline(always)]
-fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<yaml::BuildUnit>)> {
+fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<BuildUnit>)> {
     parse_build(matches)?.resolve()
 }
 
