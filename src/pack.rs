@@ -26,8 +26,15 @@ pub struct Package {
 
 impl Package {
     pub fn is_installed(&self) -> bool {
-        // TODO: check package manager instead of using which
-        which_has(&self.name)
+        if which_has(&self.name) || dpkg_has(&self.name) {
+            return true;
+        }
+        for pm in &self.managers {
+            if pm.has(&self.name) {
+                return true;
+            }
+        }
+        false
     }
 
     pub fn install(&self) -> DotsResult<()> {
@@ -103,6 +110,14 @@ impl PackageManager {
         }
     }
 
+    // Check if a package is installed
+    pub fn has(&self, package: &str) -> bool {
+        match self {
+            Self::Brew => bool_command("brew", &["list", package]),
+            _ => false,
+        }
+    }
+
     // Install the package manager and perform setup
     pub fn bootstrap(&self) -> DotsResult<()> {
         info!("Bootstrapping {}", self.name());
@@ -135,14 +150,24 @@ impl PackageManager {
     }
 }
 
-// Check if the package manager is available locally
-pub fn which_has(cmd: &str) -> bool {
-    Command::new("which")
-        .arg(cmd)
+pub fn bool_command(cmd: &str, args: &[&str]) -> bool {
+    Command::new(cmd)
+        .args(args)
         .output()
-        .expect("'which' failed")
+        .expect(&format!("'{}' failed", cmd))
         .status
         .success()
+}
+
+// Check if a command is available locally
+#[inline(always)]
+pub fn which_has(cmd: &str) -> bool {
+    bool_command("which", &[cmd])
+}
+
+#[inline(always)]
+pub fn dpkg_has(cmd: &str) -> bool {
+    bool_command("dpkg", &["-s", cmd])
 }
 
 pub enum Shell<'a> {
