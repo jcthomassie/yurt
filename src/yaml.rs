@@ -25,18 +25,6 @@ lazy_static! {
     };
 }
 
-#[inline(always)]
-pub fn map_units<T, U>(units: Vec<BuildUnit>, func: fn(T) -> DotsResult<U>) -> DotsResult<Vec<U>>
-where
-    BuildUnit: Into<Option<T>>,
-{
-    units
-        .into_iter()
-        .filter_map(BuildUnit::into)
-        .map(func)
-        .collect()
-}
-
 pub fn apply<RL, RP, RB, E>(
     units: Vec<BuildUnit>,
     lf: fn(Link) -> Result<RL, E>,
