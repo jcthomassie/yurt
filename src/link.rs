@@ -1,4 +1,5 @@
 use super::error::DotsResult;
+use log::info;
 use serde::Deserialize;
 use shellexpand;
 use std::fs;
@@ -69,7 +70,7 @@ impl Link {
         match self.status() {
             LinkStatus::Exists => Ok(()),
             LinkStatus::NotExists => {
-                println!("Linking {:?}@->{:?}", &self.head, &self.tail);
+                info!("Linking {:?}@->{:?}", &self.head, &self.tail);
                 Ok(symlink::symlink_file(&self.tail, &self.head)?)
             }
             LinkStatus::Invalid(e) => Err(e.into()),
@@ -80,7 +81,7 @@ impl Link {
     pub fn unlink(&self) -> DotsResult<()> {
         match self.status() {
             LinkStatus::Exists => {
-                println!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
+                info!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
                 Ok(symlink::remove_symlink_file(&self.head)?)
             }
             _ => Ok(()),
@@ -91,7 +92,7 @@ impl Link {
     pub fn clean(&self) -> DotsResult<()> {
         match self.status() {
             LinkStatus::Invalid(_) => {
-                println!("Removing {:?}", &self.head);
+                info!("Removing {:?}", &self.head);
                 Ok(fs::remove_file(&self.head)?)
             }
             _ => Ok(()),

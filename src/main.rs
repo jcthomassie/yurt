@@ -5,6 +5,7 @@ mod repo;
 mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
+use env_logger;
 use error::DotsResult;
 use std::env;
 use std::process::Command;
@@ -110,7 +111,22 @@ fn main() -> DotsResult<()> {
                 .long("yaml")
                 .default_value("$HOME/dotfiles/install.yaml"),
         )
+        .arg(
+            Arg::new("log")
+                .about("Logging level")
+                .short('l')
+                .long("log")
+                .takes_value(true),
+        )
         .get_matches();
+
+    if let Some(level) = matches.value_of("log") {
+        env::set_var("RUST_LOG", level);
+        println!("SETTING LOG LEVEL: {}", level);
+    } else {
+        panic!();
+    }
+    env_logger::init();
 
     match matches.subcommand_name() {
         Some("show") => show(matches),

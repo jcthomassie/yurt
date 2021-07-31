@@ -1,5 +1,6 @@
 use super::error::DotsResult;
 use lazy_static::lazy_static;
+use log::{info, warn};
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
@@ -36,8 +37,10 @@ impl Package {
                     return pm.install(&self.name);
                 }
             }
+            warn!("Package unavailable: {}", self.name);
+        } else {
+            info!("Package already installed: {}", self.name);
         }
-        // TODO: return error when no installer is available
         Ok(())
     }
 }
@@ -71,11 +74,17 @@ impl PackageManager {
     }
 
     fn _install(&self, package: &str) -> DotsResult<()> {
+        info!("Installing package ({} install {})", self.name(), package);
         self.command().arg("install").arg(package).output()?;
         Ok(())
     }
 
     fn _sudo_install(&self, package: &str) -> DotsResult<()> {
+        info!(
+            "Installing package (sudo {} install {})",
+            self.name(),
+            package
+        );
         Command::new("sudo")
             .arg(self.name())
             .arg("install")
@@ -96,6 +105,7 @@ impl PackageManager {
 
     // Install the package manager and perform setup
     pub fn bootstrap(&self) -> DotsResult<()> {
+        info!("Bootstrapping {}", self.name());
         match self {
             Self::Brew => Shell::Bash.remote_script(&[
                 "-fsSL",
@@ -157,6 +167,7 @@ impl<'a> Shell<'a> {
 
     // Use curl to fetch remote script and pipe into shell
     pub fn remote_script(&self, curl_args: &[&str]) -> DotsResult<()> {
+        info!("Running remote script with curl: {:?}", curl_args);
         let mut cmd_curl = Command::new("curl")
             .args(curl_args)
             .stdout(Stdio::piped())
@@ -182,6 +193,7 @@ impl<'a> Shell<'a> {
     }
 
     pub fn chsh(&self) -> DotsResult<()> {
+        info!("Changing shell to: {}", self.path());
         let output = Command::new("which")
             .arg(self.path())
             .stdout(Stdio::piped())
