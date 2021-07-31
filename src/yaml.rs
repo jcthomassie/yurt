@@ -37,11 +37,11 @@ where
         .collect()
 }
 
-pub fn apply<RL, RP>(
+pub fn apply<RL, RP, E>(
     units: Vec<BuildUnit>,
-    lf: fn(Link) -> DotsResult<RL>,
-    pf: fn(Package) -> DotsResult<RP>,
-) -> DotsResult<()> {
+    lf: fn(Link) -> Result<RL, E>,
+    pf: fn(Package) -> Result<RP, E>,
+) -> Result<(), E> {
     for unit in units {
         match unit {
             BuildUnit::Link(ln) => drop(lf(ln)?),

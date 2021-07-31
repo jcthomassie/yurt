@@ -6,7 +6,6 @@ mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
-use link::Link;
 use std::env;
 use std::process::Command;
 
@@ -18,6 +17,12 @@ fn parse_build(matches: &ArgMatches) -> DotsResult<yaml::Build> {
 #[inline(always)]
 fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<yaml::BuildUnit>)> {
     parse_build(matches)?.resolve()
+}
+
+macro_rules! skip {
+    () => {
+        |_| Ok(())
+    };
 }
 
 fn show(matches: ArgMatches) -> DotsResult<()> {
@@ -48,14 +53,14 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Unstalling dotfiles...");
-    yaml::map_units::<Link, _>(units, |ln| ln.unlink())?;
+    yaml::apply(units, |ln| ln.unlink(), skip!())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Cleaning invalid links...");
-    yaml::map_units::<Link, _>(units, |ln| ln.clean())?;
+    yaml::apply(units, |ln| ln.clean(), skip!())?;
     Ok(())
 }
 
