@@ -18,7 +18,9 @@ fn parse_build(matches: &ArgMatches) -> DotsResult<Build> {
 }
 
 #[inline(always)]
-fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<BuildUnit>)> {
+fn parse_resolve_build(
+    matches: &ArgMatches,
+) -> DotsResult<(repo::Repo, pack::Source, Vec<BuildUnit>)> {
     parse_build(matches)?.resolve()
 }
 
@@ -30,17 +32,19 @@ macro_rules! skip {
 
 fn show(matches: ArgMatches) -> DotsResult<()> {
     let build = parse_build(&matches)?;
-    let (_, units) = build.resolve()?;
+    let (repo, source, units) = build.resolve()?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
     println!("_______________________________________");
-    println!("Build:\n{:#?}", build);
+    println!("Repo:\n{:#?}", repo);
+    println!("_______________________________________");
+    println!("Source:\n{:#?}", source);
     println!("_______________________________________");
     println!("Steps:\n{:#?}", units);
     Ok(())
 }
 
 fn install(matches: ArgMatches) -> DotsResult<()> {
-    let (repo, units) = parse_resolve_build(&matches)?;
+    let (repo, src, units) = parse_resolve_build(&matches)?;
     // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
     if sub.is_present("clean") {
@@ -55,18 +59,19 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
         |pm| pm.require(),
     )?;
     pack::Shell::Zsh.chsh()?;
+    src.reload()?;
     Ok(())
 }
 
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
-    let (_, units) = parse_resolve_build(&matches)?;
+    let (_, _, units) = parse_resolve_build(&matches)?;
     info!("Uninstalling dotfiles...");
     yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
-    let (_, units) = parse_resolve_build(&matches)?;
+    let (_, _, units) = parse_resolve_build(&matches)?;
     info!("Cleaning link heads...");
     yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
     Ok(())

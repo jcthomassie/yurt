@@ -1,6 +1,6 @@
 use super::error::DotsResult;
 use super::link::Link;
-use super::pack::{Package, PackageManager};
+use super::pack::{Package, PackageManager, Source};
 use super::repo::Repo;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -194,6 +194,7 @@ impl BuildSet {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Build {
     pub repo: Repo,
+    pub source: Source,
     pub build: Vec<BuildSet>,
 }
 
@@ -205,13 +206,16 @@ impl Build {
         Ok(build)
     }
 
-    pub fn resolve(&self) -> DotsResult<(Repo, Vec<BuildUnit>)> {
+    pub fn resolve(&self) -> DotsResult<(Repo, Source, Vec<BuildUnit>)> {
+        // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("DOTS_REPO_LOCAL", &repo.local);
+        // Resolve source files
+        let source = self.source.resolve()?;
         let mut build_vec: Vec<BuildUnit> = Vec::new();
         for set in &self.build {
             build_vec.extend(set.resolve()?);
         }
-        Ok((repo, build_vec))
+        Ok((repo, source, build_vec))
     }
 }

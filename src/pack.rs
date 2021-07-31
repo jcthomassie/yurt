@@ -1,10 +1,12 @@
 use super::error::DotsResult;
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
+use regex::Regex;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
-use std::io::{Read, Write};
+use std::fs::File;
+use std::io::{BufRead, BufReader, Read, Write};
 use std::mem::discriminant;
 use std::process::{Child, Command, Output, Stdio};
 
@@ -23,6 +25,42 @@ lazy_static! {
         Some(other) => Shell::Other(Cow::Owned(other.to_string())),
         _ => unreachable!(),
     };
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Source(Vec<String>);
+
+impl Source {
+    // Resolve source file paths
+    pub fn resolve(&self) -> DotsResult<Self> {
+        let mut vec: Vec<String> = Vec::with_capacity(self.0.len());
+        for path in &self.0 {
+            vec.push(shellexpand::full(path)?.to_string())
+        }
+        Ok(Source(vec))
+    }
+
+    // Reload all of the source files
+    pub fn reload(&self) -> DotsResult<()> {
+        let re = Regex::new(r#"export ([0-9A-Za-z_-]+)=([0-9A-Za-z_"-:{}\$]+)[;$]?"#).unwrap();
+        for path in &self.0 {
+            let file = File::open(path)?;
+            for line in BufReader::new(file).lines() {
+                for cap in re.captures_iter(&line?) {
+                    let k = &cap[1];
+                    let v = shellexpand::full(&cap[2]);
+                    match v {
+                        Ok(v) => {
+                            debug!("Setting ${} = {}", k, v);
+                            env::set_var(k, v.as_ref());
+                        }
+                        Err(e) => warn!("Failed setting ${}; {:?}", k, e),
+                    };
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 trait Cmd {
