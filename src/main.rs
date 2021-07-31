@@ -123,8 +123,6 @@ fn main() -> DotsResult<()> {
     if let Some(level) = matches.value_of("log") {
         env::set_var("RUST_LOG", level);
         println!("SETTING LOG LEVEL: {}", level);
-    } else {
-        panic!();
     }
     env_logger::init();
 
