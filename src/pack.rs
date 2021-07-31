@@ -101,7 +101,12 @@ impl PackageManager {
 
     fn _install(&self, package: &str) -> DotsResult<()> {
         info!("Installing package ({} install {})", self.name(), package);
-        self.command().arg("install").arg(package).output()?;
+        self.command()
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .arg("install")
+            .arg(package)
+            .output()?;
         Ok(())
     }
 
@@ -112,6 +117,8 @@ impl PackageManager {
             package
         );
         Command::new("sudo")
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
             .arg(self.name())
             .arg("install")
             .arg(package)
