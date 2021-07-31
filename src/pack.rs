@@ -25,7 +25,8 @@ pub struct Package {
 
 impl Package {
     pub fn is_installed(&self) -> bool {
-        false
+        // TODO: check package manager instead of using which
+        which_has(&self.name)
     }
 
     pub fn install(&self) -> DotsResult<()> {
@@ -119,15 +120,19 @@ impl PackageManager {
         self.bootstrap()
     }
 
-    // Check if the package manager is available locally
     pub fn is_available(&self) -> bool {
-        Command::new("which")
-            .arg(self.name())
-            .output()
-            .expect("'which' failed")
-            .status
-            .success()
+        which_has(self.name())
     }
+}
+
+// Check if the package manager is available locally
+pub fn which_has(cmd: &str) -> bool {
+    Command::new("which")
+        .arg(cmd)
+        .output()
+        .expect("'which' failed")
+        .status
+        .success()
 }
 
 pub enum Shell<'a> {
