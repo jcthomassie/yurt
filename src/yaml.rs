@@ -25,6 +25,26 @@ lazy_static! {
     };
 }
 
+#[inline(always)]
+pub fn filter_units<T>(units: Vec<BuildUnit>) -> Vec<T>
+where
+    BuildUnit: Into<Option<T>>,
+{
+    units.into_iter().filter_map(BuildUnit::into).collect()
+}
+
+#[inline(always)]
+pub fn map_units<T, U>(units: Vec<BuildUnit>, func: fn(T) -> DotsResult<U>) -> DotsResult<Vec<U>>
+where
+    BuildUnit: Into<Option<T>>,
+{
+    units
+        .into_iter()
+        .filter_map(BuildUnit::into)
+        .map(func)
+        .collect()
+}
+
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Locale<T> {
     user: T,
@@ -66,7 +86,7 @@ pub enum Case {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BuildUnit {
     Link(Link),
     Package(Package),

@@ -16,11 +16,6 @@ lazy_static! {
     };
 }
 
-#[inline(always)]
-pub fn install(packages: Vec<Package>) -> DotsResult<()> {
-    packages.iter().map(|p| p.install()).collect()
-}
-
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     name: String,
@@ -111,7 +106,12 @@ impl PackageManager {
 
     // Check if the package manager is available locally
     pub fn is_available(&self) -> bool {
-        false
+        Command::new("which")
+            .arg(self.name())
+            .output()
+            .expect("'which' failed")
+            .status
+            .success()
     }
 }
 

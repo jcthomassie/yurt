@@ -11,21 +11,6 @@ pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
     Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
-#[inline(always)]
-pub fn install_links(links: Vec<Link>) -> DotsResult<()> {
-    links.iter().map(|ln| ln.link()).collect()
-}
-
-#[inline(always)]
-pub fn uninstall_links(links: Vec<Link>) -> DotsResult<()> {
-    links.iter().map(|ln| ln.unlink()).collect()
-}
-
-#[inline(always)]
-pub fn clean_links(links: Vec<Link>) -> DotsResult<()> {
-    links.iter().map(|ln| ln.clean()).collect()
-}
-
 pub enum LinkStatus {
     Exists,
     NotExists,

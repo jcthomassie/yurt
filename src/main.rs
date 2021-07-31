@@ -6,6 +6,8 @@ mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use error::DotsResult;
+use link::Link;
+use pack::Package;
 use std::env;
 use std::process::Command;
 
@@ -17,17 +19,6 @@ fn parse_build(matches: &ArgMatches) -> DotsResult<yaml::Build> {
 #[inline(always)]
 fn parse_resolve_build(matches: &ArgMatches) -> DotsResult<(repo::Repo, Vec<yaml::BuildUnit>)> {
     parse_build(matches)?.resolve()
-}
-
-#[inline(always)]
-fn filter_units<T>(units: Vec<yaml::BuildUnit>) -> Vec<T>
-where
-    yaml::BuildUnit: Into<Option<T>>,
-{
-    units
-        .into_iter()
-        .filter_map(yaml::BuildUnit::into)
-        .collect()
 }
 
 fn show(matches: ArgMatches) -> DotsResult<()> {
@@ -50,22 +41,23 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     }
     println!("Installing dotfiles...");
     repo.require()?;
-    link::install_links(filter_units::<link::Link>(units))?;
+    yaml::map_units::<Link, _>(units.clone(), |ln| ln.link())?;
     pack::Shell::Zsh.chsh()?;
+    yaml::map_units::<Package, _>(units, |pkg| pkg.install())?;
     Ok(())
 }
 
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Unstalling dotfiles...");
-    link::uninstall_links(filter_units::<link::Link>(units))?;
+    yaml::map_units::<Link, _>(units, |ln| ln.unlink())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
     println!("Cleaning invalid links...");
-    link::clean_links(filter_units::<link::Link>(units))?;
+    yaml::map_units::<Link, _>(units, |ln| ln.clean())?;
     Ok(())
 }
 
