@@ -7,6 +7,7 @@ mod yaml;
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use env_logger;
 use error::DotsResult;
+use log::info;
 use std::env;
 use std::process::Command;
 use yaml::{Build, BuildUnit};
@@ -45,8 +46,8 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     if sub.is_present("clean") {
         clean(matches)?;
     }
-    println!("Installing dotfiles...");
     repo.require()?;
+    info!("Starting build steps...");
     yaml::apply(
         units,
         |ln| ln.link(),
@@ -59,14 +60,14 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
 
 fn uninstall(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
-    println!("Unstalling dotfiles...");
+    info!("Uninstalling dotfiles...");
     yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> DotsResult<()> {
     let (_, units) = parse_resolve_build(&matches)?;
-    println!("Cleaning invalid links...");
+    info!("Cleaning link heads...");
     yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
     Ok(())
 }
@@ -79,7 +80,7 @@ fn edit() -> DotsResult<()> {
 }
 
 fn update() -> DotsResult<()> {
-    println!("Updating dotfiles...");
+    info!("Updating dotfiles...");
     Ok(())
 }
 
@@ -122,7 +123,6 @@ fn main() -> DotsResult<()> {
 
     if let Some(level) = matches.value_of("log") {
         env::set_var("RUST_LOG", level);
-        println!("SETTING LOG LEVEL: {}", level);
     }
     env_logger::init();
 
