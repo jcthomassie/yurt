@@ -90,16 +90,16 @@ impl BuildSet {
             Self::CaseVec(case_vec) => {
                 let mut default = true;
                 let mut unit_vec: Vec<BuildUnit> = Vec::new();
-                for case in case_vec.iter() {
+                for case in case_vec {
                     match case {
                         Case::Local { spec, build } if spec.is_local() => {
                             default = false;
-                            for set in build.iter() {
+                            for set in build {
                                 unit_vec.extend(set.resolve()?)
                             }
                         }
                         Case::Default { build } if default => {
-                            for set in build.iter() {
+                            for set in build {
                                 unit_vec.extend(set.resolve()?)
                             }
                         }
@@ -133,7 +133,7 @@ impl Build {
         let repo = self.repo.resolve()?;
         env::set_var("DOTS_REPO_LOCAL", &repo.local);
         let mut build_vec: Vec<BuildUnit> = Vec::new();
-        for set in self.build.iter() {
+        for set in &self.build {
             build_vec.extend(set.resolve()?);
         }
         Ok((repo, build_vec))

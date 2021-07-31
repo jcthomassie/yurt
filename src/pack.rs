@@ -34,7 +34,7 @@ impl Package {
 
     pub fn install(&self) -> DotsResult<()> {
         if !self.is_installed() {
-            for pm in self.managers.iter() {
+            for pm in &self.managers {
                 if pm.is_available() {
                     return pm.install(&self.name);
                 }
