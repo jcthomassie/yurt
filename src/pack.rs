@@ -21,27 +21,41 @@ lazy_static! {
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     name: String,
+    alias: Option<String>,
     managers: Vec<PackageManager>,
 }
 
 impl Package {
-    pub fn is_installed(&self) -> bool {
-        if which_has(&self.name) || dpkg_has(&self.name) {
+    fn _is_installed(&self, name: &str) -> bool {
+        if which_has(name) || dpkg_has(name) {
             return true;
         }
         for pm in &self.managers {
-            if pm.has(&self.name) {
+            if pm.has(name) {
                 return true;
             }
         }
         false
     }
 
+    pub fn is_installed(&self) -> bool {
+        self._is_installed(&self.name)
+            || match &self.alias {
+                Some(alias) => self._is_installed(alias),
+                None => false,
+            }
+    }
+
     pub fn install(&self) -> DotsResult<()> {
         if !self.is_installed() {
+            let alias = self.alias.clone();
             for pm in &self.managers {
                 if pm.is_available() {
-                    return pm.install(&self.name);
+                    let res = pm.install(&self.name);
+                    return match alias {
+                        Some(a) if res.is_err() => pm.install(a.as_str()),
+                        _ => res,
+                    };
                 }
             }
             warn!("Package unavailable: {}", self.name);
