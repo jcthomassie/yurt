@@ -106,34 +106,56 @@ mod tests {
     use std::fs::File;
     use tempfile;
 
+    macro_rules! fixture {
+        () => {{
+            let dir = tempfile::tempdir().expect("failed to create tempdir");
+            let ln = Link::new(dir.path().join("link.head"), dir.path().join("link.tail"));
+            (dir, ln)
+        }};
+    }
+
     #[test]
-    fn status() {
-        let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let ln = Link::new(dir.path().join("link.head"), dir.path().join("link.tail"));
-        // Neither end exists
+    fn status_null() {
+        let (_dir, ln) = fixture!();
         assert!(matches!(ln.status(), LinkStatus::Invalid(_)));
-        // Head does not exist
+    }
+
+    #[test]
+    fn status_no_head() {
+        let (_dir, ln) = fixture!();
         File::create(&ln.tail).expect("failed to create tempfile");
         assert!(matches!(ln.status(), LinkStatus::NotExists));
-        // Head links to tail
+    }
+
+    #[test]
+    fn status_exists() {
+        let (_dir, ln) = fixture!();
+        File::create(&ln.tail).expect("failed to create tempfile");
         symlink::symlink_file(&ln.tail, &ln.head).expect("failed to create symlink");
         assert!(matches!(ln.status(), LinkStatus::Exists));
         symlink::remove_symlink_file(&ln.head).expect("failed to remove symlink");
-        // Head links to wrong file
+    }
+
+    #[test]
+    fn status_wrong_tail() {
+        let (dir, ln) = fixture!();
         let wrong = dir.path().join("wrong.thing");
         File::create(&wrong).expect("failed to create tempfile");
         symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
         assert!(matches!(ln.status(), LinkStatus::Invalid(_)));
         symlink::remove_symlink_file(&ln.head).expect("failed to remove symlink");
-        // Head is a file
+    }
+
+    #[test]
+    fn status_head_is_file() {
+        let (_dir, ln) = fixture!();
         File::create(&ln.head).expect("failed to create tempfile");
         assert!(matches!(ln.status(), LinkStatus::Invalid(_)));
     }
 
     #[test]
     fn link_normal() {
-        let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let ln = Link::new(dir.path().join("link.head"), dir.path().join("link.tail"));
+        let (_dir, ln) = fixture!();
         File::create(&ln.tail).expect("failed to create tempfile");
         // Link once
         ln.link().expect("failed to create link");
@@ -142,8 +164,7 @@ mod tests {
 
     #[test]
     fn unlink_normal() {
-        let dir = tempfile::tempdir().expect("failed to create tempdir");
-        let ln = Link::new(dir.path().join("link.head"), dir.path().join("link.tail"));
+        let (_dir, ln) = fixture!();
         File::create(&ln.tail).expect("failed to create tempfile");
         // Link and unlink once
         ln.link().expect("failed to create link");
