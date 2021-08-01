@@ -133,13 +133,13 @@ impl From<PackageManager> for BuildUnit {
 #[derive(Debug, PartialEq, Deserialize)]
 pub enum BuildSet {
     #[serde(rename = "case")]
-    CaseVec(Vec<Case>),
+    Case(Vec<Case>),
     #[serde(rename = "link")]
-    LinkVec(Vec<Link>),
+    Link(Vec<Link>),
     #[serde(rename = "install")]
-    PackageVec(Vec<Package>),
+    Package(Vec<Package>),
     #[serde(rename = "bootstrap")]
-    BootstrapVec(Vec<PackageManager>),
+    Bootstrap(Vec<PackageManager>),
 }
 
 impl BuildSet {
@@ -147,7 +147,7 @@ impl BuildSet {
     pub fn resolve(&self) -> YurtResult<Vec<BuildUnit>> {
         match self {
             // Recursively filter cases
-            Self::CaseVec(case_vec) => {
+            Self::Case(case_vec) => {
                 let mut default = true;
                 let mut unit_vec: Vec<BuildUnit> = Vec::new();
                 for case in case_vec {
@@ -169,17 +169,17 @@ impl BuildSet {
                 Ok(unit_vec)
             }
             // Expand links
-            Self::LinkVec(link_vec) => link_vec
+            Self::Link(link_vec) => link_vec
                 .iter()
                 .map(|la| la.expand().map(|lb| lb.into()))
                 .collect(),
             // Clone packages
-            Self::PackageVec(pkg_vec) => pkg_vec
+            Self::Package(pkg_vec) => pkg_vec
                 .iter() // expand
                 .map(|pkg| Ok(pkg.clone().into()))
                 .collect(),
             // Clone package managers
-            Self::BootstrapVec(pm_vec) => pm_vec
+            Self::Bootstrap(pm_vec) => pm_vec
                 .iter() // expand
                 .map(|pm| Ok(pm.clone().into()))
                 .collect(),
@@ -271,13 +271,13 @@ build:
 
     #[test]
     fn empty_build_set() {
-        let set = BuildSet::CaseVec(vec![Case::Local {
+        let set = BuildSet::Case(vec![Case::Local {
             spec: Locale {
                 user: None,
                 platform: Some("nothere".to_string()),
                 distro: None,
             },
-            build: vec![BuildSet::LinkVec(vec![Link::new("a", "b")])],
+            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve().unwrap().is_empty());
     }

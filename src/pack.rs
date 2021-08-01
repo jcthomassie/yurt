@@ -67,23 +67,23 @@ impl Source {
 trait Cmd {
     fn name(&self) -> &str;
 
-    #[inline(always)]
+    #[inline]
     fn command(&self) -> Command {
         Command::new(self.name())
     }
 
-    #[inline(always)]
+    #[inline]
     fn call(&self, args: &[&str]) -> YurtResult<Output> {
         debug!("Calling command: {} {:?}", self.name(), args);
         Ok(self.command().args(args).output()?)
     }
 
-    #[inline(always)]
+    #[inline]
     fn call_bool(&self, args: &[&str]) -> bool {
         self.call(args).unwrap().status.success()
     }
 
-    #[inline(always)]
+    #[inline]
     fn child(&self, args: &[&str]) -> YurtResult<Child> {
         Ok(self
             .command()
@@ -108,9 +108,10 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> YurtResult<()> {
             stdin.write_all(&buf).unwrap();
         }
     }
-    match proc_b.wait_with_output()?.status.success() {
-        true => Ok(()),
-        false => Err("failed to execute piped command".into()),
+    if proc_b.wait_with_output()?.status.success() {
+        Ok(())
+    } else {
+        Err("failed to execute piped command".into())
     }
 }
 
@@ -161,7 +162,9 @@ impl Package {
     }
 
     pub fn install(&self) -> YurtResult<()> {
-        if !self.is_installed() {
+        if self.is_installed() {
+            info!("Package already installed: {}", self.name);
+        } else {
             let alias = self.alias.clone();
             for pm in &self.managers {
                 if pm.is_available() {
@@ -173,8 +176,6 @@ impl Package {
                 }
             }
             warn!("Package unavailable: {}", self.name);
-        } else {
-            info!("Package already installed: {}", self.name);
         }
         Ok(())
     }
@@ -235,9 +236,7 @@ impl PackageManager {
     // Install a package
     pub fn install(&self, package: &str) -> YurtResult<()> {
         match self {
-            Self::Apt => self._sudo_install(package),
-            Self::AptGet => self._sudo_install(package),
-            Self::Yum => self._sudo_install(package),
+            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package),
             _ => self._install(package),
         }
     }
@@ -283,12 +282,12 @@ impl PackageManager {
 }
 
 // Check if a command is available locally
-#[inline(always)]
+#[inline]
 pub fn which_has(cmd: &str) -> bool {
     "which".call_bool(&[cmd])
 }
 
-#[inline(always)]
+#[inline]
 pub fn dpkg_has(cmd: &str) -> bool {
     "dpkg".call_bool(&["-s", cmd])
 }
