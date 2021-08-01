@@ -1,4 +1,4 @@
-use super::error::{DotsError, DotsResult};
+use super::error::{YurtError, YurtResult};
 use git2::Repository;
 use serde::Deserialize;
 use shellexpand;
@@ -12,7 +12,7 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn resolve(&self) -> DotsResult<Self> {
+    pub fn resolve(&self) -> YurtResult<Self> {
         Ok(Self {
             local: PathBuf::from(
                 shellexpand::full(self.local.to_str().ok_or("failed to parse path")?)?.to_string(),
@@ -21,22 +21,22 @@ impl Repo {
         })
     }
 
-    pub fn open(&self) -> DotsResult<Repository> {
+    pub fn open(&self) -> YurtResult<Repository> {
         let repo = Repository::open(&self.local);
         match repo {
-            Err(e) => Err(DotsError::Upstream(Box::new(e))),
+            Err(e) => Err(YurtError::Upstream(Box::new(e))),
             Ok(r) => Ok(r),
         }
     }
 
-    pub fn clone(&self) -> DotsResult<Repository> {
+    pub fn clone(&self) -> YurtResult<Repository> {
         match Repository::clone_recurse(self.remote.as_ref(), &self.local) {
-            Err(e) => Err(DotsError::Upstream(Box::new(e))),
+            Err(e) => Err(YurtError::Upstream(Box::new(e))),
             Ok(r) => Ok(r),
         }
     }
 
-    pub fn require(&self) -> DotsResult<Repository> {
+    pub fn require(&self) -> YurtResult<Repository> {
         match self.open() {
             Err(_) => self.clone(),
             Ok(r) => Ok(r),

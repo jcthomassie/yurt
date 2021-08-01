@@ -1,4 +1,4 @@
-use super::error::DotsResult;
+use super::error::YurtResult;
 use super::link::Link;
 use super::pack::{Package, PackageManager, Source};
 use super::repo::Repo;
@@ -148,7 +148,7 @@ pub enum BuildSet {
 
 impl BuildSet {
     // Recursively resolve all case units; collect into single vec
-    pub fn resolve(&self) -> DotsResult<Vec<BuildUnit>> {
+    pub fn resolve(&self) -> YurtResult<Vec<BuildUnit>> {
         match self {
             // Recursively filter cases
             Self::CaseVec(case_vec) => {
@@ -199,17 +199,17 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn from_file(path: PathBuf) -> DotsResult<Self> {
+    pub fn from_file(path: PathBuf) -> YurtResult<Self> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
         let build: Build = serde_yaml::from_reader(reader)?;
         Ok(build)
     }
 
-    pub fn resolve(&self) -> DotsResult<(Repo, Source, Vec<BuildUnit>)> {
+    pub fn resolve(&self) -> YurtResult<(Repo, Source, Vec<BuildUnit>)> {
         // Resolve repo
         let repo = self.repo.resolve()?;
-        env::set_var("DOTS_REPO_LOCAL", &repo.local);
+        env::set_var("YURT_REPO_LOCAL", &repo.local);
         // Resolve source files
         let source = self.source.resolve()?;
         let mut build_vec: Vec<BuildUnit> = Vec::new();

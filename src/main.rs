@@ -6,21 +6,21 @@ mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use env_logger;
-use error::DotsResult;
+use error::YurtResult;
 use log::info;
 use std::env;
 use std::process::Command;
 use yaml::{Build, BuildUnit};
 
 #[inline(always)]
-fn parse_build(matches: &ArgMatches) -> DotsResult<Build> {
+fn parse_build(matches: &ArgMatches) -> YurtResult<Build> {
     Build::from_file(link::expand_path(matches.value_of("yaml").unwrap())?)
 }
 
 #[inline(always)]
 fn parse_resolve_build(
     matches: &ArgMatches,
-) -> DotsResult<(repo::Repo, pack::Source, Vec<BuildUnit>)> {
+) -> YurtResult<(repo::Repo, pack::Source, Vec<BuildUnit>)> {
     parse_build(matches)?.resolve()
 }
 
@@ -30,7 +30,7 @@ macro_rules! skip {
     };
 }
 
-fn show(matches: ArgMatches) -> DotsResult<()> {
+fn show(matches: ArgMatches) -> YurtResult<()> {
     let build = parse_build(&matches)?;
     let (repo, source, units) = build.resolve()?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
@@ -43,7 +43,7 @@ fn show(matches: ArgMatches) -> DotsResult<()> {
     Ok(())
 }
 
-fn install(matches: ArgMatches) -> DotsResult<()> {
+fn install(matches: ArgMatches) -> YurtResult<()> {
     let (repo, _, units) = parse_resolve_build(&matches)?;
     // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
@@ -62,33 +62,33 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
     Ok(())
 }
 
-fn uninstall(matches: ArgMatches) -> DotsResult<()> {
+fn uninstall(matches: ArgMatches) -> YurtResult<()> {
     let (_, _, units) = parse_resolve_build(&matches)?;
     info!("Uninstalling dotfiles...");
     yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
     Ok(())
 }
 
-fn clean(matches: ArgMatches) -> DotsResult<()> {
+fn clean(matches: ArgMatches) -> YurtResult<()> {
     let (_, _, units) = parse_resolve_build(&matches)?;
     info!("Cleaning link heads...");
     yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
     Ok(())
 }
 
-fn edit() -> DotsResult<()> {
+fn edit() -> YurtResult<()> {
     Command::new(env::var("EDITOR").expect("system editor is unset"))
-        .arg(env::var("DOTS_REPO_ROOT").expect("dotfile repo root is unset"))
+        .arg(env::var("YURT_REPO_ROOT").expect("dotfile repo root is unset"))
         .output()?;
     Ok(())
 }
 
-fn update() -> DotsResult<()> {
+fn update() -> YurtResult<()> {
     info!("Updating dotfiles...");
     Ok(())
 }
 
-fn main() -> DotsResult<()> {
+fn main() -> YurtResult<()> {
     let matches = App::new("dots")
         .author(crate_authors!())
         .version(crate_version!())

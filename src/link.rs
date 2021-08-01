@@ -1,4 +1,4 @@
-use super::error::DotsResult;
+use super::error::YurtResult;
 use log::info;
 use serde::Deserialize;
 use shellexpand;
@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use symlink;
 
 #[inline(always)]
-pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> DotsResult<PathBuf> {
+pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> YurtResult<PathBuf> {
     Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
@@ -34,7 +34,7 @@ impl Link {
     }
 
     // Returns new link with paths expanded
-    pub fn expand(&self) -> DotsResult<Self> {
+    pub fn expand(&self) -> YurtResult<Self> {
         Ok(Self::new(
             expand_path(self.head.to_str().ok_or("")?)?,
             expand_path(self.tail.to_str().ok_or("")?)?,
@@ -66,7 +66,7 @@ impl Link {
     }
 
     // Try to create link if it does not already exist
-    pub fn link(&self) -> DotsResult<()> {
+    pub fn link(&self) -> YurtResult<()> {
         match self.status() {
             LinkStatus::Exists => Ok(()),
             LinkStatus::NotExists => {
@@ -78,7 +78,7 @@ impl Link {
     }
 
     // Try to remove link if it exists
-    pub fn unlink(&self) -> DotsResult<()> {
+    pub fn unlink(&self) -> YurtResult<()> {
         match self.status() {
             LinkStatus::Exists => {
                 info!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
@@ -89,7 +89,7 @@ impl Link {
     }
 
     // Remove any conflicting files/links at head
-    pub fn clean(&self) -> DotsResult<()> {
+    pub fn clean(&self) -> YurtResult<()> {
         match self.status() {
             LinkStatus::Invalid(_) => {
                 info!("Removing {:?}", &self.head);
