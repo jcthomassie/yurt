@@ -1,7 +1,7 @@
-use super::error::YurtResult;
 use super::link::Link;
 use super::pack::{Package, PackageManager};
 use super::repo::Repo;
+use anyhow::Result;
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::borrow::Cow;
@@ -144,7 +144,7 @@ pub enum BuildSet {
 
 impl BuildSet {
     // Recursively resolve all case units; collect into single vec
-    pub fn resolve(&self) -> YurtResult<Vec<BuildUnit>> {
+    pub fn resolve(&self) -> Result<Vec<BuildUnit>> {
         match self {
             // Recursively filter cases
             Self::Case(case_vec) => {
@@ -194,17 +194,17 @@ pub struct Build {
 }
 
 impl Build {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> YurtResult<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
         Self::from_file(file)
     }
 
-    pub fn from_file(file: File) -> YurtResult<Self> {
+    pub fn from_file(file: File) -> Result<Self> {
         let reader = BufReader::new(file);
         Ok(serde_yaml::from_reader::<_, Self>(reader)?)
     }
 
-    pub fn resolve(&self) -> YurtResult<(Repo, Vec<BuildUnit>)> {
+    pub fn resolve(&self) -> Result<(Repo, Vec<BuildUnit>)> {
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);

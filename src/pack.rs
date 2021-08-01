@@ -1,4 +1,4 @@
-use super::error::YurtResult;
+use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use regex::Regex;
@@ -33,7 +33,7 @@ pub struct Source(Vec<String>);
 #[allow(dead_code)]
 impl Source {
     // Resolve source file paths
-    pub fn resolve(&self) -> YurtResult<Self> {
+    pub fn resolve(&self) -> Result<Self> {
         let mut vec: Vec<String> = Vec::with_capacity(self.0.len());
         for path in &self.0 {
             vec.push(shellexpand::full(path)?.to_string())
@@ -42,7 +42,7 @@ impl Source {
     }
 
     // Reload all of the source files
-    pub fn reload(&self) -> YurtResult<()> {
+    pub fn reload(&self) -> Result<()> {
         let re = Regex::new(r#"export ([0-9A-Za-z_-]+)=([0-9A-Za-z_"-:{}\$]+)[;$]?"#).unwrap();
         for path in &self.0 {
             let file = File::open(path)?;
@@ -73,7 +73,7 @@ trait Cmd {
     }
 
     #[inline]
-    fn call(&self, args: &[&str]) -> YurtResult<Output> {
+    fn call(&self, args: &[&str]) -> Result<Output> {
         debug!("Calling command: {} {:?}", self.name(), args);
         Ok(self.command().args(args).output()?)
     }
@@ -84,7 +84,7 @@ trait Cmd {
     }
 
     #[inline]
-    fn child(&self, args: &[&str]) -> YurtResult<Child> {
+    fn child(&self, args: &[&str]) -> Result<Child> {
         Ok(self
             .command()
             .args(args)
@@ -100,7 +100,7 @@ impl Cmd for &str {
     }
 }
 
-fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> YurtResult<()> {
+fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<()> {
     if let Some(ref mut stdout) = proc_a.stdout {
         if let Some(ref mut stdin) = proc_b.stdin {
             let mut buf: Vec<u8> = Vec::new();
@@ -111,11 +111,11 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> YurtResult<()> {
     if proc_b.wait_with_output()?.status.success() {
         Ok(())
     } else {
-        Err("failed to execute piped command".into())
+        Err(anyhow!("failed to execute piped command"))
     }
 }
 
-fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> YurtResult<()>
+fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> Result<()>
 where
     T: Cmd,
     U: Cmd,
@@ -161,7 +161,7 @@ impl Package {
             }
     }
 
-    pub fn install(&self) -> YurtResult<()> {
+    pub fn install(&self) -> Result<()> {
         if self.is_installed() {
             info!("Package already installed: {}", self.name);
         } else {
@@ -206,7 +206,7 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
-    fn _install(&self, package: &str) -> YurtResult<()> {
+    fn _install(&self, package: &str) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.command()
             .stdin(Stdio::null())
@@ -217,7 +217,7 @@ impl PackageManager {
         Ok(())
     }
 
-    fn _sudo_install(&self, package: &str) -> YurtResult<()> {
+    fn _sudo_install(&self, package: &str) -> Result<()> {
         info!(
             "Installing package (sudo {} install {})",
             self.name(),
@@ -234,7 +234,7 @@ impl PackageManager {
     }
 
     // Install a package
-    pub fn install(&self, package: &str) -> YurtResult<()> {
+    pub fn install(&self, package: &str) -> Result<()> {
         match self {
             Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package),
             _ => self._install(package),
@@ -250,7 +250,7 @@ impl PackageManager {
     }
 
     // Install the package manager and perform setup
-    pub fn bootstrap(&self) -> YurtResult<()> {
+    pub fn bootstrap(&self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
             Self::Brew => Bash.remote_script(&[
@@ -264,12 +264,12 @@ impl PackageManager {
                 "-sSf",
                 "https://sh.rustup.rs",
             ]),
-            pm => Err(format!("bootstrap not supported for {}", pm.name()).into()),
+            pm => Err(anyhow!("bootstrap not supported for {}", pm.name())),
         }
     }
 
     // Install the package manager if not already installed
-    pub fn require(&self) -> YurtResult<()> {
+    pub fn require(&self) -> Result<()> {
         if self.is_available() {
             return Ok(());
         }
@@ -315,13 +315,13 @@ impl<'a> Cmd for Shell<'a> {
 
 impl<'a> Shell<'a> {
     // Use curl to fetch remote script and pipe into shell
-    pub fn remote_script(self, curl_args: &[&str]) -> YurtResult<()> {
+    pub fn remote_script(self, curl_args: &[&str]) -> Result<()> {
         info!("Running remote script");
         pipe("curl", curl_args, self, &[])
     }
 
     // Set self as the default system shell
-    pub fn chsh(&self) -> YurtResult<()> {
+    pub fn chsh(&self) -> Result<()> {
         info!("Current shell: {}", &*SHELL.name());
         if discriminant(self) == discriminant(&*SHELL) {
             return Ok(());
