@@ -44,7 +44,7 @@ fn show(matches: ArgMatches) -> DotsResult<()> {
 }
 
 fn install(matches: ArgMatches) -> DotsResult<()> {
-    let (repo, src, units) = parse_resolve_build(&matches)?;
+    let (repo, _, units) = parse_resolve_build(&matches)?;
     // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
     if sub.is_present("clean") {
@@ -59,7 +59,6 @@ fn install(matches: ArgMatches) -> DotsResult<()> {
         |pm| pm.require(),
     )?;
     pack::Shell::Zsh.chsh()?;
-    src.reload()?;
     Ok(())
 }
 

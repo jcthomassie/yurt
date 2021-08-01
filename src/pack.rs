@@ -41,6 +41,7 @@ impl Source {
     }
 
     // Reload all of the source files
+    #[allow(dead_code)]
     pub fn reload(&self) -> DotsResult<()> {
         let re = Regex::new(r#"export ([0-9A-Za-z_-]+)=([0-9A-Za-z_"-:{}\$]+)[;$]?"#).unwrap();
         for path in &self.0 {
