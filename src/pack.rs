@@ -133,7 +133,7 @@ where
     pipe_existing(proc_a, proc_b)
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize)]
 pub struct Package {
     name: String,
     alias: Option<String>,
@@ -181,7 +181,7 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,

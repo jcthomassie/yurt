@@ -27,8 +27,7 @@ macro_rules! skip {
 }
 
 fn show(matches: &ArgMatches) -> Result<()> {
-    let build = parse_build(matches)?;
-    let (repo, units) = build.resolve()?;
+    let (repo, units) = parse_resolve_build(matches)?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
     println!("_______________________________________");
     println!("Repo:\n{:#?}", repo);

@@ -78,7 +78,7 @@ pub enum Case {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum BuildUnit {
     Link(Link),
     Package(Package),
@@ -114,7 +114,8 @@ impl From<BuildUnit> for Option<PackageManager> {
 
 impl From<Link> for BuildUnit {
     fn from(ln: Link) -> BuildUnit {
-        BuildUnit::Link(ln)
+        // TODO: don't panic
+        BuildUnit::Link(ln.expand().unwrap())
     }
 }
 
@@ -127,6 +128,57 @@ impl From<Package> for BuildUnit {
 impl From<PackageManager> for BuildUnit {
     fn from(pkg: PackageManager) -> BuildUnit {
         BuildUnit::Bootstrap(pkg)
+    }
+}
+
+trait UnitResolves {
+    fn resolve(self) -> Result<BuildUnit>;
+}
+
+impl<T> UnitResolves for T
+where
+    T: Into<BuildUnit>,
+{
+    fn resolve(self) -> Result<BuildUnit> {
+        Ok(self.into())
+    }
+}
+
+trait SetResolves {
+    fn resolve(self) -> Result<Vec<BuildUnit>>;
+}
+
+impl<T> SetResolves for Vec<T>
+where
+    T: UnitResolves,
+{
+    fn resolve(self) -> Result<Vec<BuildUnit>> {
+        self.into_iter().map(|u| u.resolve()).collect()
+    }
+}
+
+impl SetResolves for Vec<Case> {
+    // Recursively filter cases
+    fn resolve(self) -> Result<Vec<BuildUnit>> {
+        let mut default = true;
+        let mut unit_vec: Vec<BuildUnit> = Vec::new();
+        for case in self {
+            match case {
+                Case::Local { spec, build } if spec.is_local() => {
+                    default = false;
+                    for set in build {
+                        unit_vec.extend(set.resolve()?);
+                    }
+                }
+                Case::Default { build } if default => {
+                    for set in build {
+                        unit_vec.extend(set.resolve()?);
+                    }
+                }
+                _ => (),
+            };
+        }
+        Ok(unit_vec)
     }
 }
 
@@ -144,45 +196,12 @@ pub enum BuildSet {
 
 impl BuildSet {
     // Recursively resolve all case units; collect into single vec
-    pub fn resolve(&self) -> Result<Vec<BuildUnit>> {
+    pub fn resolve(self) -> Result<Vec<BuildUnit>> {
         match self {
-            // Recursively filter cases
-            Self::Case(case_vec) => {
-                let mut default = true;
-                let mut unit_vec: Vec<BuildUnit> = Vec::new();
-                for case in case_vec {
-                    match case {
-                        Case::Local { spec, build } if spec.is_local() => {
-                            default = false;
-                            for set in build {
-                                unit_vec.extend(set.resolve()?)
-                            }
-                        }
-                        Case::Default { build } if default => {
-                            for set in build {
-                                unit_vec.extend(set.resolve()?)
-                            }
-                        }
-                        _ => (),
-                    };
-                }
-                Ok(unit_vec)
-            }
-            // Expand links
-            Self::Link(link_vec) => link_vec
-                .iter()
-                .map(|la| la.expand().map(|lb| lb.into()))
-                .collect(),
-            // Clone packages
-            Self::Package(pkg_vec) => pkg_vec
-                .iter() // expand
-                .map(|pkg| Ok(pkg.clone().into()))
-                .collect(),
-            // Clone package managers
-            Self::Bootstrap(pm_vec) => pm_vec
-                .iter() // expand
-                .map(|pm| Ok(pm.clone().into()))
-                .collect(),
+            Self::Case(case_vec) => case_vec.resolve(),
+            Self::Link(link_vec) => link_vec.resolve(),
+            Self::Package(pkg_vec) => pkg_vec.resolve(),
+            Self::Bootstrap(pm_vec) => pm_vec.resolve(),
         }
     }
 }
@@ -204,12 +223,12 @@ impl Build {
         Ok(serde_yaml::from_reader::<_, Self>(reader)?)
     }
 
-    pub fn resolve(&self) -> Result<(Repo, Vec<BuildUnit>)> {
+    pub fn resolve(self) -> Result<(Repo, Vec<BuildUnit>)> {
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);
         let mut build_vec: Vec<BuildUnit> = Vec::new();
-        for set in &self.build {
+        for set in self.build {
             build_vec.extend(set.resolve()?);
         }
         Ok((repo, build_vec))
