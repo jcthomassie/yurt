@@ -219,3 +219,71 @@ impl Build {
         Ok((repo, build_vec))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::prelude::*;
+    use tempfile;
+
+    const YAML: &str = "
+---
+repo:
+  local: $HOME/dotfiles
+  remote: https://github.com/user/dotfiles.git
+build:
+  - case:
+    - local:
+        spec:
+          user: notme
+        build:
+        - install:
+          - name: wrong
+            managers:
+            - apt
+    - default:
+        build:
+        - install:
+          - name: right
+            managers:
+            - apt
+            - brew
+  - link:
+    - tail: some/file
+      head: some/link
+  - bootstrap:
+    - cargo
+";
+
+    fn yaml_file() -> tempfile::NamedTempFile {
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(YAML.as_bytes()).unwrap();
+        file
+    }
+
+    #[test]
+    fn build_parses() {
+        let file = yaml_file();
+        Build::from_path(file.path()).unwrap();
+    }
+
+    #[test]
+    fn build_resolves() {
+        let file = yaml_file();
+        let build = Build::from_path(file.path()).unwrap();
+        build.resolve().unwrap();
+    }
+
+    #[test]
+    fn empty_build_set() {
+        let set = BuildSet::CaseVec(vec![Case::Local {
+            spec: Locale {
+                user: None,
+                platform: Some("nothere".to_string()),
+                distro: None,
+            },
+            build: vec![BuildSet::LinkVec(vec![Link::new("a", "b")])],
+        }]);
+        assert!(set.resolve().unwrap().is_empty());
+    }
+}
