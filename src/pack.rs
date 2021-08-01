@@ -15,7 +15,7 @@ pub use Shell::{Bash, Powershell, Sh, Zsh};
 lazy_static! {
     static ref SHELL: Shell<'static> = match env::var("SHELL")
         .expect("failed to read shell")
-        .split("/")
+        .split('/')
         .last()
     {
         Some("sh") => Shell::Sh,
@@ -80,10 +80,7 @@ trait Cmd {
 
     #[inline(always)]
     fn call_bool(&self, args: &[&str]) -> bool {
-        self.call(args)
-            .expect(&format!("'{}' failed", self.name()))
-            .status
-            .success()
+        self.call(args).unwrap().status.success()
     }
 
     #[inline(always)]

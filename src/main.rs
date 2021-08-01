@@ -5,7 +5,6 @@ mod repo;
 mod yaml;
 
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
-use env_logger;
 use error::YurtResult;
 use log::info;
 use std::env;

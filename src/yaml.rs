@@ -9,7 +9,6 @@ use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use whoami;
 
 lazy_static! {
     pub static ref LOCALE: Locale<Cow<'static, str>> = Locale {
@@ -17,7 +16,7 @@ lazy_static! {
         platform: Cow::Owned(format!("{:?}", whoami::platform())),
         distro: Cow::Owned(
             whoami::distro()
-                .split(" ")
+                .split(' ')
                 .next()
                 .map(String::from)
                 .expect("failed to determine distro"),
@@ -63,10 +62,7 @@ impl Locale<Option<String>> {
         s_vals
             .into_iter()
             .zip(o_vals.into_iter())
-            .all(|(s, o)| match s {
-                Some(val) if val != o => false,
-                _ => true,
-            })
+            .all(|(s, o)| !matches!(s, Some(val) if val != o))
     }
 }
 
@@ -89,28 +85,28 @@ pub enum BuildUnit {
     Bootstrap(PackageManager),
 }
 
-impl Into<Option<Link>> for BuildUnit {
-    fn into(self) -> Option<Link> {
-        match self {
-            Self::Link(v) => Some(v),
+impl From<BuildUnit> for Option<Link> {
+    fn from(unit: BuildUnit) -> Option<Link> {
+        match unit {
+            BuildUnit::Link(v) => Some(v),
             _ => None,
         }
     }
 }
 
-impl Into<Option<Package>> for BuildUnit {
-    fn into(self) -> Option<Package> {
-        match self {
-            Self::Package(v) => Some(v),
+impl From<BuildUnit> for Option<Package> {
+    fn from(unit: BuildUnit) -> Option<Package> {
+        match unit {
+            BuildUnit::Package(v) => Some(v),
             _ => None,
         }
     }
 }
 
-impl Into<Option<PackageManager>> for BuildUnit {
-    fn into(self) -> Option<PackageManager> {
-        match self {
-            Self::Bootstrap(v) => Some(v),
+impl From<BuildUnit> for Option<PackageManager> {
+    fn from(unit: BuildUnit) -> Option<PackageManager> {
+        match unit {
+            BuildUnit::Bootstrap(v) => Some(v),
             _ => None,
         }
     }
@@ -175,7 +171,7 @@ impl BuildSet {
             // Expand links
             Self::LinkVec(link_vec) => link_vec
                 .iter()
-                .map(|la| la.expand().and_then(|lb| Ok(lb.into())))
+                .map(|la| la.expand().map(|lb| lb.into()))
                 .collect(),
             // Clone packages
             Self::PackageVec(pkg_vec) => pkg_vec
@@ -224,7 +220,6 @@ impl Build {
 mod tests {
     use super::*;
     use std::io::prelude::*;
-    use tempfile;
 
     const YAML: &str = "
 ---

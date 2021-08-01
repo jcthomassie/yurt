@@ -1,7 +1,6 @@
 use super::error::{YurtError, YurtResult};
 use git2::Repository;
 use serde::Deserialize;
-use shellexpand;
 use std::path::PathBuf;
 use url::Url;
 

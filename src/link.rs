@@ -1,11 +1,9 @@
 use super::error::YurtResult;
 use log::info;
 use serde::Deserialize;
-use shellexpand;
 use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
-use symlink;
 
 #[inline(always)]
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> YurtResult<PathBuf> {
@@ -104,7 +102,6 @@ impl Link {
 mod tests {
     use super::*;
     use std::fs::File;
-    use tempfile;
 
     fn fixture() -> (tempfile::TempDir, Link) {
         let dir = tempfile::tempdir().expect("failed to create tempdir");
