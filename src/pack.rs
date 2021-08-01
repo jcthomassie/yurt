@@ -30,6 +30,7 @@ lazy_static! {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Source(Vec<String>);
 
+#[allow(dead_code)]
 impl Source {
     // Resolve source file paths
     pub fn resolve(&self) -> YurtResult<Self> {
@@ -41,7 +42,6 @@ impl Source {
     }
 
     // Reload all of the source files
-    #[allow(dead_code)]
     pub fn reload(&self) -> YurtResult<()> {
         let re = Regex::new(r#"export ([0-9A-Za-z_-]+)=([0-9A-Za-z_"-:{}\$]+)[;$]?"#).unwrap();
         for path in &self.0 {

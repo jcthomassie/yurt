@@ -14,13 +14,11 @@ use yaml::{Build, BuildUnit};
 
 #[inline(always)]
 fn parse_build(matches: &ArgMatches) -> YurtResult<Build> {
-    Build::from_file(link::expand_path(matches.value_of("yaml").unwrap())?)
+    Build::from_path(link::expand_path(matches.value_of("yaml").unwrap())?)
 }
 
 #[inline(always)]
-fn parse_resolve_build(
-    matches: &ArgMatches,
-) -> YurtResult<(repo::Repo, pack::Source, Vec<BuildUnit>)> {
+fn parse_resolve_build(matches: &ArgMatches) -> YurtResult<(repo::Repo, Vec<BuildUnit>)> {
     parse_build(matches)?.resolve()
 }
 
@@ -32,19 +30,17 @@ macro_rules! skip {
 
 fn show(matches: ArgMatches) -> YurtResult<()> {
     let build = parse_build(&matches)?;
-    let (repo, source, units) = build.resolve()?;
+    let (repo, units) = build.resolve()?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
     println!("_______________________________________");
     println!("Repo:\n{:#?}", repo);
-    println!("_______________________________________");
-    println!("Source:\n{:#?}", source);
     println!("_______________________________________");
     println!("Steps:\n{:#?}", units);
     Ok(())
 }
 
 fn install(matches: ArgMatches) -> YurtResult<()> {
-    let (repo, _, units) = parse_resolve_build(&matches)?;
+    let (repo, units) = parse_resolve_build(&matches)?;
     // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
     if sub.is_present("clean") {
@@ -63,14 +59,14 @@ fn install(matches: ArgMatches) -> YurtResult<()> {
 }
 
 fn uninstall(matches: ArgMatches) -> YurtResult<()> {
-    let (_, _, units) = parse_resolve_build(&matches)?;
+    let (_, units) = parse_resolve_build(&matches)?;
     info!("Uninstalling dotfiles...");
     yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
     Ok(())
 }
 
 fn clean(matches: ArgMatches) -> YurtResult<()> {
-    let (_, _, units) = parse_resolve_build(&matches)?;
+    let (_, units) = parse_resolve_build(&matches)?;
     info!("Cleaning link heads...");
     yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
     Ok(())

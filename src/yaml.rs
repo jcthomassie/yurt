@@ -1,6 +1,6 @@
 use super::error::YurtResult;
 use super::link::Link;
-use super::pack::{Package, PackageManager, Source};
+use super::pack::{Package, PackageManager};
 use super::repo::Repo;
 use lazy_static::lazy_static;
 use serde::Deserialize;
@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::PathBuf;
+use std::path::Path;
 use whoami;
 
 lazy_static! {
@@ -194,28 +194,28 @@ impl BuildSet {
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Build {
     pub repo: Repo,
-    pub source: Source,
     pub build: Vec<BuildSet>,
 }
 
 impl Build {
-    pub fn from_file(path: PathBuf) -> YurtResult<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> YurtResult<Self> {
         let file = File::open(path)?;
-        let reader = BufReader::new(file);
-        let build: Build = serde_yaml::from_reader(reader)?;
-        Ok(build)
+        Self::from_file(file)
     }
 
-    pub fn resolve(&self) -> YurtResult<(Repo, Source, Vec<BuildUnit>)> {
+    pub fn from_file(file: File) -> YurtResult<Self> {
+        let reader = BufReader::new(file);
+        Ok(serde_yaml::from_reader::<_, Self>(reader)?)
+    }
+
+    pub fn resolve(&self) -> YurtResult<(Repo, Vec<BuildUnit>)> {
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);
-        // Resolve source files
-        let source = self.source.resolve()?;
         let mut build_vec: Vec<BuildUnit> = Vec::new();
         for set in &self.build {
             build_vec.extend(set.resolve()?);
         }
-        Ok((repo, source, build_vec))
+        Ok((repo, build_vec))
     }
 }
