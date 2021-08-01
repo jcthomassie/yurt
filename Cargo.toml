@@ -1,5 +1,5 @@
 [package]
-name = "dots"
+name = "yurt"
 version = "0.1.0"
 authors = ["Julian Thomassie <julianthomassie@gmail.com>"]
 edition = "2018"
