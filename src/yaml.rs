@@ -85,51 +85,39 @@ pub enum BuildUnit {
     Bootstrap(PackageManager),
 }
 
-impl From<BuildUnit> for Option<Link> {
-    fn from(unit: BuildUnit) -> Option<Link> {
-        match unit {
-            BuildUnit::Link(v) => Some(v),
-            _ => None,
+macro_rules! auto_convert {
+    (@impl_from BuildUnit::$outer:ident, $inner:ty) => {
+        impl From<BuildUnit> for Option<$inner> {
+            fn from(unit: BuildUnit) -> Option<$inner> {
+                match unit {
+                    BuildUnit::$outer(u) => Some(u),
+                    _ => None,
+                }
+            }
         }
-    }
-}
+    };
 
-impl From<BuildUnit> for Option<Package> {
-    fn from(unit: BuildUnit) -> Option<Package> {
-        match unit {
-            BuildUnit::Package(v) => Some(v),
-            _ => None,
+    (@impl_to BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
+        impl From<$inner> for BuildUnit {
+            fn from($var: $inner) -> BuildUnit {
+                BuildUnit::$outer($var_map)
+            }
         }
-    }
+    };
+
+    (BuildUnit::$outer:ident, $inner:ty) => {
+        auto_convert!(@impl_from BuildUnit::$outer, $inner);
+        auto_convert!(@impl_to BuildUnit::$outer, $inner, x, x);
+    };
+    (BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
+        auto_convert!(@impl_from BuildUnit::$outer, $inner);
+        auto_convert!(@impl_to BuildUnit::$outer, $inner, $var, $var_map);
+    };
 }
 
-impl From<BuildUnit> for Option<PackageManager> {
-    fn from(unit: BuildUnit) -> Option<PackageManager> {
-        match unit {
-            BuildUnit::Bootstrap(v) => Some(v),
-            _ => None,
-        }
-    }
-}
-
-impl From<Link> for BuildUnit {
-    fn from(ln: Link) -> BuildUnit {
-        // TODO: don't panic
-        BuildUnit::Link(ln.expand().unwrap())
-    }
-}
-
-impl From<Package> for BuildUnit {
-    fn from(pkg: Package) -> BuildUnit {
-        BuildUnit::Package(pkg)
-    }
-}
-
-impl From<PackageManager> for BuildUnit {
-    fn from(pkg: PackageManager) -> BuildUnit {
-        BuildUnit::Bootstrap(pkg)
-    }
-}
+auto_convert!(BuildUnit::Link, Link, ln, ln.expand().unwrap());
+auto_convert!(BuildUnit::Package, Package);
+auto_convert!(BuildUnit::Bootstrap, PackageManager);
 
 trait UnitResolves {
     fn resolve(self) -> Result<BuildUnit>;
