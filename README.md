@@ -1,5 +1,7 @@
 # yurt
 
+[![tests](https://github.com/jcthomassie/euler/workflows/tests/badge.svg)](https://github.com/jcthomassie/yurt/actions)
+
 Experimental cross-platform dotfile and package manager.
 
 Build instructions are specified via YAML. Features include symlink application, installation of packages (and package managers), execution of remote shell scripts via curl, and system specific build steps.
