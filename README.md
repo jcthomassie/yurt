@@ -1,6 +1,7 @@
 # yurt
 
-[![tests](https://github.com/jcthomassie/euler/workflows/tests/badge.svg)](https://github.com/jcthomassie/yurt/actions)
+[![tests](https://github.com/jcthomassie/yurt/workflows/tests/badge.svg)](https://github.com/jcthomassie/yurt/actions)
+[![release](https://github.com/jcthomassie/yurt/workflows/release/badge.svg)](https://github.com/jcthomassie/yurt/releases)
 
 Experimental cross-platform dotfile and package manager.
 
