@@ -10,6 +10,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::mem::discriminant;
 use std::process::{Child, Command, Output, Stdio};
 
+pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 lazy_static! {
@@ -100,7 +101,7 @@ impl Cmd for &str {
     }
 }
 
-fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<()> {
+fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
     if let Some(ref mut stdout) = proc_a.stdout {
         if let Some(ref mut stdin) = proc_b.stdin {
             let mut buf: Vec<u8> = Vec::new();
@@ -108,14 +109,15 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<()> {
             stdin.write_all(&buf).unwrap();
         }
     }
-    if proc_b.wait_with_output()?.status.success() {
-        Ok(())
+    let output = proc_b.wait_with_output()?;
+    if output.status.success() {
+        Ok(output)
     } else {
         Err(anyhow!("failed to execute piped command"))
     }
 }
 
-fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> Result<()>
+fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> Result<Output>
 where
     T: Cmd,
     U: Cmd,
@@ -141,8 +143,16 @@ pub struct Package {
 }
 
 impl Package {
+    pub fn new(name: String, managers: Vec<PackageManager>) -> Self {
+        Package {
+            name,
+            alias: None,
+            managers,
+        }
+    }
+
     fn _is_installed(&self, name: &str) -> bool {
-        if which_has(name) || dpkg_has(name) {
+        if which_has(name) {
             return true;
         }
         for pm in &self.managers {
@@ -181,7 +191,7 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,
@@ -243,9 +253,24 @@ impl PackageManager {
 
     // Check if a package is installed
     pub fn has(&self, package: &str) -> bool {
-        match self {
-            Self::Brew => self.call_bool(&["list", package]).unwrap(),
-            _ => false,
+        let res = match self {
+            Self::Brew => self.call_bool(&["list", package]),
+            Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
+            Self::Cargo => pipe(
+                "cargo",
+                &["install", "--list"],
+                "grep",
+                &[format!("    {}$", package).as_ref()],
+            )
+            .map(|o| o.status.success()),
+            _ => Ok(false),
+        };
+        match res {
+            Ok(has) => has,
+            Err(_) => {
+                warn!("{} failed to check for package", self.name());
+                false
+            }
         }
     }
 
@@ -293,17 +318,6 @@ pub fn which_has(cmd: &str) -> bool {
     }
 }
 
-#[inline]
-pub fn dpkg_has(cmd: &str) -> bool {
-    match "dpkg".call_bool(&[cmd]) {
-        Ok(has) => has,
-        Err(e) => {
-            warn!("'dpkg' failed for {}: {}", cmd, e);
-            false
-        }
-    }
-}
-
 #[derive(PartialEq)]
 pub enum Shell<'a> {
     Sh,
@@ -329,7 +343,8 @@ impl<'a> Shell<'a> {
     // Use curl to fetch remote script and pipe into shell
     pub fn remote_script(self, curl_args: &[&str]) -> Result<()> {
         info!("Running remote script");
-        pipe("curl", curl_args, self, &[])
+        pipe("curl", curl_args, self, &[])?;
+        Ok(())
     }
 
     // Set self as the default system shell
@@ -339,13 +354,16 @@ impl<'a> Shell<'a> {
             return Ok(());
         }
         info!("Changing shell to: {}", self.name());
-        pipe("which", &[], "chsh", &["-s"])
+        pipe("which", &[], "chsh", &["-s"])?;
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    static ALL_PMS: [PackageManager; 6] = [Apt, AptGet, Brew, Cargo, Choco, Yum];
 
     #[test]
     fn shell_resolves() {
@@ -362,28 +380,14 @@ mod tests {
         assert!(!which_has("some_missing_package"));
     }
 
-    // System specific tests
-    #[cfg(target_os = "linux")]
-    mod system {
-        use super::*;
-
-        #[test]
-        fn dpkg_has_cargo() {
-            assert!(dpkg_has("cargo"));
-        }
-
-        #[test]
-        fn dpkg_not_has_fake() {
-            assert!(!dpkg_has("some_missing_package"));
-        }
+    #[test]
+    fn package_check_success() {
+        assert!(Package::new("cargo".to_string(), ALL_PMS.to_vec()).is_installed());
     }
-    #[cfg(not(target_os = "linux"))]
-    mod system {
-        use super::*;
 
-        #[test]
-        fn dpkg_fails_cleanly() {
-            assert!(!dpkg_has("cargo"));
-        }
+    #[test]
+    fn package_check_failure() {
+        assert!(!Package::new("".to_string(), ALL_PMS.to_vec()).is_installed());
+        assert!(!Package::new("some_missing_package".to_string(), ALL_PMS.to_vec()).is_installed());
     }
 }
