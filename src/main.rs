@@ -12,13 +12,17 @@ use yaml::{Build, BuildUnit};
 
 #[inline]
 fn parse_build(matches: &ArgMatches) -> Result<Build> {
-    let yaml = match matches.value_of("yaml") {
-        Some(path) => Ok(path.to_string()),
-        None => env::var("YURT_BUILD_FILE"),
+    if let Some(yaml_url) = matches.value_of("yaml-url") {
+        Build::from_url(yaml_url).context("Failed to parse remote build file")
+    } else {
+        let yaml = match matches.value_of("yaml") {
+            Some(path) => Ok(path.to_string()),
+            None => env::var("YURT_BUILD_FILE"),
+        }
+        .context("Build file not specified")?;
+        let path = link::expand_path(&yaml).context("Failed to expand path")?;
+        Build::from_path(path).context("Failed to parse local build file")
     }
-    .context("Build file not specified")?;
-    Build::from_path(link::expand_path(&yaml).context("Failed to expand path")?)
-        .context("Failed to parse build")
 }
 
 #[inline]
@@ -119,6 +123,13 @@ fn main() -> Result<()> {
                 .short('y')
                 .long("yaml")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::new("yaml-url")
+                .about("YAML build file URL")
+                .long("yaml-url")
+                .takes_value(true)
+                .conflicts_with("yaml"),
         )
         .arg(
             Arg::new("log")

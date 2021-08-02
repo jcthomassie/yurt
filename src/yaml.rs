@@ -200,8 +200,14 @@ pub struct Build {
     pub build: Vec<BuildSet>,
 }
 
-#[allow(dead_code)]
 impl Build {
+    pub fn from_str<S>(string: S) -> Result<Self>
+    where
+        S: AsRef<str>,
+    {
+        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
+    }
+
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
         Self::from_file(file)
@@ -212,11 +218,9 @@ impl Build {
         Ok(serde_yaml::from_reader::<_, Self>(reader)?)
     }
 
-    pub fn from_str<S>(string: S) -> Result<Self>
-    where
-        S: AsRef<str>,
-    {
-        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
+    pub fn from_url(url: &str) -> Result<Self> {
+        let body = reqwest::blocking::get(url)?.text()?;
+        Self::from_str(body)
     }
 
     pub fn resolve(self) -> Result<(Repo, Vec<BuildUnit>)> {
