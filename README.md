@@ -9,20 +9,42 @@ Build instructions are specified via YAML. Features include symlink application,
 
 ## Usage
 
-Install from local build file.
+Install from local build file:
 
 ```shell
-yurt --yaml=~/build.yaml install
+yurt --yaml "~/build.yaml" install
 ```
 
-Print resolved build steps and exit.
+Install from remote build file:
+
+```shell
+yurt --yaml-url "https://raw.githubusercontent.com/jcthomassie/dotfiles/HEAD/build.yaml" install
+```
+
+Print resolved build steps and exit:
 
 ```shell
 yurt show
 ```
 
-## YAML Format
+**Note:** Default build path is specified via the `YURT_BUILD_FILE` environment variable.
 
+## Build Format
+
+Build parameters are specified via a YAML file. Cases can be arbitrarily nested. Order of build steps is preserved after resolution.
+
+### Fields
+`repo`
+- `local` path to local dotfile repository
+- `remote` dotfile remote url for cloning
+
+`build`
+- `case` list of conditional build steps
+- `install` list of packages to install
+- `bootstrap` list of package managers to bootstrap
+- `link` list of symlinks to be applied
+
+### Example
 ```yaml
 ---
 repo:
