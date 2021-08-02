@@ -1,21 +1,25 @@
 ---
-name: Test
-
 on:
   push:
-    branches:
-      - master
+    branches: [ master ]
   pull_request:
-    branches:
-      - master
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+strategy:
+  matrix:
+    os: [ ubuntu-latest, windows-latest ]
 
 jobs:
-  build_and_test:
-    name: Rust project
-    runs-on: ubuntu-latest
+  build:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-      - run: cargo build --release --all-features
+    - uses: actions/checkout@v2
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
