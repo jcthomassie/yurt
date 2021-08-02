@@ -200,6 +200,7 @@ pub struct Build {
     pub build: Vec<BuildSet>,
 }
 
+#[allow(dead_code)]
 impl Build {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         let file = File::open(path)?;
@@ -209,6 +210,13 @@ impl Build {
     pub fn from_file(file: File) -> Result<Self> {
         let reader = BufReader::new(file);
         Ok(serde_yaml::from_reader::<_, Self>(reader)?)
+    }
+
+    pub fn from_str<S>(string: S) -> Result<Self>
+    where
+        S: AsRef<str>,
+    {
+        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
     }
 
     pub fn resolve(self) -> Result<(Repo, Vec<BuildUnit>)> {
@@ -226,54 +234,35 @@ impl Build {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::prelude::*;
 
-    const YAML: &str = "
----
-repo:
-  local: $HOME/dotfiles
-  remote: https://github.com/user/dotfiles.git
-build:
-  - case:
-    - local:
-        spec:
-          user: notme
-        build:
-        - install:
-          - name: wrong
-            managers:
-            - apt
-    - default:
-        build:
-        - install:
-          - name: right
-            managers:
-            - apt
-            - brew
-  - link:
-    - tail: some/file
-      head: some/link
-  - bootstrap:
-    - cargo
-";
+    static YAML: &str = include_str!("../test/build.yaml");
 
-    fn yaml_file() -> tempfile::NamedTempFile {
-        let mut file = tempfile::NamedTempFile::new().unwrap();
-        file.write_all(YAML.as_bytes()).unwrap();
-        file
+    #[test]
+    fn empty_build_fails() {
+        assert!(Build::from_str("").is_err())
     }
 
     #[test]
     fn build_parses() {
-        let file = yaml_file();
-        Build::from_path(file.path()).unwrap();
+        Build::from_str(YAML).unwrap();
     }
 
     #[test]
     fn build_resolves() {
-        let file = yaml_file();
-        let build = Build::from_path(file.path()).unwrap();
-        build.resolve().unwrap();
+        let (_, b) = Build::from_str(YAML).unwrap().resolve().unwrap();
+        let mut links = 1;
+        let mut boots = 2;
+        let mut names = vec!["package_1", "package_2", "package_3"].into_iter();
+        for unit in b.into_iter() {
+            match unit {
+                BuildUnit::Link(_) => links -= 1,
+                BuildUnit::Package(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
+                BuildUnit::Bootstrap(_) => boots -= 1,
+            }
+        }
+        assert_eq!(links, 0);
+        assert_eq!(boots, 0);
+        assert!(names.next().is_none());
     }
 
     #[test]

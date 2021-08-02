@@ -1,0 +1,45 @@
+---
+repo:
+  local: $HOME/dotfiles
+  remote: https://github.com/user/dotfiles.git
+build:
+  # Conditional instructions
+  - case:
+    - local:
+        spec:
+          user: not_user
+        build:
+        - install:
+          - name: not_package
+            managers:
+            - apt
+    - default:
+        build:
+        # Nested conditional
+        - case:
+          - local:
+              spec:
+                user: not_user
+              build:
+                - bootstrap:
+                  - choco
+        - install:
+          - name: package_1
+            managers:
+            - apt
+            - brew
+  # Top level instructions
+  - bootstrap:
+    - cargo
+    - brew
+  - install:
+    - name: package_2
+      managers:
+      - apt
+  - link:
+    - tail: tail_1
+      head: head_1
+  - install:
+    - name: package_3
+      managers:
+      - brew

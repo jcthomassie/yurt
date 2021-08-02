@@ -135,9 +135,9 @@ where
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Package {
-    name: String,
-    alias: Option<String>,
-    managers: Vec<PackageManager>,
+    pub name: String,
+    pub alias: Option<String>,
+    pub managers: Vec<PackageManager>,
 }
 
 impl Package {
