@@ -342,3 +342,48 @@ impl<'a> Shell<'a> {
         pipe("which", &[], "chsh", &["-s"])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shell_resolves() {
+        assert!(!matches!(*SHELL, Shell::Other(_)));
+    }
+
+    #[test]
+    fn which_has_cargo() {
+        assert!(which_has("cargo"));
+    }
+
+    #[test]
+    fn which_not_has_fake() {
+        assert!(!which_has("some_missing_package"));
+    }
+
+    // System specific tests
+    #[cfg(target_os = "linux")]
+    mod system {
+        use super::*;
+
+        #[test]
+        fn dpkg_has_cargo() {
+            assert!(dpkg_has("cargo"));
+        }
+
+        #[test]
+        fn dpkg_not_has_fake() {
+            assert!(!dpkg_has("some_missing_package"));
+        }
+    }
+    #[cfg(not(target_os = "linux"))]
+    mod system {
+        use super::*;
+
+        #[test]
+        fn dpkg_fails_cleanly() {
+            assert!(!dpkg_has("cargo"));
+        }
+    }
+}
