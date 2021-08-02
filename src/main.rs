@@ -18,11 +18,14 @@ fn parse_build(matches: &ArgMatches) -> Result<Build> {
     }
     .context("Build file not specified")?;
     Build::from_path(link::expand_path(&yaml).context("Failed to expand path")?)
+        .context("Failed to parse build")
 }
 
 #[inline]
 fn parse_resolve_build(matches: &ArgMatches) -> Result<(repo::Repo, Vec<BuildUnit>)> {
-    parse_build(matches)?.resolve()
+    parse_build(matches)?
+        .resolve()
+        .context("Failed to resolve build")
 }
 
 macro_rules! skip {
@@ -55,7 +58,8 @@ fn install(matches: &ArgMatches) -> Result<()> {
         |ln| ln.link(),
         |pkg| pkg.install(),
         |pm| pm.require(),
-    )?;
+    )
+    .context("Failed to complete install steps")?;
     pack::Shell::Zsh.chsh()?;
     Ok(())
 }
@@ -63,21 +67,23 @@ fn install(matches: &ArgMatches) -> Result<()> {
 fn uninstall(matches: &ArgMatches) -> Result<()> {
     let (_, units) = parse_resolve_build(matches)?;
     info!("Uninstalling dotfiles...");
-    yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())?;
+    yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())
+        .context("Failed to complete uninstall steps")?;
     Ok(())
 }
 
 fn clean(matches: &ArgMatches) -> Result<()> {
     let (_, units) = parse_resolve_build(matches)?;
     info!("Cleaning link heads...");
-    yaml::apply(units, |ln| ln.clean(), skip!(), skip!())?;
+    yaml::apply(units, |ln| ln.clean(), skip!(), skip!()).context("Failed to clean link heads")?;
     Ok(())
 }
 
 fn edit() -> Result<()> {
-    Command::new(env::var("EDITOR").expect("system editor is unset"))
-        .arg(env::var("YURT_REPO_ROOT").expect("dotfile repo root is unset"))
-        .output()?;
+    Command::new(env::var("EDITOR").context("System editor is not set")?)
+        .arg(env::var("YURT_REPO_ROOT").context("dotfile repo root is not set")?)
+        .output()
+        .context("Failed to open dotfiles in editor")?;
     Ok(())
 }
 
