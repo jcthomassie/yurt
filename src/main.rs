@@ -3,7 +3,7 @@ mod pack;
 mod repo;
 mod yaml;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
 use std::env;
@@ -12,7 +12,12 @@ use yaml::{Build, BuildUnit};
 
 #[inline]
 fn parse_build(matches: &ArgMatches) -> Result<Build> {
-    Build::from_path(link::expand_path(matches.value_of("yaml").unwrap())?)
+    let yaml = match matches.value_of("yaml") {
+        Some(path) => Ok(path.to_string()),
+        None => env::var("YURT_BUILD_FILE"),
+    }
+    .context("Build file not specified")?;
+    Build::from_path(link::expand_path(&yaml).context("Failed to expand path")?)
 }
 
 #[inline]
@@ -107,7 +112,7 @@ fn main() -> Result<()> {
                 .about("YAML build file path")
                 .short('y')
                 .long("yaml")
-                .default_value("$HOME/dotfiles/install.yaml"),
+                .takes_value(true),
         )
         .arg(
             Arg::new("log")
