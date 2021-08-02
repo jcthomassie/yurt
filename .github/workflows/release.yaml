@@ -1,6 +1,7 @@
 ---
 on:
-  release: [ created ]
+  release:
+    types: [ created ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -16,9 +17,6 @@ jobs:
           - os: ubuntu-latest
             artifact_name: yurt
             asset_name: yurt-linux-amd64
-          - os: windows-latest
-            artifact_name: yurt.exe
-            asset_name: yurt-windows-amd64
           - os: macos-latest
             artifact_name: yurt
             asset_name: yurt-macos-amd64
