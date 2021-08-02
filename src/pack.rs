@@ -79,8 +79,8 @@ trait Cmd {
     }
 
     #[inline]
-    fn call_bool(&self, args: &[&str]) -> bool {
-        self.call(args).unwrap().status.success()
+    fn call_bool(&self, args: &[&str]) -> Result<bool> {
+        Ok(self.call(args)?.status.success())
     }
 
     #[inline]
@@ -244,7 +244,7 @@ impl PackageManager {
     // Check if a package is installed
     pub fn has(&self, package: &str) -> bool {
         match self {
-            Self::Brew => self.call_bool(&["list", package]),
+            Self::Brew => self.call_bool(&["list", package]).unwrap(),
             _ => false,
         }
     }
@@ -284,12 +284,24 @@ impl PackageManager {
 // Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
-    "which".call_bool(&[cmd])
+    match "which".call_bool(&[cmd]) {
+        Ok(has) => has,
+        Err(e) => {
+            warn!("'which' failed for {}: {}", cmd, e);
+            false
+        }
+    }
 }
 
 #[inline]
 pub fn dpkg_has(cmd: &str) -> bool {
-    "dpkg".call_bool(&["-s", cmd])
+    match "dpkg".call_bool(&[cmd]) {
+        Ok(has) => has,
+        Err(e) => {
+            warn!("'dpkg' failed for {}: {}", cmd, e);
+            false
+        }
+    }
 }
 
 #[derive(PartialEq)]
