@@ -8,6 +8,7 @@ on:
       - ".github/workflows/release.yaml"
       - ".gitignore"
       - "README.md"
+      - "LICENSE"
 
   pull_request:
     branches: [ master ]
@@ -15,6 +16,7 @@ on:
       - ".github/workflows/release.yaml"
       - ".gitignore"
       - "README.md"
+      - "LICENSE"
 
 env:
   CARGO_TERM_COLOR: always
