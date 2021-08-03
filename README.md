@@ -1,7 +1,7 @@
 # yurt
 
-[![tests](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions)
-[![release](https://github.com/jcthomassie/yurt/actions/workflows/release.yaml/badge.svg)](https://github.com/jcthomassie/yurt/releases)
+[![tests](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml)
+[![publish](https://github.com/jcthomassie/yurt/actions/workflows/publish.yaml/badge.svg?event=release)](https://github.com/jcthomassie/yurt/actions/workflows/publish.yaml)
 
 Experimental cross-platform dotfile and package manager.
 
