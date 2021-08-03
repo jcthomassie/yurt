@@ -14,18 +14,7 @@ pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 lazy_static! {
-    static ref SHELL: Shell<'static> = match env::var("SHELL")
-        .expect("failed to read shell")
-        .split('/')
-        .last()
-    {
-        Some("sh") => Shell::Sh,
-        Some("bash") => Shell::Bash,
-        Some("zsh") => Shell::Zsh,
-        Some("pwsh") => Shell::Powershell,
-        Some(other) => Shell::Other(Cow::Owned(other.to_string())),
-        _ => unreachable!(),
-    };
+    static ref SHELL: Shell<'static> = Shell::from_env();
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -318,7 +307,7 @@ pub fn which_has(cmd: &str) -> bool {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Shell<'a> {
     Sh,
     Bash,
@@ -340,6 +329,26 @@ impl<'a> Cmd for Shell<'a> {
 }
 
 impl<'a> Shell<'a> {
+    pub fn from_env() -> Self {
+        Self::from_name(
+            env::var("SHELL")
+                .expect("failed to read shell")
+                .split('/')
+                .last()
+                .unwrap(),
+        )
+    }
+
+    pub fn from_name(name: &str) -> Self {
+        match name {
+            "sh" => Shell::Sh,
+            "bash" => Shell::Bash,
+            "zsh" => Shell::Zsh,
+            "pwsh" => Shell::Powershell,
+            other => Shell::Other(Cow::Owned(other.to_string())),
+        }
+    }
+
     // Use curl to fetch remote script and pipe into shell
     pub fn remote_script(self, curl_args: &[&str]) -> Result<()> {
         info!("Running remote script");
@@ -365,9 +374,55 @@ mod tests {
 
     static ALL_PMS: [PackageManager; 6] = [Apt, AptGet, Brew, Cargo, Choco, Yum];
 
+    macro_rules! check_missing {
+        ($pm:ident, $mod_name:ident) => {
+            mod $mod_name {
+                use super::*;
+
+                #[test]
+                fn not_has_fake() {
+                    assert!(!$pm.has("some_missing_package"));
+                }
+
+                #[test]
+                fn not_has_empty() {
+                    assert!(!$pm.has(""));
+                }
+            }
+        };
+    }
+
+    check_missing!(Apt, apt);
+
+    check_missing!(AptGet, apt_get);
+
+    check_missing!(Brew, brew);
+
+    check_missing!(Cargo, cargo);
+
+    check_missing!(Choco, choco);
+
+    check_missing!(Yum, yum);
+
     #[test]
-    fn shell_resolves() {
-        assert!(!matches!(*SHELL, Shell::Other(_)));
+    fn shell_from_name() {
+        assert_eq!(Shell::from_name("sh"), Shell::Sh);
+        assert_eq!(Shell::from_name("bash"), Shell::Bash);
+        assert_eq!(Shell::from_name("zsh"), Shell::Zsh);
+        assert_eq!(Shell::from_name("pwsh"), Shell::Powershell);
+        assert!(matches!(Shell::from_name("/home/crush"), Shell::Other(_)));
+    }
+
+    #[test]
+    fn shell_from_env() {
+        if env::var("SHELL").is_err() {
+            env::set_var("SHELL", "/bin/fake_path/zsh");
+            assert_eq!(*SHELL, Shell::Zsh);
+            env::remove_var("SHELL");
+        } else {
+            // Other shells should be added as needed
+            assert!(!matches!(*SHELL, Shell::Other(_)));
+        }
     }
 
     #[test]
@@ -387,7 +442,6 @@ mod tests {
 
     #[test]
     fn package_check_failure() {
-        assert!(!Package::new("".to_string(), ALL_PMS.to_vec()).is_installed());
         assert!(!Package::new("some_missing_package".to_string(), ALL_PMS.to_vec()).is_installed());
     }
 }
