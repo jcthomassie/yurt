@@ -3,7 +3,7 @@ name: release
 
 on:
   release:
-    types: [ created ]
+    action: [ created ]
 
 env:
   CARGO_TERM_COLOR: always
