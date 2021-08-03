@@ -2,35 +2,35 @@
 name: publish
 
 on:
-  release:
-    types: [ created ]
+  push:
+    tags: [ "v*.*" ]
+
+  pull_request:
+    branches: [ master ]
+    paths-ignore:
+      - ".github/workflows/release.yaml"
+      - ".gitignore"
+      - "README.md"
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  publish:
-    name: Publish for ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            artifact_name: yurt
-            asset_name: yurt-linux-amd64
-          - os: macos-latest
-            artifact_name: yurt
-            asset_name: yurt-macos-amd64
-
+  build:
+    name: Create release
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
-    - name: Build
-      run: cargo build --release --locked
-    - name: Release binaries
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.GITHUB_TOKEN }}
-        file: target/release/${{ matrix.artifact_name }}
-        asset_name: ${{ matrix.asset_name }}
-        tag: ${{ github.ref }}
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          body: |
+            Release automatically created by: ${{ github.sha }}
+          draft: false
+          prerelease: false
