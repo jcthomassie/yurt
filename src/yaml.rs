@@ -13,13 +13,14 @@ use std::path::Path;
 lazy_static! {
     pub static ref LOCALE: Locale<Cow<'static, str>> = Locale {
         user: Cow::Owned(whoami::username()),
-        platform: Cow::Owned(format!("{:?}", whoami::platform())),
+        platform: Cow::Owned(format!("{:?}", whoami::platform()).to_lowercase()),
         distro: Cow::Owned(
             whoami::distro()
                 .split(' ')
                 .next()
                 .map(String::from)
-                .expect("failed to determine distro"),
+                .expect("failed to determine distro")
+                .to_lowercase(),
         ),
     };
 }

@@ -1,6 +1,6 @@
 ---
 repo:
-  local: $HOME/dotfiles
+  local: ~/dotfiles
   remote: https://github.com/user/dotfiles.git
 build:
   # Conditional instructions

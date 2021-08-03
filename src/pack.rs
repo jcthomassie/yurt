@@ -7,7 +7,6 @@ use std::borrow::Cow;
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::mem::discriminant;
 use std::process::{Child, Command, Output, Stdio};
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
@@ -298,10 +297,14 @@ impl PackageManager {
 // Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
-    match "which".call_bool(&[cmd]) {
+    #[cfg(not(target_os = "windows"))]
+    let name = "which";
+    #[cfg(target_os = "windows")]
+    let name = "where";
+    match name.call_bool(&[cmd]) {
         Ok(has) => has,
         Err(e) => {
-            warn!("'which' failed for {}: {}", cmd, e);
+            warn!("'{}' failed for {}: {}", name, cmd, e);
             false
         }
     }
@@ -357,9 +360,10 @@ impl<'a> Shell<'a> {
     }
 
     // Set self as the default system shell
+    #[cfg(not(target_os = "windows"))]
     pub fn chsh(&self) -> Result<()> {
         info!("Current shell: {}", &*SHELL.name());
-        if discriminant(self) == discriminant(&*SHELL) {
+        if std::mem::discriminant(self) == std::mem::discriminant(&*SHELL) {
             return Ok(());
         }
         info!("Changing shell to: {}", self.name());

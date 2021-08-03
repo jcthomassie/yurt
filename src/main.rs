@@ -64,6 +64,7 @@ fn install(matches: &ArgMatches) -> Result<()> {
         |pm| pm.require(),
     )
     .context("Failed to complete install steps")?;
+    #[cfg(not(target_os = "windows"))]
     pack::Shell::Zsh.chsh()?;
     Ok(())
 }
