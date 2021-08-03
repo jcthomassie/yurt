@@ -298,10 +298,14 @@ impl PackageManager {
 // Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
-    match "which".call_bool(&[cmd]) {
+    #[cfg(not(target_os = "windows"))]
+    let name = "which";
+    #[cfg(target_os = "windows")]
+    let name = "where";
+    match name.call_bool(&[cmd]) {
         Ok(has) => has,
         Err(e) => {
-            warn!("'which' failed for {}: {}", cmd, e);
+            warn!("'{}' failed for {}: {}", name, cmd, e);
             false
         }
     }
