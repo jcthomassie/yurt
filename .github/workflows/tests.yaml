@@ -6,6 +6,7 @@ on:
     branches: [ master ]
     paths-ignore:
       - ".github/workflows/release.yaml"
+      - ".github/workflows/publish.yaml"
       - ".gitignore"
       - "README.md"
       - "LICENSE"
@@ -14,6 +15,7 @@ on:
     branches: [ master ]
     paths-ignore:
       - ".github/workflows/release.yaml"
+      - ".github/workflows/publish.yaml"
       - ".gitignore"
       - "README.md"
       - "LICENSE"
