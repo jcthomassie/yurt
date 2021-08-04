@@ -133,8 +133,32 @@ where
     }
 }
 
+#[derive(Debug, PartialEq, Deserialize)]
+pub enum BuildSet {
+    #[serde(rename = "case")]
+    Case(Vec<Case>),
+    #[serde(rename = "link")]
+    Link(Vec<Link>),
+    #[serde(rename = "install")]
+    Package(Vec<Package>),
+    #[serde(rename = "bootstrap")]
+    Bootstrap(Vec<PackageManager>),
+}
+
 trait SetResolves {
     fn resolve(self) -> Result<Vec<BuildUnit>>;
+}
+
+impl SetResolves for BuildSet {
+    // Recursively resolve all case units; collect into single vec
+    fn resolve(self) -> Result<Vec<BuildUnit>> {
+        match self {
+            Self::Case(v) => v.resolve(),
+            Self::Link(v) => v.resolve(),
+            Self::Package(v) => v.resolve(),
+            Self::Bootstrap(v) => v.resolve(),
+        }
+    }
 }
 
 impl<T> SetResolves for Vec<T>
@@ -150,48 +174,24 @@ impl SetResolves for Vec<Case> {
     // Recursively filter cases
     fn resolve(self) -> Result<Vec<BuildUnit>> {
         let mut default = true;
-        let mut unit_vec: Vec<BuildUnit> = Vec::new();
+        let mut units = Vec::new();
         for case in self {
             match case {
                 Case::Local { spec, build } if spec.is_local() => {
                     default = false;
                     for set in build {
-                        unit_vec.extend(set.resolve()?);
+                        units.extend(set.resolve()?);
                     }
                 }
                 Case::Default { build } if default => {
                     for set in build {
-                        unit_vec.extend(set.resolve()?);
+                        units.extend(set.resolve()?);
                     }
                 }
-                _ => (),
+                _ => continue,
             };
         }
-        Ok(unit_vec)
-    }
-}
-
-#[derive(Debug, PartialEq, Deserialize)]
-pub enum BuildSet {
-    #[serde(rename = "case")]
-    Case(Vec<Case>),
-    #[serde(rename = "link")]
-    Link(Vec<Link>),
-    #[serde(rename = "install")]
-    Package(Vec<Package>),
-    #[serde(rename = "bootstrap")]
-    Bootstrap(Vec<PackageManager>),
-}
-
-impl BuildSet {
-    // Recursively resolve all case units; collect into single vec
-    pub fn resolve(self) -> Result<Vec<BuildUnit>> {
-        match self {
-            Self::Case(case_vec) => case_vec.resolve(),
-            Self::Link(link_vec) => link_vec.resolve(),
-            Self::Package(pkg_vec) => pkg_vec.resolve(),
-            Self::Bootstrap(pm_vec) => pm_vec.resolve(),
-        }
+        Ok(units)
     }
 }
 
