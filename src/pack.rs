@@ -177,6 +177,21 @@ impl Package {
         }
         Ok(())
     }
+
+    pub fn uninstall(&self) -> Result<()> {
+        if self.is_installed() {
+            for pm in &self.managers {
+                if pm.has(&self.name) {
+                    pm.uninstall(&self.name)?;
+                    continue;
+                }
+                if matches!(self.alias, Some(ref a) if pm.has(a)) {
+                    pm.uninstall(&self.alias.clone().unwrap())?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -239,16 +254,32 @@ impl PackageManager {
         }
     }
 
+    // Uninstall a package
+    pub fn uninstall(&self, package: &str) -> Result<()> {
+        info!(
+            "Uninstalling package ({} uninstall {})",
+            self.name(),
+            package
+        );
+        self.command()
+            .stdin(Stdio::null())
+            .stdout(Stdio::inherit())
+            .arg("uninstall")
+            .arg(package)
+            .output()?;
+        Ok(())
+    }
+
     // Check if a package is installed
     pub fn has(&self, package: &str) -> bool {
         let res = match self {
-            Self::Brew => self.call_bool(&["list", package]),
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
+            Self::Brew => self.call_bool(&["list", package]),
             Self::Cargo => pipe(
                 "cargo",
                 &["install", "--list"],
                 "grep",
-                &[format!("    {}$", package).as_ref()],
+                &[&format!("    {}$", package)],
             )
             .map(|o| o.status.success()),
             _ => Ok(false),

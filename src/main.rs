@@ -72,7 +72,7 @@ fn install(matches: &ArgMatches) -> Result<()> {
 fn uninstall(matches: &ArgMatches) -> Result<()> {
     let (_, units) = parse_resolve_build(matches)?;
     info!("Uninstalling dotfiles...");
-    yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())
+    yaml::apply(units, |ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
         .context("Failed to complete uninstall steps")?;
     Ok(())
 }
@@ -113,7 +113,15 @@ fn main() -> Result<()> {
                     .takes_value(false),
             ),
         )
-        .subcommand(App::new("uninstall").about("Uninstalls dotfiles"))
+        .subcommand(
+            App::new("uninstall").about("Uninstalls dotfiles").arg(
+                Arg::new("packages")
+                    .about("Uninstall packages too")
+                    .short('p')
+                    .long("packages")
+                    .takes_value(false),
+            ),
+        )
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
         .subcommand(App::new("clean").about("Cleans output destinations"))
         .subcommand(App::new("edit").about("Opens dotfile repo in system editor"))
