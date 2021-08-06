@@ -1,4 +1,4 @@
-# yurt
+# 🛖yurt
 
 [![tests](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml)
 [![release](https://github.com/jcthomassie/yurt/actions/workflows/release.yaml/badge.svg?event=release)](https://github.com/jcthomassie/yurt/actions/workflows/release.yaml)
