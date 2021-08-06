@@ -2,7 +2,9 @@ use super::link::Link;
 use super::pack::{Package, PackageManager};
 use super::repo::Repo;
 use anyhow::Result;
+use clap::crate_version;
 use lazy_static::lazy_static;
+use log::warn;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::env;
@@ -207,6 +209,7 @@ impl SetResolves for Vec<Case> {
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Build {
+    pub version: Option<String>,
     pub repo: Repo,
     pub build: Vec<BuildSet>,
 }
@@ -234,7 +237,22 @@ impl Build {
         Self::from_str(body)
     }
 
+    pub fn version_matches(&self, strict: bool) -> bool {
+        if let Some(ref v) = self.version {
+            return v == crate_version!();
+        }
+        !strict
+    }
+
     pub fn resolve(self) -> Result<(Repo, Vec<BuildUnit>)> {
+        // Check version
+        if self.version_matches(false) {
+            warn!(
+                "Build version mismatch: {} | {}",
+                self.version.as_deref().unwrap_or("None"),
+                crate_version!()
+            );
+        }
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);
@@ -267,7 +285,14 @@ mod tests {
         let (_, b) = Build::from_str(YAML).unwrap().resolve().unwrap();
         let mut links = 1;
         let mut boots = 2;
-        let mut names = vec!["package_0", "package_1", "package_2", "package_3"].into_iter();
+        let mut names = vec![
+            "package_0",
+            "package_1",
+            "package_2",
+            "package_3",
+            "package_4",
+        ]
+        .into_iter();
         for unit in b.into_iter() {
             match unit {
                 BuildUnit::Link(_) => links -= 1,
