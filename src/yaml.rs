@@ -70,7 +70,11 @@ impl Locale<Option<String>> {
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case {
-    Local {
+    Positive {
+        spec: Locale<Option<String>>,
+        build: Vec<BuildSet>,
+    },
+    Negative {
         spec: Locale<Option<String>>,
         build: Vec<BuildSet>,
     },
@@ -177,7 +181,13 @@ impl SetResolves for Vec<Case> {
         let mut units = Vec::new();
         for case in self {
             match case {
-                Case::Local { spec, build } if spec.is_local() => {
+                Case::Positive { spec, build } if spec.is_local() => {
+                    default = false;
+                    for set in build {
+                        units.extend(set.resolve()?);
+                    }
+                }
+                Case::Negative { spec, build } if !spec.is_local() => {
                     default = false;
                     for set in build {
                         units.extend(set.resolve()?);
@@ -257,7 +267,7 @@ mod tests {
         let (_, b) = Build::from_str(YAML).unwrap().resolve().unwrap();
         let mut links = 1;
         let mut boots = 2;
-        let mut names = vec!["package_1", "package_2", "package_3"].into_iter();
+        let mut names = vec!["package_0", "package_1", "package_2", "package_3"].into_iter();
         for unit in b.into_iter() {
             match unit {
                 BuildUnit::Link(_) => links -= 1,
@@ -272,7 +282,7 @@ mod tests {
 
     #[test]
     fn empty_build_set() {
-        let set = BuildSet::Case(vec![Case::Local {
+        let set = BuildSet::Case(vec![Case::Positive {
             spec: Locale {
                 user: None,
                 platform: Some("nothere".to_string()),

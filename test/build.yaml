@@ -5,7 +5,7 @@ repo:
 build:
   # Conditional instructions
   - case:
-    - local:
+    - positive:
         spec:
           user: not_user
         build:
@@ -17,17 +17,25 @@ build:
         build:
         # Nested conditional
         - case:
-          - local:
+          - positive:
               spec:
                 user: not_user
               build:
                 - bootstrap:
                   - choco
+          - negative:
+              spec:
+                user: not_user
+              build:
+                - install:
+                  - name: package_0
+                    managers:
+                      - choco
         - install:
           - name: package_1
             managers:
             - apt
-            - brew
+            - apt-get
   # Top level instructions
   - bootstrap:
     - cargo
