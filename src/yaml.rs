@@ -1,5 +1,5 @@
 use super::link::Link;
-use super::pack::{Package, PackageManager};
+use super::pack::{Package, PackageBundle, PackageManager};
 use super::repo::Repo;
 use anyhow::Result;
 use clap::crate_version;
@@ -155,14 +155,12 @@ where
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum BuildSet {
-    #[serde(rename = "case")]
     Case(Vec<Case>),
-    #[serde(rename = "link")]
     Link(Vec<Link>),
-    #[serde(rename = "install")]
-    Package(Vec<Package>),
-    #[serde(rename = "bootstrap")]
+    Install(Vec<Package>),
+    Bundle(PackageBundle),
     Bootstrap(Vec<PackageManager>),
 }
 
@@ -176,7 +174,8 @@ impl SetResolves for BuildSet {
         match self {
             Self::Case(v) => v.resolve(),
             Self::Link(v) => v.resolve(),
-            Self::Package(v) => v.resolve(),
+            Self::Install(v) => v.resolve(),
+            Self::Bundle(v) => v.resolve(),
             Self::Bootstrap(v) => v.resolve(),
         }
     }
@@ -188,6 +187,16 @@ where
 {
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         self.into_iter().map(|u| u.resolve()).collect()
+    }
+}
+
+impl SetResolves for PackageBundle {
+    fn resolve(self) -> Result<LinkedList<BuildUnit>> {
+        let manager = self.manager;
+        self.packages
+            .into_iter()
+            .map(|name| Package::new(name, vec![manager.clone()]).resolve())
+            .collect()
     }
 }
 

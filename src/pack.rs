@@ -194,6 +194,12 @@ impl Package {
     }
 }
 
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct PackageBundle {
+    pub manager: PackageManager,
+    pub packages: Vec<String>,
+}
+
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {

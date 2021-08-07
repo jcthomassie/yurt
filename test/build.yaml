@@ -41,17 +41,12 @@ build:
   - bootstrap:
     - cargo
     - brew
-  - install:
-    - name: package_2
-      managers:
-      - apt
   - link:
     - tail: tail_1
       head: head_1
-  - install:
-    - name: package_3
-      managers:
-      - brew
-    - name: package_4
-      managers:
-      - apt
+  - bundle:
+      manager: brew
+      packages:
+      - package_2
+      - package_3
+      - package_4
