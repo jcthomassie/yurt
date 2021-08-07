@@ -1,8 +1,8 @@
 # 🛖yurt
 
 [![tests](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml)
-[![release](https://github.com/jcthomassie/yurt/actions/workflows/release.yaml/badge.svg?event=release)](https://github.com/jcthomassie/yurt/actions/workflows/release.yaml)
-[![latest](https://img.shields.io/github/v/release/jcthomassie/yurt?include_prereleases&label=latest)](https://github.com/jcthomassie/yurt/releases/latest)
+[![build](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml/badge.svg?event=release)](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml)
+[![release](https://img.shields.io/github/v/release/jcthomassie/yurt?include_prereleases&label=release)](https://github.com/jcthomassie/yurt/releases/latest)
 
 Experimental cross-platform dotfile and package manager.
 
