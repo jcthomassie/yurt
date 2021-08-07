@@ -11,13 +11,15 @@ use std::collections::LinkedList;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
+use std::iter::Zip;
 use std::path::Path;
+use std::vec::IntoIter;
 
 lazy_static! {
-    pub static ref LOCALE: Locale<Cow<'static, str>> = Locale {
-        user: Cow::Owned(whoami::username()),
-        platform: Cow::Owned(format!("{:?}", whoami::platform()).to_lowercase()),
-        distro: Cow::Owned(
+    pub static ref LOCALE: Locale<Cow<'static, str>> = Locale::new(
+        Cow::Owned(whoami::username()),
+        Cow::Owned(format!("{:?}", whoami::platform()).to_lowercase()),
+        Cow::Owned(
             whoami::distro()
                 .split(' ')
                 .next()
@@ -25,7 +27,7 @@ lazy_static! {
                 .expect("failed to determine distro")
                 .to_lowercase(),
         ),
-    };
+    );
 }
 
 pub fn apply<RL, RP, RB, E>(
@@ -51,8 +53,18 @@ pub struct Locale<T> {
     distro: T,
 }
 
+impl<T> Locale<T> {
+    pub fn new(user: T, platform: T, distro: T) -> Self {
+        Self {
+            user,
+            platform,
+            distro,
+        }
+    }
+}
+
 impl Locale<Option<String>> {
-    pub fn is_local(&self) -> bool {
+    fn zipped(&self) -> Zip<IntoIter<Option<&str>>, IntoIter<&str>> {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
@@ -63,9 +75,11 @@ impl Locale<Option<String>> {
             LOCALE.platform.as_ref(),
             LOCALE.distro.as_ref(),
         ];
-        s_vals
-            .into_iter()
-            .zip(o_vals.into_iter())
+        s_vals.into_iter().zip(o_vals.into_iter())
+    }
+
+    pub fn is_local(&self) -> bool {
+        self.zipped()
             .all(|(s, o)| !matches!(s, Some(val) if val != o))
     }
 }
@@ -307,13 +321,36 @@ mod tests {
     }
 
     #[test]
-    fn empty_build_set() {
+    fn positive_match() {
         let set = BuildSet::Case(vec![Case::Positive {
-            spec: Locale {
-                user: None,
-                platform: Some("nothere".to_string()),
-                distro: None,
-            },
+            spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
+            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        }]);
+        assert!(!set.resolve().unwrap().is_empty());
+    }
+
+    #[test]
+    fn positive_non_match() {
+        let set = BuildSet::Case(vec![Case::Positive {
+            spec: Locale::new(None, None, Some("nothere".to_string())),
+            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        }]);
+        assert!(set.resolve().unwrap().is_empty());
+    }
+
+    #[test]
+    fn negative_match() {
+        let set = BuildSet::Case(vec![Case::Negative {
+            spec: Locale::new(None, Some("nothere".to_string()), None),
+            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        }]);
+        assert!(!set.resolve().unwrap().is_empty());
+    }
+
+    #[test]
+    fn negative_non_match() {
+        let set = BuildSet::Case(vec![Case::Negative {
+            spec: Locale::new(Some(LOCALE.user.to_string()), None, None),
             build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve().unwrap().is_empty());
