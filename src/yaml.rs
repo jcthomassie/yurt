@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use log::warn;
 use serde::Deserialize;
 use std::borrow::Cow;
+use std::collections::LinkedList;
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -28,7 +29,7 @@ lazy_static! {
 }
 
 pub fn apply<RL, RP, RB, E>(
-    units: Vec<BuildUnit>,
+    units: LinkedList<BuildUnit>,
     lf: fn(Link) -> Result<RL, E>,
     pf: fn(Package) -> Result<RP, E>,
     bf: fn(PackageManager) -> Result<RB, E>,
@@ -152,12 +153,12 @@ pub enum BuildSet {
 }
 
 trait SetResolves {
-    fn resolve(self) -> Result<Vec<BuildUnit>>;
+    fn resolve(self) -> Result<LinkedList<BuildUnit>>;
 }
 
 impl SetResolves for BuildSet {
     // Recursively resolve all case units; collect into single vec
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         match self {
             Self::Case(v) => v.resolve(),
             Self::Link(v) => v.resolve(),
@@ -171,16 +172,16 @@ impl<T> SetResolves for Vec<T>
 where
     T: UnitResolves,
 {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         self.into_iter().map(|u| u.resolve()).collect()
     }
 }
 
 impl SetResolves for Vec<Case> {
     // Recursively filter cases
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         let mut default = true;
-        let mut units = Vec::new();
+        let mut units = LinkedList::new();
         for case in self {
             match case {
                 Case::Positive { spec, build } if spec.is_local() => {
@@ -244,7 +245,7 @@ impl Build {
         !strict
     }
 
-    pub fn resolve(self) -> Result<(Repo, Vec<BuildUnit>)> {
+    pub fn resolve(self) -> Result<(Repo, LinkedList<BuildUnit>)> {
         // Check version
         if self.version_matches(false) {
             warn!(
@@ -256,7 +257,7 @@ impl Build {
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);
-        let mut build_vec: Vec<BuildUnit> = Vec::new();
+        let mut build_vec = LinkedList::new();
         for set in self.build {
             build_vec.extend(set.resolve()?);
         }

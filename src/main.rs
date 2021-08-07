@@ -6,6 +6,7 @@ mod yaml;
 use anyhow::{Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
+use std::collections::LinkedList;
 use std::env;
 use std::process::Command;
 use yaml::{Build, BuildUnit};
@@ -26,7 +27,7 @@ fn parse_build(matches: &ArgMatches) -> Result<Build> {
 }
 
 #[inline]
-fn parse_resolve_build(matches: &ArgMatches) -> Result<(repo::Repo, Vec<BuildUnit>)> {
+fn parse_resolve_build(matches: &ArgMatches) -> Result<(repo::Repo, LinkedList<BuildUnit>)> {
     parse_build(matches)?
         .resolve()
         .context("Failed to resolve build")
