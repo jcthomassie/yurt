@@ -381,11 +381,11 @@ impl<'a> Shell<'a> {
 
     pub fn from_name(name: &str) -> Self {
         match name {
-            "sh" => Shell::Sh,
-            "bash" => Shell::Bash,
-            "zsh" => Shell::Zsh,
-            "pwsh" => Shell::Powershell,
-            other => Shell::Other(Cow::Owned(other.to_string())),
+            "sh" => Self::Sh,
+            "bash" => Self::Bash,
+            "zsh" => Self::Zsh,
+            "pwsh" => Self::Powershell,
+            other => Self::Other(Cow::Owned(other.to_string())),
         }
     }
 
@@ -399,8 +399,8 @@ impl<'a> Shell<'a> {
     // Set self as the default system shell
     #[cfg(not(target_os = "windows"))]
     pub fn chsh(&self) -> Result<()> {
-        info!("Current shell: {}", &*SHELL.name());
-        if std::mem::discriminant(self) == std::mem::discriminant(&*SHELL) {
+        info!("Current shell: {}", SHELL.name());
+        if std::mem::discriminant(self) == std::mem::discriminant(&SHELL) {
             return Ok(());
         }
         info!("Changing shell to: {}", self.name());

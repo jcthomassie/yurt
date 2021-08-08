@@ -11,7 +11,6 @@ use std::env;
 use std::process::Command;
 use yaml::{Build, BuildUnit};
 
-#[inline]
 fn parse_build(matches: &ArgMatches) -> Result<Build> {
     if let Some(yaml_url) = matches.value_of("yaml-url") {
         Build::from_url(yaml_url).context("Failed to parse remote build file")
