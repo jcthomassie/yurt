@@ -10,6 +10,7 @@ pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> Result<PathBuf> {
     Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
 }
 
+#[derive(Debug)]
 pub enum Status {
     Valid,
     NullHead,
@@ -46,9 +47,6 @@ impl Link {
         if !self.tail.exists() {
             return Status::NullTail;
         }
-        if !self.head.exists() {
-            return Status::NullHead;
-        }
         match self.head.read_link() {
             Ok(target) if target == self.tail => Status::Valid,
             Ok(target) => Status::InvalidTail(Error::new(
@@ -58,7 +56,8 @@ impl Link {
                     self.head, target, self.tail
                 ),
             )),
-            Err(e) => Status::InvalidHead(e),
+            Err(e) if self.head.exists() => Status::InvalidHead(e),
+            Err(_) => Status::NullHead,
         }
     }
 
@@ -90,13 +89,9 @@ impl Link {
     // Remove any conflicting files/links at head
     pub fn clean(&self) -> Result<()> {
         match self.status() {
-            Status::InvalidHead(_) => {
+            Status::InvalidHead(_) | Status::InvalidTail(_) => {
                 info!("Removing {:?}", &self.head);
                 Ok(fs::remove_file(&self.head)?)
-            }
-            Status::InvalidTail(_) => {
-                info!("Removing {:?}", &self.head);
-                Ok(symlink::remove_symlink_file(&self.head)?)
             }
             _ => Ok(()),
         }
@@ -188,6 +183,18 @@ mod tests {
         File::create(&ln.tail).expect("failed to create tempfile");
         File::create(&wrong).expect("failed to create tempfile");
         symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
+        ln.clean().expect("failed to clean link");
+        ln.link().expect("failed to apply link");
+    }
+
+    #[test]
+    fn clean_broken_link() {
+        let (dir, ln) = fixture();
+        let wrong = dir.path().join("wrong.thing");
+        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&wrong).expect("failed to create tempfile");
+        symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
+        fs::remove_file(&wrong).expect("failed to delete tail");
         ln.clean().expect("failed to clean link");
         ln.link().expect("failed to apply link");
     }
