@@ -26,18 +26,14 @@ impl Repo {
     }
 
     pub fn open(&self) -> Result<Repository> {
-        let repo = Repository::open(&self.local);
-        match repo {
-            Err(e) => Err(anyhow!(e)),
-            Ok(r) => Ok(r),
-        }
+        Ok(Repository::open(&self.local)?)
     }
 
     pub fn clone(&self) -> Result<Repository> {
-        match Repository::clone_recurse(self.remote.as_ref(), &self.local) {
-            Err(e) => Err(anyhow!(e)),
-            Ok(r) => Ok(r),
-        }
+        Ok(Repository::clone_recurse(
+            self.remote.as_ref(),
+            &self.local,
+        )?)
     }
 
     pub fn require(&self) -> Result<Repository> {
