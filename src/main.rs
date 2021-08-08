@@ -71,17 +71,22 @@ fn install(matches: &ArgMatches) -> Result<()> {
 
 fn uninstall(matches: &ArgMatches) -> Result<()> {
     let (_, units) = parse_resolve_build(matches)?;
-    info!("Uninstalling dotfiles...");
-    yaml::apply(units, |ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
-        .context("Failed to complete uninstall steps")?;
-    Ok(())
+    let sub = matches.subcommand_matches("uninstall").unwrap();
+    if sub.is_present("packages") {
+        info!("Uninstalling dotfiles and packages...");
+        yaml::apply(units, |ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
+            .context("Failed to complete uninstall steps")
+    } else {
+        info!("Uninstalling dotfiles...");
+        yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())
+            .context("Failed to complete uninstall steps")
+    }
 }
 
 fn clean(matches: &ArgMatches) -> Result<()> {
     let (_, units) = parse_resolve_build(matches)?;
     info!("Cleaning link heads...");
-    yaml::apply(units, |ln| ln.clean(), skip!(), skip!()).context("Failed to clean link heads")?;
-    Ok(())
+    yaml::apply(units, |ln| ln.clean(), skip!(), skip!()).context("Failed to clean link heads")
 }
 
 fn edit() -> Result<()> {
