@@ -98,7 +98,7 @@ fn update() -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let matches = App::new("dots")
+    let matches = App::new("yurt")
         .author(crate_authors!())
         .version(crate_version!())
         .about("Simple CLI tool for dotfile management.")
