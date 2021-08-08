@@ -1318,7 +1318,6 @@ dependencies = [
  "git2",
  "lazy_static",
  "log",
- "regex",
  "reqwest",
  "serde",
  "serde_yaml",
