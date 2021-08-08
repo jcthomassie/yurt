@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::info;
 use serde::Deserialize;
 use std::fs;
@@ -11,9 +11,11 @@ pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> Result<PathBuf> {
 }
 
 pub enum Status {
-    Exists,
-    NotExists,
-    Invalid(Error),
+    Valid,
+    NullHead,
+    NullTail,
+    InvalidHead(Error),
+    InvalidTail(Error),
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -42,43 +44,42 @@ impl Link {
     // Get current status of link
     pub fn status(&self) -> Status {
         if !self.tail.exists() {
-            return Status::Invalid(Error::new(
-                ErrorKind::NotFound,
-                "link target does not exist",
-            ));
+            return Status::NullTail;
         }
         if !self.head.exists() {
-            return Status::NotExists;
+            return Status::NullHead;
         }
         match self.head.read_link() {
-            Ok(target) if target == self.tail => Status::Exists,
-            Ok(target) => Status::Invalid(Error::new(
+            Ok(target) if target == self.tail => Status::Valid,
+            Ok(target) => Status::InvalidTail(Error::new(
                 ErrorKind::AlreadyExists,
                 format!(
                     "link source points to wrong target: {:?}@=>{:?} != {:?}",
                     self.head, target, self.tail
                 ),
             )),
-            Err(e) => Status::Invalid(e),
+            Err(e) => Status::InvalidHead(e),
         }
     }
 
     // Try to create link if it does not already exist
     pub fn link(&self) -> Result<()> {
         match self.status() {
-            Status::Exists => Ok(()),
-            Status::NotExists => {
+            Status::Valid => Ok(()),
+            Status::NullHead => {
                 info!("Linking {:?}@->{:?}", &self.head, &self.tail);
                 Ok(symlink::symlink_file(&self.tail, &self.head)?)
             }
-            Status::Invalid(e) => Err(e.into()),
+            Status::NullTail => Err(anyhow!("Link tail does not exist")),
+            Status::InvalidHead(e) => Err(anyhow!(e).context("Invalid link head")),
+            Status::InvalidTail(e) => Err(anyhow!(e).context("Invalid link tail")),
         }
     }
 
     // Try to remove link if it exists
     pub fn unlink(&self) -> Result<()> {
         match self.status() {
-            Status::Exists => {
+            Status::Valid => {
                 info!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
                 Ok(symlink::remove_symlink_file(&self.head)?)
             }
@@ -89,9 +90,13 @@ impl Link {
     // Remove any conflicting files/links at head
     pub fn clean(&self) -> Result<()> {
         match self.status() {
-            Status::Invalid(_) => {
+            Status::InvalidHead(_) => {
                 info!("Removing {:?}", &self.head);
                 Ok(fs::remove_file(&self.head)?)
+            }
+            Status::InvalidTail(_) => {
+                info!("Removing {:?}", &self.head);
+                Ok(symlink::remove_symlink_file(&self.head)?)
             }
             _ => Ok(()),
         }
@@ -110,42 +115,42 @@ mod tests {
     }
 
     #[test]
-    fn status_null() {
+    fn status_no_tail() {
         let (_dir, ln) = fixture();
-        assert!(matches!(ln.status(), Status::Invalid(_)));
+        assert!(matches!(ln.status(), Status::NullTail));
     }
 
     #[test]
     fn status_no_head() {
         let (_dir, ln) = fixture();
         File::create(&ln.tail).expect("failed to create tempfile");
-        assert!(matches!(ln.status(), Status::NotExists));
+        assert!(matches!(ln.status(), Status::NullHead));
     }
 
     #[test]
-    fn status_exists() {
+    fn status_valid() {
         let (_dir, ln) = fixture();
         File::create(&ln.tail).expect("failed to create tempfile");
         symlink::symlink_file(&ln.tail, &ln.head).expect("failed to create symlink");
-        assert!(matches!(ln.status(), Status::Exists));
-        symlink::remove_symlink_file(&ln.head).expect("failed to remove symlink");
+        assert!(matches!(ln.status(), Status::Valid));
     }
 
     #[test]
     fn status_wrong_tail() {
         let (dir, ln) = fixture();
         let wrong = dir.path().join("wrong.thing");
+        File::create(&ln.tail).expect("failed to create tempfile");
         File::create(&wrong).expect("failed to create tempfile");
         symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
-        assert!(matches!(ln.status(), Status::Invalid(_)));
-        symlink::remove_symlink_file(&ln.head).expect("failed to remove symlink");
+        assert!(matches!(ln.status(), Status::InvalidTail(_)));
     }
 
     #[test]
     fn status_head_is_file() {
         let (_dir, ln) = fixture();
+        File::create(&ln.tail).expect("failed to create tempfile");
         File::create(&ln.head).expect("failed to create tempfile");
-        assert!(matches!(ln.status(), Status::Invalid(_)));
+        assert!(matches!(ln.status(), Status::InvalidHead(_)));
     }
 
     #[test]
@@ -165,5 +170,25 @@ mod tests {
         ln.link().expect("failed to create link");
         ln.unlink().expect("failed to remove link");
         assert!(!ln.head.exists());
+    }
+
+    #[test]
+    fn clean_invalid_head() {
+        let (_dir, ln) = fixture();
+        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&ln.head).expect("failed to create tempfile");
+        ln.clean().expect("failed to clean link");
+        ln.link().expect("failed to apply link");
+    }
+
+    #[test]
+    fn clean_invalid_tail() {
+        let (dir, ln) = fixture();
+        let wrong = dir.path().join("wrong.thing");
+        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&wrong).expect("failed to create tempfile");
+        symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
+        ln.clean().expect("failed to clean link");
+        ln.link().expect("failed to apply link");
     }
 }
