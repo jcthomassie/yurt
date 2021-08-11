@@ -308,7 +308,8 @@ pub fn which_has(cmd: &str) -> bool {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Deserialize)]
+#[serde(rename_all(deserialize = "snake_case"))]
 pub enum Shell<'a> {
     Sh,
     Bash,

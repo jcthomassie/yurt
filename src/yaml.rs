@@ -1,5 +1,5 @@
 use super::link::Link;
-use super::pack::{Package, PackageBundle, PackageManager};
+use super::pack::{Package, PackageBundle, PackageManager, Shell};
 use super::repo::Repo;
 use anyhow::Result;
 use clap::crate_version;
@@ -28,22 +28,6 @@ lazy_static! {
                 .to_lowercase(),
         ),
     );
-}
-
-pub fn apply<RL, RP, RB, E>(
-    units: LinkedList<BuildUnit>,
-    lf: fn(Link) -> Result<RL, E>,
-    pf: fn(Package) -> Result<RP, E>,
-    bf: fn(PackageManager) -> Result<RB, E>,
-) -> Result<(), E> {
-    for unit in units {
-        match unit {
-            BuildUnit::Link(ln) => drop(lf(ln)?),
-            BuildUnit::Package(pkg) => drop(pf(pkg)?),
-            BuildUnit::Bootstrap(pm) => drop(bf(pm)?),
-        }
-    }
-    Ok(())
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -231,14 +215,41 @@ impl SetResolves for Vec<Case> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
-pub struct Build {
+#[derive(Debug)]
+pub struct ResolvedConfig<'a> {
     pub version: Option<String>,
+    pub shell: Option<Shell<'a>>,
+    pub repo: Repo,
+    pub build: LinkedList<BuildUnit>,
+}
+
+impl<'a> ResolvedConfig<'a> {
+    pub fn map_build<RL, RP, RB, E>(
+        &self,
+        lf: fn(&Link) -> Result<RL, E>,
+        pf: fn(&Package) -> Result<RP, E>,
+        bf: fn(&PackageManager) -> Result<RB, E>,
+    ) -> Result<(), E> {
+        for unit in &self.build {
+            match unit {
+                BuildUnit::Link(ln) => drop(lf(ln)?),
+                BuildUnit::Package(pkg) => drop(pf(pkg)?),
+                BuildUnit::Bootstrap(pm) => drop(bf(pm)?),
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize)]
+pub struct Config<'a> {
+    pub version: Option<String>,
+    pub shell: Option<Shell<'a>>,
     pub repo: Repo,
     pub build: Vec<BuildSet>,
 }
 
-impl Build {
+impl<'a> Config<'a> {
     pub fn from_str<S>(string: S) -> Result<Self>
     where
         S: AsRef<str>,
@@ -268,11 +279,11 @@ impl Build {
         !strict
     }
 
-    pub fn resolve(self) -> Result<(Repo, LinkedList<BuildUnit>)> {
+    pub fn resolve(self) -> Result<ResolvedConfig<'a>> {
         // Check version
         if self.version_matches(false) {
             warn!(
-                "Build version mismatch: {} | {}",
+                "Config version mismatch: {} | {}",
                 self.version.as_deref().unwrap_or("None"),
                 crate_version!()
             );
@@ -280,11 +291,16 @@ impl Build {
         // Resolve repo
         let repo = self.repo.resolve()?;
         env::set_var("YURT_REPO_LOCAL", &repo.local);
-        let mut build_vec = LinkedList::new();
+        let mut build = LinkedList::new();
         for set in self.build {
-            build_vec.extend(set.resolve()?);
+            build.extend(set.resolve()?);
         }
-        Ok((repo, build_vec))
+        Ok(ResolvedConfig {
+            version: self.version,
+            shell: self.shell,
+            repo,
+            build,
+        })
     }
 }
 
@@ -296,17 +312,17 @@ mod tests {
 
     #[test]
     fn empty_build_fails() {
-        assert!(Build::from_str("").is_err())
+        assert!(Config::from_str("").is_err())
     }
 
     #[test]
     fn build_parses() {
-        Build::from_str(YAML).unwrap();
+        Config::from_str(YAML).unwrap();
     }
 
     #[test]
     fn build_resolves() {
-        let (_, b) = Build::from_str(YAML).unwrap().resolve().unwrap();
+        let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
         let mut links = 1;
         let mut boots = 2;
         let mut names = vec![
@@ -317,7 +333,7 @@ mod tests {
             "package_4",
         ]
         .into_iter();
-        for unit in b.into_iter() {
+        for unit in resolved.build.into_iter() {
             match unit {
                 BuildUnit::Link(_) => links -= 1,
                 BuildUnit::Package(pkg) => assert_eq!(pkg.name, names.next().unwrap()),

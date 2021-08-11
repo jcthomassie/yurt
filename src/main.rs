@@ -6,28 +6,27 @@ mod yaml;
 use anyhow::{Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
-use std::collections::LinkedList;
 use std::env;
 use std::process::Command;
-use yaml::{Build, BuildUnit};
+use yaml::{Config, ResolvedConfig};
 
-fn parse_build(matches: &ArgMatches) -> Result<Build> {
+fn parse_config(matches: &ArgMatches) -> Result<Config> {
     if let Some(yaml_url) = matches.value_of("yaml-url") {
-        Build::from_url(yaml_url).context("Failed to parse remote build file")
+        Config::from_url(yaml_url).context("Failed to parse remote build file")
     } else {
         let yaml = match matches.value_of("yaml") {
             Some(path) => Ok(path.to_string()),
             None => env::var("YURT_BUILD_FILE"),
         }
-        .context("Build file not specified")?;
+        .context("Config file not specified")?;
         let path = link::expand_path(&yaml).context("Failed to expand path")?;
-        Build::from_path(path).context("Failed to parse local build file")
+        Config::from_path(path).context("Failed to parse local build file")
     }
 }
 
 #[inline]
-fn parse_resolve_build(matches: &ArgMatches) -> Result<(repo::Repo, LinkedList<BuildUnit>)> {
-    parse_build(matches)?
+fn parse_resolved(matches: &ArgMatches) -> Result<ResolvedConfig> {
+    parse_config(matches)?
         .resolve()
         .context("Failed to resolve build")
 }
@@ -39,54 +38,51 @@ macro_rules! skip {
 }
 
 fn show(matches: &ArgMatches) -> Result<()> {
-    let (repo, units) = parse_resolve_build(matches)?;
+    let resolved = parse_resolved(matches)?;
     println!("Locale:\n{:#?}", *yaml::LOCALE);
     println!("_______________________________________");
-    println!("Repo:\n{:#?}", repo);
+    println!("Repo:\n{:#?}", resolved.repo);
     println!("_______________________________________");
-    println!("Steps:\n{:#?}", units);
+    println!("Steps:\n{:#?}", resolved.build);
     Ok(())
 }
 
 fn install(matches: &ArgMatches) -> Result<()> {
-    let (repo, units) = parse_resolve_build(matches)?;
-    // Optionally clean before install
     let sub = matches.subcommand_matches("install").unwrap();
     if sub.is_present("clean") {
         clean(matches)?;
     }
-    repo.require()?;
+    let resolved = parse_resolved(matches)?;
+    resolved.repo.require()?;
     info!("Starting build steps...");
-    yaml::apply(
-        units,
-        |ln| ln.link(),
-        |pkg| pkg.install(),
-        |pm| pm.require(),
-    )
-    .context("Failed to complete install steps")?;
-    #[cfg(not(target_os = "windows"))]
-    pack::Shell::Zsh.chsh()?;
+    resolved
+        .map_build(|ln| ln.link(), |pkg| pkg.install(), |pm| pm.require())
+        .context("Failed to complete build steps")?;
+    if let Some(shell) = resolved.shell {
+        shell.chsh()?;
+    }
     Ok(())
 }
 
 fn uninstall(matches: &ArgMatches) -> Result<()> {
-    let (_, units) = parse_resolve_build(matches)?;
+    let resolved = parse_resolved(matches)?;
     let sub = matches.subcommand_matches("uninstall").unwrap();
     if sub.is_present("packages") {
         info!("Uninstalling dotfiles and packages...");
-        yaml::apply(units, |ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
-            .context("Failed to complete uninstall steps")
+        resolved.map_build(|ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
     } else {
         info!("Uninstalling dotfiles...");
-        yaml::apply(units, |ln| ln.unlink(), skip!(), skip!())
-            .context("Failed to complete uninstall steps")
+        resolved.map_build(|ln| ln.unlink(), skip!(), skip!())
     }
+    .context("Failed to complete uninstall steps")
 }
 
 fn clean(matches: &ArgMatches) -> Result<()> {
-    let (_, units) = parse_resolve_build(matches)?;
+    let resolved = parse_resolved(matches)?;
     info!("Cleaning link heads...");
-    yaml::apply(units, |ln| ln.clean(), skip!(), skip!()).context("Failed to clean link heads")
+    resolved
+        .map_build(|ln| ln.clean(), skip!(), skip!())
+        .context("Failed to clean link heads")
 }
 
 fn edit() -> Result<()> {

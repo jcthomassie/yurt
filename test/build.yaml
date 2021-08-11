@@ -3,6 +3,7 @@ version: 0.1.0
 repo:
   local: ~/dotfiles
   remote: https://github.com/user/dotfiles.git
+shell: zsh
 build:
   # Conditional instructions
   - case:
