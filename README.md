@@ -35,15 +35,26 @@ yurt show
 Build parameters are specified via a YAML file. Cases can be arbitrarily nested. Order of build steps is preserved after resolution.
 
 ### Fields
+
+`version` yurt version for compatibility check
+
+`shell` set the shell for POSIX systems
+
 `repo`
 - `local` path to local dotfile repository
 - `remote` dotfile remote url for cloning
 
 `build`
 - `case` list of conditional build steps
-- `install` list of packages to install
-- `bootstrap` list of package managers to bootstrap
 - `link` list of symlinks to be applied
+- `install` list of packages to install
+  - `name` package name
+  - `alias` package alias for package managers
+  - `managers` list of package managers that provide the package
+- `bootstrap` list of package managers to bootstrap
+- `bundle`
+  - `manager` single package manager
+  - `packages` list of package names to install
 
 ### Example
 ```yaml
