@@ -369,6 +369,11 @@ impl<'a> Shell<'a> {
         pipe("which", &[], "chsh", &["-s"])?;
         Ok(())
     }
+    #[cfg(target_os = "windows")]
+    pub fn chsh(&self) -> Result<()> {
+        warn!("Shell change not implemented for windows");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
