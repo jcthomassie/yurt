@@ -46,6 +46,9 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 
 `build`
 - `case` list of conditional build steps
+  - `positive` if the spec matches the local spec
+  - `negative` if the spec does not match the local spec
+  - `default` if none of the preceeding conditions are met
 - `link` list of symlinks to be applied
 - `install` list of packages to install
   - `name` package name
@@ -59,6 +62,8 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 ### Example
 ```yaml
 ---
+version: 0.1.0
+
 repo:
   local: $HOME/dotfiles
   remote: https://github.com/jcthomassie/dotfiles.git
@@ -66,7 +71,7 @@ repo:
 build:
   # Bootstrap package managers
   - case:
-    - local:
+    - positive:
         spec:
           platform: windows
         build:
