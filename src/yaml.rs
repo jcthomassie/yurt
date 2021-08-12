@@ -355,6 +355,24 @@ mod tests {
     }
 
     #[test]
+    fn build_version_check() {
+        let mut cfg = Config {
+            version: None,
+            shell: None,
+            repo: None,
+            build: None,
+        };
+        assert!(!cfg.version_matches(true));
+        assert!(cfg.version_matches(false));
+        cfg.version = Some("9.9.9".to_string());
+        assert!(!cfg.version_matches(true));
+        assert!(!cfg.version_matches(false));
+        cfg.version = Some(crate_version!().to_string());
+        assert!(cfg.version_matches(true));
+        assert!(cfg.version_matches(false));
+    }
+
+    #[test]
     fn positive_match() {
         let set = BuildSet::Case(vec![Case::Positive {
             spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
