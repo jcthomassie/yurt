@@ -53,12 +53,14 @@ fn install(matches: &ArgMatches) -> Result<()> {
         clean(matches)?;
     }
     let resolved = parse_resolved(matches)?;
-    resolved.repo.require()?;
+    if let Some(repo) = &resolved.repo {
+        repo.require()?;
+    }
     info!("Starting build steps...");
     resolved
         .map_build(|ln| ln.link(), |pkg| pkg.install(), |pm| pm.require())
         .context("Failed to complete build steps")?;
-    if let Some(shell) = resolved.shell {
+    if let Some(shell) = &resolved.shell {
         shell.chsh()?;
     }
     Ok(())

@@ -219,7 +219,7 @@ impl SetResolves for Vec<Case> {
 pub struct ResolvedConfig<'a> {
     pub version: Option<String>,
     pub shell: Option<Shell<'a>>,
-    pub repo: Repo,
+    pub repo: Option<Repo>,
     pub build: LinkedList<BuildUnit>,
 }
 
@@ -245,8 +245,8 @@ impl<'a> ResolvedConfig<'a> {
 pub struct Config<'a> {
     pub version: Option<String>,
     pub shell: Option<Shell<'a>>,
-    pub repo: Repo,
-    pub build: Vec<BuildSet>,
+    pub repo: Option<Repo>,
+    pub build: Option<Vec<BuildSet>>,
 }
 
 impl<'a> Config<'a> {
@@ -289,11 +289,20 @@ impl<'a> Config<'a> {
             );
         }
         // Resolve repo
-        let repo = self.repo.resolve()?;
-        env::set_var("YURT_REPO_LOCAL", &repo.local);
+        let repo = match self.repo {
+            Some(mut repo) => {
+                repo = repo.resolve()?;
+                env::set_var("YURT_REPO_LOCAL", &repo.local);
+                Some(repo)
+            }
+            None => None,
+        };
+        // Resolve build
         let mut build = LinkedList::new();
-        for set in self.build {
-            build.extend(set.resolve()?);
+        if let Some(raw_build) = self.build {
+            for set in raw_build {
+                build.extend(set.resolve()?);
+            }
         }
         Ok(ResolvedConfig {
             version: self.version,
