@@ -281,7 +281,7 @@ impl<'a> Config<'a> {
 
     pub fn resolve(self) -> Result<ResolvedConfig<'a>> {
         // Check version
-        if self.version_matches(false) {
+        if !self.version_matches(false) {
             warn!(
                 "Config version mismatch: {} | {}",
                 self.version.as_deref().unwrap_or("None"),
