@@ -39,11 +39,8 @@ macro_rules! skip {
 
 fn show(matches: &ArgMatches) -> Result<()> {
     let resolved = parse_resolved(matches)?;
-    println!("Locale:\n{:#?}", *yaml::LOCALE);
-    println!("_______________________________________");
-    println!("Repo:\n{:#?}", resolved.repo);
-    println!("_______________________________________");
-    println!("Steps:\n{:#?}", resolved.build);
+    println!("{:#?}", *yaml::LOCALE);
+    println!("{:#?}", resolved);
     Ok(())
 }
 
