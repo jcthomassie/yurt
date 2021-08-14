@@ -338,7 +338,7 @@ mod tests {
     fn build_resolves() {
         let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
         let mut links = 1;
-        let mut comms = 0;
+        let mut comms = 1;
         let mut boots = 2;
         let mut names = vec![
             "package_0",

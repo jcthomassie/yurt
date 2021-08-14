@@ -444,6 +444,18 @@ mod tests {
     }
 
     #[test]
+    fn shell_command_success() {
+        let out = "ls ~".run().unwrap();
+        assert!(out.status.success());
+    }
+
+    #[test]
+    fn shell_command_failure() {
+        let out = "made_up_command with parameters".run().unwrap();
+        assert!(!out.status.success());
+    }
+
+    #[test]
     fn which_has_cargo() {
         assert!(which_has("cargo"));
     }
