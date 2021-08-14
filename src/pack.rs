@@ -11,10 +11,10 @@ pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 lazy_static! {
-    static ref SHELL: Shell<'static> = Shell::from_env();
+    pub static ref SHELL: Shell<'static> = Shell::from_env();
 }
 
-trait Cmd {
+pub trait Cmd {
     fn name(&self) -> &str;
 
     #[inline]
@@ -47,6 +47,16 @@ trait Cmd {
 impl Cmd for &str {
     fn name(&self) -> &str {
         self
+    }
+}
+
+pub trait ShellCmd {
+    fn run(&self) -> Result<Output>;
+}
+
+impl ShellCmd for &str {
+    fn run(&self) -> Result<Output> {
+        SHELL.call(&["-c", self])
     }
 }
 

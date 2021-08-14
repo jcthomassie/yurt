@@ -6,6 +6,7 @@ mod yaml;
 use anyhow::{Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
+use pack::ShellCmd;
 use std::env;
 use std::process::Command;
 use yaml::{Config, ResolvedConfig};
@@ -55,7 +56,12 @@ fn install(matches: &ArgMatches) -> Result<()> {
     }
     info!("Starting build steps...");
     resolved
-        .map_build(|ln| ln.link(), |pkg| pkg.install(), |pm| pm.require())
+        .map_build(
+            |ln| ln.link(),
+            |cmd| cmd.run(),
+            |pkg| pkg.install(),
+            |pm| pm.require(),
+        )
         .context("Failed to complete build steps")?;
     if let Some(shell) = &resolved.shell {
         shell.chsh()?;
@@ -68,10 +74,10 @@ fn uninstall(matches: &ArgMatches) -> Result<()> {
     let sub = matches.subcommand_matches("uninstall").unwrap();
     if sub.is_present("packages") {
         info!("Uninstalling dotfiles and packages...");
-        resolved.map_build(|ln| ln.unlink(), |pkg| pkg.uninstall(), skip!())
+        resolved.map_build(|ln| ln.unlink(), skip!(), |pkg| pkg.uninstall(), skip!())
     } else {
         info!("Uninstalling dotfiles...");
-        resolved.map_build(|ln| ln.unlink(), skip!(), skip!())
+        resolved.map_build(|ln| ln.unlink(), skip!(), skip!(), skip!())
     }
     .context("Failed to complete uninstall steps")
 }
@@ -80,7 +86,7 @@ fn clean(matches: &ArgMatches) -> Result<()> {
     let resolved = parse_resolved(matches)?;
     info!("Cleaning link heads...");
     resolved
-        .map_build(|ln| ln.clean(), skip!(), skip!())
+        .map_build(|ln| ln.clean(), skip!(), skip!(), skip!())
         .context("Failed to clean link heads")
 }
 

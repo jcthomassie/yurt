@@ -87,6 +87,7 @@ pub enum Case {
 #[derive(Debug)]
 pub enum BuildUnit {
     Link(Link),
+    ShellCmd(String),
     Package(Package),
     Bootstrap(PackageManager),
 }
@@ -143,6 +144,7 @@ where
 pub enum BuildSet {
     Case(Vec<Case>),
     Link(Vec<Link>),
+    Run(Vec<String>),
     Install(Vec<Package>),
     Bundle(PackageBundle),
     Bootstrap(Vec<PackageManager>),
@@ -158,6 +160,7 @@ impl SetResolves for BuildSet {
         match self {
             Self::Case(v) => v.resolve(),
             Self::Link(v) => v.resolve(),
+            Self::Run(v) => Ok(v.into_iter().map(BuildUnit::ShellCmd).collect()),
             Self::Install(v) => v.resolve(),
             Self::Bundle(v) => v.resolve(),
             Self::Bootstrap(v) => v.resolve(),
@@ -224,15 +227,17 @@ pub struct ResolvedConfig<'a> {
 }
 
 impl<'a> ResolvedConfig<'a> {
-    pub fn map_build<RL, RP, RB, E>(
+    pub fn map_build<RL, RS, RP, RB, E>(
         &self,
         lf: fn(&Link) -> Result<RL, E>,
+        sf: fn(&str) -> Result<RS, E>,
         pf: fn(&Package) -> Result<RP, E>,
         bf: fn(&PackageManager) -> Result<RB, E>,
     ) -> Result<(), E> {
         for unit in &self.build {
             match unit {
                 BuildUnit::Link(ln) => drop(lf(ln)?),
+                BuildUnit::ShellCmd(cmd) => drop(sf(cmd)?),
                 BuildUnit::Package(pkg) => drop(pf(pkg)?),
                 BuildUnit::Bootstrap(pm) => drop(bf(pm)?),
             }
@@ -333,6 +338,7 @@ mod tests {
     fn build_resolves() {
         let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
         let mut links = 1;
+        let mut comms = 0;
         let mut boots = 2;
         let mut names = vec![
             "package_0",
@@ -345,11 +351,13 @@ mod tests {
         for unit in resolved.build.into_iter() {
             match unit {
                 BuildUnit::Link(_) => links -= 1,
+                BuildUnit::ShellCmd(_) => comms -= 1,
                 BuildUnit::Package(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
                 BuildUnit::Bootstrap(_) => boots -= 1,
             }
         }
         assert_eq!(links, 0);
+        assert_eq!(comms, 0);
         assert_eq!(boots, 0);
         assert!(names.next().is_none());
     }
