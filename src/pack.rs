@@ -340,15 +340,24 @@ impl<'a> Cmd for Shell<'a> {
     }
 }
 
+impl<'a> Default for Shell<'a> {
+    #[cfg(target_os = "windows")]
+    fn default() -> Shell<'a> {
+        Shell::Powershell
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    fn default() -> Shell<'a> {
+        Shell::Sh
+    }
+}
+
 impl<'a> Shell<'a> {
     pub fn from_env() -> Self {
-        Self::from_name(
-            env::var("SHELL")
-                .expect("failed to read shell")
-                .split('/')
-                .last()
-                .unwrap(),
-        )
+        match env::var("SHELL") {
+            Ok(s) => Self::from_name(s.split('/').last().unwrap()),
+            Err(_) => Self::default(),
+        }
     }
 
     pub fn from_name(name: &str) -> Self {
@@ -433,13 +442,10 @@ mod tests {
 
     #[test]
     fn shell_from_env() {
-        if env::var("SHELL").is_err() {
-            env::set_var("SHELL", "/bin/fake_path/zsh");
-            assert_eq!(*SHELL, Shell::Zsh);
-            env::remove_var("SHELL");
-        } else {
+        match env::var("SHELL") {
             // Other shells should be added as needed
-            assert!(!matches!(*SHELL, Shell::Other(_)));
+            Ok(_) => assert!(!matches!(*SHELL, Shell::Other(_))),
+            Err(_) => assert_eq!(*SHELL, Shell::default()),
         }
     }
 
