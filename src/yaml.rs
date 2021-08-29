@@ -127,11 +127,11 @@ auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
 auto_convert!(BuildUnit::ShellCmd, String);
 
-trait UnitResolves {
+trait ResolveUnit {
     fn resolve(self) -> Result<BuildUnit>;
 }
 
-impl<T> UnitResolves for T
+impl<T> ResolveUnit for T
 where
     T: Into<BuildUnit>,
 {
@@ -151,11 +151,11 @@ pub enum BuildSet {
     Bootstrap(Vec<PackageManager>),
 }
 
-trait SetResolves {
+trait ResolveSet {
     fn resolve(self) -> Result<LinkedList<BuildUnit>>;
 }
 
-impl SetResolves for BuildSet {
+impl ResolveSet for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         match self {
@@ -169,16 +169,16 @@ impl SetResolves for BuildSet {
     }
 }
 
-impl<T> SetResolves for Vec<T>
+impl<T> ResolveSet for Vec<T>
 where
-    T: UnitResolves,
+    T: ResolveUnit,
 {
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         self.into_iter().map(|u| u.resolve()).collect()
     }
 }
 
-impl SetResolves for PackageBundle {
+impl ResolveSet for PackageBundle {
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         let manager = self.manager;
         self.packages
@@ -188,7 +188,7 @@ impl SetResolves for PackageBundle {
     }
 }
 
-impl SetResolves for Vec<Case> {
+impl ResolveSet for Vec<Case> {
     // Recursively filter cases
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         let mut default = true;
