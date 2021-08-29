@@ -125,6 +125,7 @@ macro_rules! auto_convert {
 auto_convert!(BuildUnit::Link, Link, ln, ln.expand().unwrap());
 auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
+auto_convert!(BuildUnit::ShellCmd, String);
 
 trait UnitResolves {
     fn resolve(self) -> Result<BuildUnit>;
@@ -160,7 +161,7 @@ impl SetResolves for BuildSet {
         match self {
             Self::Case(v) => v.resolve(),
             Self::Link(v) => v.resolve(),
-            Self::Run(v) => Ok(v.into_iter().map(BuildUnit::ShellCmd).collect()),
+            Self::Run(v) => v.resolve(),
             Self::Install(v) => v.resolve(),
             Self::Bundle(v) => v.resolve(),
             Self::Bootstrap(v) => v.resolve(),
