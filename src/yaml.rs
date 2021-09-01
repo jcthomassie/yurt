@@ -8,6 +8,7 @@ use log::warn;
 use serde::Deserialize;
 use std::borrow::Cow;
 use std::collections::LinkedList;
+use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -93,32 +94,21 @@ pub enum BuildUnit {
 }
 
 macro_rules! auto_convert {
-    (@impl_from BuildUnit::$outer:ident, $inner:ty) => {
-        impl From<BuildUnit> for Option<$inner> {
-            fn from(unit: BuildUnit) -> Option<$inner> {
-                match unit {
-                    BuildUnit::$outer(u) => Some(u),
-                    _ => None,
-                }
-            }
-        }
-    };
+    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
+        impl TryFrom<$inner> for BuildUnit {
+            type Error = anyhow::Error;
 
-    (@impl_to BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        impl From<$inner> for BuildUnit {
-            fn from($var: $inner) -> BuildUnit {
-                BuildUnit::$outer($var_map)
+            fn try_from($var: $inner) -> Result<Self, Self::Error> {
+                Ok(BuildUnit::$outer($var_map))
             }
         }
     };
 
     (BuildUnit::$outer:ident, $inner:ty) => {
-        auto_convert!(@impl_from BuildUnit::$outer, $inner);
-        auto_convert!(@impl_to BuildUnit::$outer, $inner, x, x);
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, x, x);
     };
     (BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        auto_convert!(@impl_from BuildUnit::$outer, $inner);
-        auto_convert!(@impl_to BuildUnit::$outer, $inner, $var, $var_map);
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $var, $var_map);
     };
 }
 
@@ -126,19 +116,6 @@ auto_convert!(BuildUnit::Link, Link, ln, ln.expand().unwrap());
 auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
 auto_convert!(BuildUnit::ShellCmd, String);
-
-trait ResolveUnit {
-    fn resolve(self) -> Result<BuildUnit>;
-}
-
-impl<T> ResolveUnit for T
-where
-    T: Into<BuildUnit>,
-{
-    fn resolve(self) -> Result<BuildUnit> {
-        Ok(self.into())
-    }
-}
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -151,11 +128,11 @@ pub enum BuildSet {
     Bootstrap(Vec<PackageManager>),
 }
 
-trait ResolveSet {
+trait Resolve {
     fn resolve(self) -> Result<LinkedList<BuildUnit>>;
 }
 
-impl ResolveSet for BuildSet {
+impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         match self {
@@ -169,26 +146,26 @@ impl ResolveSet for BuildSet {
     }
 }
 
-impl<T> ResolveSet for Vec<T>
+impl<T> Resolve for Vec<T>
 where
-    T: ResolveUnit,
+    T: TryInto<BuildUnit, Error = anyhow::Error>,
 {
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
-        self.into_iter().map(|u| u.resolve()).collect()
+        self.into_iter().map(|u| u.try_into()).collect()
     }
 }
 
-impl ResolveSet for PackageBundle {
+impl Resolve for PackageBundle {
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         let manager = self.manager;
         self.packages
             .into_iter()
-            .map(|name| Package::new(name, vec![manager.clone()]).resolve())
+            .map(|name| Package::new(name, vec![manager.clone()]).try_into())
             .collect()
     }
 }
 
-impl ResolveSet for Vec<Case> {
+impl Resolve for Vec<Case> {
     // Recursively filter cases
     fn resolve(self) -> Result<LinkedList<BuildUnit>> {
         let mut default = true;
