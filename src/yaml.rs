@@ -98,20 +98,20 @@ macro_rules! auto_convert {
             type Error = anyhow::Error;
 
             fn try_from($var: $inner) -> Result<Self, Self::Error> {
-                Ok(BuildUnit::$outer($var_map))
+                ($var_map).map(BuildUnit::$outer)
             }
         }
     };
 
     (BuildUnit::$outer:ident, $inner:ty) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, x, x);
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, x, Ok(x));
     };
     (BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
         auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $var, $var_map);
     };
 }
 
-auto_convert!(BuildUnit::Link, Link, ln, ln.expand().unwrap());
+auto_convert!(BuildUnit::Link, Link, ln, ln.expand());
 auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
 auto_convert!(BuildUnit::ShellCmd, String);
