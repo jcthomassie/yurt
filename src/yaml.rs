@@ -21,8 +21,8 @@ lazy_static! {
         whoami::distro()
             .split(' ')
             .next()
-            .map(String::from)
             .expect("failed to determine distro")
+            .to_owned()
             .to_lowercase(),
     );
 }
