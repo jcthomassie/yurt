@@ -6,7 +6,6 @@ use clap::crate_version;
 use lazy_static::lazy_static;
 use log::warn;
 use serde::Deserialize;
-use std::borrow::Cow;
 use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fs::File;
@@ -16,17 +15,15 @@ use std::path::Path;
 use std::vec::IntoIter;
 
 lazy_static! {
-    pub static ref LOCALE: Locale<Cow<'static, str>> = Locale::new(
-        Cow::Owned(whoami::username()),
-        Cow::Owned(format!("{:?}", whoami::platform()).to_lowercase()),
-        Cow::Owned(
-            whoami::distro()
-                .split(' ')
-                .next()
-                .map(String::from)
-                .expect("failed to determine distro")
-                .to_lowercase(),
-        ),
+    pub static ref LOCALE: Locale<String> = Locale::new(
+        whoami::username(),
+        format!("{:?}", whoami::platform()).to_lowercase(),
+        whoami::distro()
+            .split(' ')
+            .next()
+            .map(String::from)
+            .expect("failed to determine distro")
+            .to_lowercase(),
     );
 }
 
@@ -196,14 +193,14 @@ impl Resolve for Vec<Case> {
 }
 
 #[derive(Debug)]
-pub struct ResolvedConfig<'a> {
+pub struct ResolvedConfig {
     pub version: Option<String>,
-    pub shell: Option<Shell<'a>>,
+    pub shell: Option<Shell>,
     pub repo: Option<Repo>,
     pub build: Vec<BuildUnit>,
 }
 
-impl<'a> ResolvedConfig<'a> {
+impl ResolvedConfig {
     pub fn map_build<RL, RS, RP, RB, E>(
         &self,
         lf: fn(&Link) -> Result<RL, E>,
@@ -224,14 +221,14 @@ impl<'a> ResolvedConfig<'a> {
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
-pub struct Config<'a> {
+pub struct Config {
     pub version: Option<String>,
-    pub shell: Option<Shell<'a>>,
+    pub shell: Option<Shell>,
     pub repo: Option<Repo>,
     pub build: Option<Vec<BuildSet>>,
 }
 
-impl<'a> Config<'a> {
+impl Config {
     pub fn from_str<S>(string: S) -> Result<Self>
     where
         S: AsRef<str>,
@@ -261,7 +258,7 @@ impl<'a> Config<'a> {
         !strict
     }
 
-    pub fn resolve(self) -> Result<ResolvedConfig<'a>> {
+    pub fn resolve(self) -> Result<ResolvedConfig> {
         // Check version
         if !self.version_matches(false) {
             warn!(

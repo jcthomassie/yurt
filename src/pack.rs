@@ -2,7 +2,6 @@ use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
-use std::borrow::Cow;
 use std::env;
 use std::io::{Read, Write};
 use std::process::{Child, Command, Output, Stdio};
@@ -11,7 +10,7 @@ pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 lazy_static! {
-    pub static ref SHELL: Shell<'static> = Shell::from_env();
+    pub static ref SHELL: Shell = Shell::from_env();
 }
 
 pub trait Cmd {
@@ -320,15 +319,15 @@ pub fn which_has(cmd: &str) -> bool {
 
 #[derive(PartialEq, Debug, Deserialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
-pub enum Shell<'a> {
+pub enum Shell {
     Sh,
     Bash,
     Zsh,
     Powershell,
-    Other(Cow<'a, str>),
+    Other(String),
 }
 
-impl<'a> Cmd for Shell<'a> {
+impl Cmd for Shell {
     fn name(&self) -> &str {
         match self {
             Self::Sh => "sh",
@@ -340,19 +339,19 @@ impl<'a> Cmd for Shell<'a> {
     }
 }
 
-impl<'a> Default for Shell<'a> {
+impl Default for Shell {
     #[cfg(target_os = "windows")]
-    fn default() -> Shell<'a> {
+    fn default() -> Shell {
         Shell::Powershell
     }
 
     #[cfg(not(target_os = "windows"))]
-    fn default() -> Shell<'a> {
+    fn default() -> Shell {
         Shell::Sh
     }
 }
 
-impl<'a> Shell<'a> {
+impl Shell {
     pub fn from_env() -> Self {
         match env::var("SHELL") {
             Ok(s) => Self::from_name(s.split('/').last().unwrap()),
@@ -366,7 +365,7 @@ impl<'a> Shell<'a> {
             "bash" => Self::Bash,
             "zsh" => Self::Zsh,
             "pwsh" => Self::Powershell,
-            other => Self::Other(Cow::Owned(other.to_string())),
+            other => Self::Other(other.to_string()),
         }
     }
 
