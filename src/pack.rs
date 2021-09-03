@@ -195,18 +195,19 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
-    fn _install(&self, package: &str) -> Result<()> {
+    fn _install(&self, package: &str, args: &[&str]) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.command()
             .stdin(Stdio::null())
             .stdout(Stdio::inherit())
             .arg("install")
             .arg(package)
+            .args(args)
             .output()?;
         Ok(())
     }
 
-    fn _sudo_install(&self, package: &str) -> Result<()> {
+    fn _sudo_install(&self, package: &str, args: &[&str]) -> Result<()> {
         info!(
             "Installing package (sudo {} install {})",
             self.name(),
@@ -218,6 +219,7 @@ impl PackageManager {
             .arg(self.name())
             .arg("install")
             .arg(package)
+            .args(args)
             .output()?;
         Ok(())
     }
@@ -225,8 +227,9 @@ impl PackageManager {
     // Install a package
     pub fn install(&self, package: &str) -> Result<()> {
         match self {
-            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package),
-            _ => self._install(package),
+            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &[]),
+            Self::Choco => self._install(package, &["-y"]),
+            _ => self._install(package, &[]),
         }
     }
 
