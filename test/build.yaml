@@ -10,25 +10,25 @@ build:
     - positive:
         spec:
           user: not_user
-        build:
+        include:
         - install:
           - name: not_package
             managers:
             - apt
     - default:
-        build:
+        include:
         # Nested conditional
         - case:
           - positive:
               spec:
                 user: not_user
-              build:
+              include:
                 - bootstrap:
                   - choco
           - negative:
               spec:
                 user: not_user
-              build:
+              include:
                 - install:
                   - name: package_0
                     managers:

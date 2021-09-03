@@ -67,18 +67,29 @@ impl Locale<Option<String>> {
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
-pub enum Case {
+pub enum Case<T> {
     Positive {
         spec: Locale<Option<String>>,
-        build: Vec<BuildSet>,
+        include: T,
     },
     Negative {
         spec: Locale<Option<String>>,
-        build: Vec<BuildSet>,
+        include: T,
     },
     Default {
-        build: Vec<BuildSet>,
+        include: T,
     },
+}
+
+impl<T> Case<T> {
+    pub fn rule(self, default: bool) -> Option<T> {
+        match self {
+            Case::Positive { spec, include } if spec.is_local() => Some(include),
+            Case::Negative { spec, include } if !spec.is_local() => Some(include),
+            Case::Default { include } if default => Some(include),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -116,7 +127,7 @@ auto_convert!(BuildUnit::ShellCmd, String);
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
-    Case(Vec<Case>),
+    Case(Vec<Case<Vec<BuildSet>>>),
     Link(Vec<Link>),
     Run(Vec<String>),
     Install(Vec<Package>),
@@ -151,6 +162,16 @@ where
     }
 }
 
+impl Resolve for Vec<BuildSet> {
+    fn resolve(self) -> Result<Vec<BuildUnit>> {
+        let mut units = Vec::new();
+        for build in self {
+            units.extend(build.resolve()?);
+        }
+        Ok(units)
+    }
+}
+
 impl Resolve for PackageBundle {
     fn resolve(self) -> Result<Vec<BuildUnit>> {
         let manager = self.manager;
@@ -161,31 +182,21 @@ impl Resolve for PackageBundle {
     }
 }
 
-impl Resolve for Vec<Case> {
-    // Recursively filter cases
+impl<T> Resolve for Vec<Case<T>>
+where
+    T: Resolve,
+{
+    // Process a block of cases
     fn resolve(self) -> Result<Vec<BuildUnit>> {
         let mut default = true;
         let mut units = Vec::new();
         for case in self {
-            match case {
-                Case::Positive { spec, build } if spec.is_local() => {
+            match case.rule(default) {
+                Some(build) => {
                     default = false;
-                    for set in build {
-                        units.extend(set.resolve()?);
-                    }
+                    units.extend(build.resolve()?);
                 }
-                Case::Negative { spec, build } if !spec.is_local() => {
-                    default = false;
-                    for set in build {
-                        units.extend(set.resolve()?);
-                    }
-                }
-                Case::Default { build } if default => {
-                    for set in build {
-                        units.extend(set.resolve()?);
-                    }
-                }
-                _ => continue,
+                None => continue,
             };
         }
         Ok(units)
@@ -358,7 +369,7 @@ mod tests {
     fn positive_match() {
         let set = BuildSet::Case(vec![Case::Positive {
             spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
-            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve().unwrap().is_empty());
     }
@@ -367,7 +378,7 @@ mod tests {
     fn positive_non_match() {
         let set = BuildSet::Case(vec![Case::Positive {
             spec: Locale::new(None, None, Some("nothere".to_string())),
-            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve().unwrap().is_empty());
     }
@@ -376,7 +387,7 @@ mod tests {
     fn negative_match() {
         let set = BuildSet::Case(vec![Case::Negative {
             spec: Locale::new(None, Some("nothere".to_string()), None),
-            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve().unwrap().is_empty());
     }
@@ -385,7 +396,7 @@ mod tests {
     fn negative_non_match() {
         let set = BuildSet::Case(vec![Case::Negative {
             spec: Locale::new(Some(LOCALE.user.to_string()), None, None),
-            build: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve().unwrap().is_empty());
     }
