@@ -11,7 +11,7 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn resolve(&self) -> Result<Self> {
+    pub fn resolve(self) -> Result<Self> {
         Ok(Self {
             local: PathBuf::from(
                 shellexpand::full(
@@ -21,7 +21,7 @@ impl Repo {
                 )?
                 .to_string(),
             ),
-            remote: self.remote.clone(),
+            ..self
         })
     }
 
@@ -36,10 +36,8 @@ impl Repo {
         )?)
     }
 
+    #[inline]
     pub fn require(&self) -> Result<Repository> {
-        match self.open() {
-            Err(_) => self.clone(),
-            Ok(r) => Ok(r),
-        }
+        self.open().or_else(|_| self.clone())
     }
 }
