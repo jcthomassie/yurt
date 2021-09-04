@@ -116,6 +116,9 @@ enum YurtAction {
 
     /// Uninstall the resolved build
     Uninstall,
+
+    /// Update repos and packages
+    Update,
 }
 
 fn main() -> Result<()> {
@@ -186,6 +189,13 @@ fn main() -> Result<()> {
                     BuildUnit::Link(link) => link.unlink(),
                     BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
                     BuildUnit::Package(package) => package.uninstall(build.context),
+                    _ => Ok(()),
+                })
+            }),
+        YurtAction::Update => ResolvedConfig::resolve_from(&args, &mut context) //
+            .and_then(|build| {
+                build.for_each_unit(|unit| match unit {
+                    BuildUnit::Repo(repo) => repo.pull().map(drop),
                     _ => Ok(()),
                 })
             }),

@@ -2,15 +2,21 @@ use crate::{
     context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
 };
-
-use anyhow::{Context as _, Result};
-use git2::Repository;
+use anyhow::{anyhow, Context as _, Result};
+use git2::{build::CheckoutBuilder, Repository};
 use serde::{Deserialize, Serialize};
+
+const DEFAULT_BRANCH: &str = "main";
+const DEFAULT_REMOTE: &str = "origin";
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
     path: String,
     url: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    branch: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    remote: Option<String>,
 }
 
 impl Repo {
@@ -19,17 +25,42 @@ impl Repo {
             .with_context(|| format!("Failed to open git repository: {self:?}"))
     }
 
-    fn clone(&self) -> Result<Repository> {
+    fn clone_recurse(&self) -> Result<Repository> {
         Repository::clone_recurse(&self.url, &self.path)
             .with_context(|| format!("Failed to clone git repository: {self:?}"))
     }
 
     pub fn require(&self) -> Result<Repository> {
-        self.open().or_else(|_| self.clone())
+        self.open().or_else(|_| self.clone_recurse())
     }
 
     pub fn is_available(&self) -> bool {
         self.open().is_ok()
+    }
+
+    pub fn pull(&self) -> Result<bool> {
+        log::debug!("Updating repository: {}", self.path);
+        let repo = self.require()?;
+        let branch = self.branch.as_deref().unwrap_or(DEFAULT_BRANCH);
+        let remote = self.remote.as_deref().unwrap_or(DEFAULT_REMOTE);
+        // Fetch remote
+        repo.find_remote(remote)?.fetch(&[branch], None, None)?;
+        let fetch_head = repo.find_reference("FETCH_HEAD")?;
+        let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
+        // Try fast-forward merge
+        let analysis = repo.merge_analysis(&[&fetch_commit])?;
+        if analysis.0.is_up_to_date() {
+            Ok(false)
+        } else if analysis.0.is_fast_forward() {
+            let refname = format!("refs/heads/{branch}");
+            let mut reference = repo.find_reference(&refname)?;
+            reference.set_target(fetch_commit.id(), "Fast-Forward")?;
+            repo.set_head(&refname)?;
+            repo.checkout_head(Some(CheckoutBuilder::default().force()))?;
+            Ok(true)
+        } else {
+            Err(anyhow!("Could not perform fast-forward merge"))
+        }
     }
 
     fn name(&self) -> Result<&str> {
@@ -50,6 +81,7 @@ impl Resolve for Repo {
         let new = Self {
             path: context.parse_path(&self.path)?,
             url: context.parse_str(&self.url)?,
+            ..self
         };
         let new_id = new.name()?;
         for (attr, value) in [("path", &new.path), ("url", &new.url)] {
@@ -67,12 +99,34 @@ impl Resolve for Repo {
 #[cfg(test)]
 mod tests {
     use super::Repo;
+    use lazy_static::lazy_static;
+
+    lazy_static! {
+        pub static ref REPO: Repo = Repo {
+            path: env!("CARGO_MANIFEST_DIR").to_string(),
+            url: "https://github.com/jcthomassie/yurt.git".to_string(),
+            branch: Some("main".to_string()),
+            remote: Some("origin".to_string()),
+        };
+    }
+
+    #[test]
+    fn open() {
+        REPO.open().unwrap();
+    }
+
+    #[test]
+    fn require() {
+        REPO.require().unwrap();
+    }
+
+    #[test]
+    fn is_available() {
+        assert!(REPO.is_available());
+    }
 
     fn repo(path: &str) -> Repo {
-        Repo {
-            path: path.to_string(),
-            url: "repo-url".to_string(),
-        }
+        serde_yaml::from_str(&format!("{{ path: {path}, url: www.web.site }}")).unwrap()
     }
 
     #[test]
