@@ -288,12 +288,10 @@ impl Config {
             None => None,
         };
         // Resolve build
-        let mut build = Vec::new();
-        if let Some(raw_build) = self.build {
-            for set in raw_build {
-                build.extend(set.resolve()?);
-            }
-        }
+        let build = match self.build {
+            Some(raw) => raw.resolve()?,
+            None => Vec::new(),
+        };
         Ok(ResolvedConfig {
             version: self.version,
             shell: self.shell,
