@@ -339,7 +339,15 @@ impl ResolvedConfig {
 
     #[allow(clippy::unused_self)]
     pub fn update(&self) -> Result<()> {
-        todo!()
+        for unit in &self.build {
+            match unit {
+                BuildUnit::Repo(repo) => {
+                    repo.pull()?;
+                }
+                _ => continue,
+            }
+        }
+        Ok(())
     }
 
     fn into_config(self) -> Config {
