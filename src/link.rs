@@ -1,3 +1,4 @@
+use super::yaml::expand_context;
 use anyhow::{anyhow, Result};
 use log::info;
 use serde::Deserialize;
@@ -7,7 +8,7 @@ use std::path::PathBuf;
 
 #[inline]
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> Result<PathBuf> {
-    Ok(PathBuf::from(shellexpand::full(path.as_ref())?.as_ref()))
+    Ok(PathBuf::from(expand_context(path)?))
 }
 
 #[derive(Debug)]

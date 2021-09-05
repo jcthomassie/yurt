@@ -1,20 +1,24 @@
 use super::link::Link;
 use super::pack::{Package, PackageBundle, PackageManager, Shell};
 use super::repo::Repo;
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
 use log::warn;
+use regex::{Captures, Regex};
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::iter::Zip;
 use std::path::Path;
+use std::sync::Mutex;
 use std::vec::IntoIter;
 
 lazy_static! {
+    pub static ref CONTEXT: Mutex<Context> = Mutex::default();
     pub static ref LOCALE: Locale<String> = Locale::new(
         whoami::username(),
         format!("{:?}", whoami::platform()).to_lowercase(),
@@ -25,6 +29,79 @@ lazy_static! {
             .to_owned()
             .to_lowercase(),
     );
+    // Matches: "${{ anything here }}"
+    static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
+    // Matches: "namespace.variable_name"
+    static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
+}
+
+#[inline]
+pub fn expand_context<S: ?Sized + AsRef<str>>(raw: &S) -> Result<String> {
+    CONTEXT.lock().unwrap().substitute(raw.as_ref())
+}
+
+#[inline]
+pub fn update_context<S: ToString>(namespace: S, variable: S, value: S) -> Option<String> {
+    CONTEXT.lock().unwrap().insert(namespace, variable, value)
+}
+
+pub struct Context {
+    variables: HashMap<(String, String), String>,
+    home_dir: String,
+}
+
+impl Context {
+    fn new() -> Self {
+        Self {
+            variables: HashMap::new(),
+            home_dir: dirs::home_dir()
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("~")
+                .to_string(),
+        }
+    }
+
+    #[inline]
+    fn insert<S: ToString>(&mut self, namespace: S, variable: S, value: S) -> Option<String> {
+        self.variables.insert(
+            (namespace.to_string(), variable.to_string()),
+            value.to_string(),
+        )
+    }
+
+    fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
+        if namespace == "env" {
+            Ok(env::var(variable)?)
+        } else {
+            self.variables
+                .get(&(namespace.to_string(), variable.to_string()))
+                .map(|s| s.clone())
+                .ok_or(anyhow!("variable {}.{} is undefined", namespace, variable))
+        }
+    }
+
+    fn substitute(&self, input: &str) -> Result<String> {
+        // Build iterator of replaced values
+        let values: Result<Vec<String>> = RE_OUTER
+            .captures_iter(input)
+            .map(|cap_outer| match RE_INNER.captures(&cap_outer["inner"]) {
+                Some(cap_inner) => self.lookup(&cap_inner["namespace"], &cap_inner["variable"]),
+                None => Err(anyhow!("invalid substitution: {}", &cap_outer["inner"])),
+            })
+            .collect();
+        let mut values_iter = values?.into_iter();
+        // Build new string with replacements
+        Ok(RE_OUTER
+            .replace_all(input, |_: &Captures| values_iter.next().unwrap())
+            .replace("~", &self.home_dir))
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, PartialEq, Deserialize)]
@@ -282,7 +359,7 @@ impl Config {
         let repo = match self.repo {
             Some(mut repo) => {
                 repo = repo.resolve()?;
-                env::set_var("YURT_REPO_LOCAL", &repo.local);
+                update_context("repo", "local", &repo.local);
                 Some(repo)
             }
             None => None,
@@ -306,6 +383,46 @@ mod tests {
     use super::*;
 
     static YAML: &str = include_str!("../test/build.yaml");
+
+    fn check_pattern_outer(input: &str, output: &str) {
+        let caps = RE_OUTER.captures(input).unwrap();
+        assert_eq!(&caps[0], input);
+        assert_eq!(&caps["inner"], output);
+    }
+
+    fn check_pattern_inner(input: &str, namespace: &str, variable: &str) {
+        let caps = RE_INNER.captures(input).unwrap();
+        assert_eq!(&caps["namespace"], namespace);
+        assert_eq!(&caps["variable"], variable);
+    }
+
+    #[test]
+    fn substitution_pattern_outer() {
+        check_pattern_outer("${{}}", "");
+        check_pattern_outer("${{ var }}", " var ");
+        check_pattern_outer("${{ env.var }}", " env.var ");
+    }
+
+    #[test]
+    fn substitution_pattern_inner() {
+        check_pattern_inner("   a.b\t ", "a", "b");
+        check_pattern_inner("mod_1.var_1", "mod_1", "var_1");
+    }
+
+    #[test]
+    fn substitute_from_context() {
+        let mut expander = Context::default();
+        expander.insert("name", "var_1", "val_1");
+        expander.insert("name", "var_2", "val_2");
+        assert!(expander.substitute("~").unwrap().len() > 0);
+        assert_eq!(expander.substitute("${{ name.var_1 }}").unwrap(), "val_1");
+        assert_eq!(
+            expander
+                .substitute("${{ name.var_1 }}/${{ name.var_2 }}")
+                .unwrap(),
+            "val_1/val_2"
+        );
+    }
 
     #[test]
     fn empty_build_fails() {
