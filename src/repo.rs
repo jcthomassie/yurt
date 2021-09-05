@@ -1,26 +1,19 @@
-use anyhow::{anyhow, Result};
+use super::yaml::expand_context;
+use anyhow::Result;
 use git2::Repository;
 use serde::Deserialize;
-use std::path::PathBuf;
 use url::Url;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Repo {
-    pub local: PathBuf,
+    pub local: String,
     pub remote: Url,
 }
 
 impl Repo {
     pub fn resolve(self) -> Result<Self> {
         Ok(Self {
-            local: PathBuf::from(
-                shellexpand::full(
-                    self.local
-                        .to_str()
-                        .ok_or_else(|| anyhow!("failed to parse path"))?,
-                )?
-                .to_string(),
-            ),
+            local: expand_context(&self.local)?,
             ..self
         })
     }

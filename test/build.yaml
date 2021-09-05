@@ -44,7 +44,7 @@ build:
     - brew
   - link:
     - tail: tail_1
-      head: head_1
+      head: ${{ repo.local }}/head_1
   - bundle:
       manager: brew
       packages:
