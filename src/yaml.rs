@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use log::warn;
 use regex::{Captures, Regex};
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fs::File;
@@ -45,8 +45,10 @@ pub fn update_context<S: ToString>(namespace: S, variable: S, value: S) -> Optio
     CONTEXT.lock().unwrap().insert(namespace, variable, value)
 }
 
+#[derive(Debug)]
 pub struct Context {
     variables: HashMap<(String, String), String>,
+    managers: HashSet<PackageManager>,
     home_dir: String,
 }
 
@@ -54,6 +56,11 @@ impl Context {
     fn new() -> Self {
         Self {
             variables: HashMap::new(),
+            managers: PackageManager::all()
+                .iter()
+                .filter(|pm| pm.is_available())
+                .cloned()
+                .collect(),
             home_dir: dirs::home_dir()
                 .as_ref()
                 .and_then(|p| p.to_str())
