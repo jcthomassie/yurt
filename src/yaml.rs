@@ -8,17 +8,14 @@ use log::warn;
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
-use std::convert::{TryFrom, TryInto};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
 use std::iter::Zip;
 use std::path::Path;
-use std::sync::Mutex;
 use std::vec::IntoIter;
 
 lazy_static! {
-    pub static ref CONTEXT: Mutex<Context> = Mutex::default();
     pub static ref LOCALE: Locale<String> = Locale::new(
         whoami::username(),
         format!("{:?}", whoami::platform()).to_lowercase(),
@@ -35,23 +32,6 @@ lazy_static! {
     static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
 }
 
-#[inline]
-pub fn expand_context<S: ?Sized + AsRef<str>>(raw: &S) -> Result<String> {
-    CONTEXT.lock().unwrap().substitute(raw.as_ref())
-}
-
-#[inline]
-pub fn update_context<S: ?Sized + AsRef<str>>(
-    namespace: &S,
-    variable: &S,
-    value: &S,
-) -> Option<String> {
-    CONTEXT
-        .lock()
-        .unwrap()
-        .insert(namespace.as_ref(), variable.as_ref(), value.as_ref())
-}
-
 #[derive(Debug)]
 pub struct Context {
     variables: HashMap<String, String>,
@@ -60,19 +40,12 @@ pub struct Context {
 }
 
 impl Context {
+    #[allow(unused)]
     fn new() -> Self {
         Self {
             variables: HashMap::new(),
-            managers: PackageManager::all()
-                .iter()
-                .filter(|pm| pm.is_available())
-                .cloned()
-                .collect(),
-            home_dir: dirs::home_dir()
-                .as_ref()
-                .and_then(|p| p.to_str())
-                .unwrap_or("~")
-                .to_string(),
+            managers: HashSet::new(),
+            home_dir: String::new(),
         }
     }
 
@@ -82,7 +55,7 @@ impl Context {
             .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
 
-    fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
+    pub fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
         if namespace == "env" {
             Ok(env::var(variable)?)
         } else {
@@ -93,7 +66,7 @@ impl Context {
         }
     }
 
-    fn substitute(&self, input: &str) -> Result<String> {
+    pub fn substitute(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -112,7 +85,19 @@ impl Context {
 
 impl Default for Context {
     fn default() -> Self {
-        Self::new()
+        Self {
+            variables: HashMap::new(),
+            managers: PackageManager::all()
+                .iter()
+                .filter(|pm| pm.is_available())
+                .cloned()
+                .collect(),
+            home_dir: dirs::home_dir()
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("~")
+                .to_string(),
+        }
     }
 }
 
@@ -189,29 +174,34 @@ pub enum BuildUnit {
     Bootstrap(PackageManager),
 }
 
-macro_rules! auto_convert {
-    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        impl TryFrom<$inner> for BuildUnit {
-            type Error = anyhow::Error;
+trait ResolveUnit {
+    fn resolve(self, context: &Context) -> Result<BuildUnit>;
+}
 
-            fn try_from($var: $inner) -> Result<Self, Self::Error> {
-                ($var_map).map(BuildUnit::$outer)
+macro_rules! auto_convert {
+    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $self:ident, $context:ident, $mapped:expr) => {
+        impl ResolveUnit for $inner {
+            fn resolve($self, $context: &Context) -> Result<BuildUnit> {
+                ($mapped).map(BuildUnit::$outer)
             }
         }
     };
 
     (BuildUnit::$outer:ident, $inner:ty) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, x, Ok(x));
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, self, _context, Ok(self));
     };
-    (BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $var, $var_map);
+    (BuildUnit::$outer:ident, $inner:ty, ($a:ident, $b:ident) => $mapped:expr) => {
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $a, $b, $mapped);
     };
 }
 
-auto_convert!(BuildUnit::Link, Link, ln, ln.expand());
+auto_convert!(BuildUnit::Link, Link, (self, context) => self.expand(context));
 auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
-auto_convert!(BuildUnit::ShellCmd, String, cmd, expand_context(&cmd));
+auto_convert!(
+    BuildUnit::ShellCmd,
+    String, (self, context) => context.substitute(&self)
+);
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -225,48 +215,48 @@ pub enum BuildSet {
 }
 
 trait Resolve {
-    fn resolve(self) -> Result<Vec<BuildUnit>>;
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>>;
 }
 
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         match self {
-            Self::Case(v) => v.resolve(),
-            Self::Link(v) => v.resolve(),
-            Self::Run(s) => Ok(vec![s.try_into()?]),
-            Self::Install(v) => v.resolve(),
-            Self::Bundle(v) => v.resolve(),
-            Self::Bootstrap(v) => v.resolve(),
+            Self::Case(v) => v.resolve(context),
+            Self::Link(v) => v.resolve(context),
+            Self::Run(s) => Ok(vec![s.resolve(context)?]),
+            Self::Install(v) => v.resolve(context),
+            Self::Bundle(v) => v.resolve(context),
+            Self::Bootstrap(v) => v.resolve(context),
         }
     }
 }
 
 impl<T> Resolve for Vec<T>
 where
-    T: TryInto<BuildUnit, Error = anyhow::Error>,
+    T: ResolveUnit,
 {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
-        self.into_iter().map(|u| u.try_into()).collect()
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+        self.into_iter().map(|u| u.resolve(context)).collect()
     }
 }
 
 impl Resolve for Vec<BuildSet> {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let mut units = Vec::new();
         for build in self {
-            units.extend(build.resolve()?);
+            units.extend(build.resolve(context)?);
         }
         Ok(units)
     }
 }
 
 impl Resolve for PackageBundle {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let manager = self.manager;
         self.packages
             .into_iter()
-            .map(|name| Package::new(name, vec![manager.clone()]).try_into())
+            .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
             .collect()
     }
 }
@@ -276,14 +266,14 @@ where
     T: Resolve,
 {
     // Process a block of cases
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let mut default = true;
         let mut units = Vec::new();
         for case in self {
             match case.rule(default) {
                 Some(build) => {
                     default = false;
-                    units.extend(build.resolve()?);
+                    units.extend(build.resolve(context)?);
                 }
                 None => continue,
             };
@@ -294,6 +284,7 @@ where
 
 #[derive(Debug)]
 pub struct ResolvedConfig {
+    pub context: Context,
     pub version: Option<String>,
     pub shell: Option<Shell>,
     pub repo: Option<Repo>,
@@ -359,6 +350,7 @@ impl Config {
     }
 
     pub fn resolve(self) -> Result<ResolvedConfig> {
+        let mut context = Context::default();
         // Check version
         if !self.version_matches(false) {
             warn!(
@@ -370,18 +362,19 @@ impl Config {
         // Resolve repo
         let repo = match self.repo {
             Some(mut repo) => {
-                repo = repo.resolve()?;
-                update_context("repo", "local", &repo.local);
+                repo = repo.resolve(&context)?;
+                context.insert("repo", "local", &repo.local);
                 Some(repo)
             }
             None => None,
         };
         // Resolve build
         let build = match self.build {
-            Some(raw) => raw.resolve()?,
+            Some(raw) => raw.resolve(&context)?,
             None => Vec::new(),
         };
         Ok(ResolvedConfig {
+            context,
             version: self.version,
             shell: self.shell,
             repo,
@@ -498,7 +491,7 @@ mod tests {
             spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve().unwrap().is_empty());
+        assert!(!set.resolve(&Context::new()).unwrap().is_empty());
     }
 
     #[test]
@@ -507,7 +500,7 @@ mod tests {
             spec: Locale::new(None, None, Some("nothere".to_string())),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve().unwrap().is_empty());
+        assert!(set.resolve(&Context::new()).unwrap().is_empty());
     }
 
     #[test]
@@ -516,7 +509,7 @@ mod tests {
             spec: Locale::new(None, Some("nothere".to_string()), None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve().unwrap().is_empty());
+        assert!(!set.resolve(&Context::new()).unwrap().is_empty());
     }
 
     #[test]
@@ -525,6 +518,6 @@ mod tests {
             spec: Locale::new(Some(LOCALE.user.to_string()), None, None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve().unwrap().is_empty());
+        assert!(set.resolve(&Context::new()).unwrap().is_empty());
     }
 }

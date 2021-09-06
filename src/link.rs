@@ -1,4 +1,4 @@
-use super::yaml::expand_context;
+use super::yaml::Context;
 use anyhow::{anyhow, Result};
 use log::info;
 use serde::Deserialize;
@@ -6,9 +6,11 @@ use std::fs;
 use std::io::{Error, ErrorKind};
 use std::path::PathBuf;
 
-#[inline]
-pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S) -> Result<PathBuf> {
-    Ok(PathBuf::from(expand_context(path)?))
+pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S, context: Option<&Context>) -> Result<PathBuf> {
+    Ok(PathBuf::from(match context {
+        Some(c) => c.substitute(path.as_ref()),
+        None => Context::default().substitute(path.as_ref()),
+    }?))
 }
 
 #[derive(Debug)]
@@ -36,10 +38,10 @@ impl Link {
     }
 
     // Returns new link with paths expanded
-    pub fn expand(&self) -> Result<Self> {
+    pub fn expand(&self, context: &Context) -> Result<Self> {
         Ok(Self::new(
-            expand_path(self.head.to_str().unwrap())?,
-            expand_path(self.tail.to_str().unwrap())?,
+            expand_path(self.head.to_str().unwrap(), Some(context))?,
+            expand_path(self.tail.to_str().unwrap(), Some(context))?,
         ))
     }
 
