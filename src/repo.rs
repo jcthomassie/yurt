@@ -2,12 +2,11 @@ use super::yaml::expand_context;
 use anyhow::Result;
 use git2::Repository;
 use serde::Deserialize;
-use url::Url;
 
 #[derive(Debug, PartialEq, Deserialize)]
 pub struct Repo {
     pub local: String,
-    pub remote: Url,
+    pub remote: String,
 }
 
 impl Repo {

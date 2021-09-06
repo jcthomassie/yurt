@@ -1124,7 +1124,6 @@ dependencies = [
  "idna",
  "matches",
  "percent-encoding",
- "serde",
 ]
 
 [[package]]
@@ -1315,6 +1314,5 @@ dependencies = [
  "serde_yaml",
  "symlink",
  "tempfile",
- "url",
  "whoami",
 ]
