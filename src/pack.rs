@@ -93,7 +93,7 @@ where
     pipe_existing(proc_a, proc_b)
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     pub name: String,
     pub alias: Option<String>,
@@ -164,7 +164,7 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct PackageBundle {
     pub manager: PackageManager,
     pub packages: Vec<String>,

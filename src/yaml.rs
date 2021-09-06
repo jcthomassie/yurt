@@ -7,7 +7,7 @@ use lazy_static::lazy_static;
 use log::warn;
 use regex::{Captures, Regex};
 use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
@@ -20,7 +20,7 @@ lazy_static! {
     static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Context {
     locale: Locale<String>,
     variables: HashMap<String, String>,
@@ -91,7 +91,7 @@ impl Default for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Locale<T> {
     user: T,
     platform: T,
@@ -127,7 +127,40 @@ impl Locale<Option<String>> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub struct Matrix<T> {
+    values: BTreeMap<String, Vec<String>>,
+    include: T,
+}
+
+impl<T> Matrix<T> {
+    // Number of expanded elements; returns Err if value counts do not match
+    pub fn length(&self) -> Result<usize> {
+        let counts: Vec<usize> = self.values.values().map(Vec::len).collect();
+        if counts.is_empty() {
+            return Err(anyhow!("Matrix values must be non-empty"));
+        }
+        if counts.windows(2).any(|w| w[1] != w[0]) {
+            return Err(anyhow!("Matrix array length mismatch"));
+        }
+        Ok(counts[0])
+    }
+
+    // Transpose into nested vec of key, value pairs
+    pub fn transpose(&self) -> Result<Vec<Vec<(&str, &str)>>> {
+        let mut groups: Vec<Vec<(&str, &str)>> = std::iter::repeat_with(Vec::new)
+            .take(self.length()?)
+            .collect();
+        for (key, vals) in self.values.iter() {
+            for (i, val) in vals.into_iter().enumerate() {
+                groups[i].push((&key, &val));
+            }
+        }
+        Ok(groups)
+    }
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case<T> {
     Positive {
@@ -154,7 +187,7 @@ impl<T> Case<T> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum BuildUnit {
     Link(Link),
     ShellCmd(String),
@@ -188,10 +221,13 @@ auto_convert!(BuildUnit::Package(Package));
 auto_convert!(BuildUnit::Bootstrap(PackageManager));
 auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.substitute(&self));
 
-#[derive(Debug, PartialEq, Deserialize)]
+type Build = Vec<BuildSet>;
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
-    Case(Vec<Case<Vec<BuildSet>>>),
+    Matrix(Matrix<Build>),
+    Case(Vec<Case<Build>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<Package>),
@@ -207,6 +243,7 @@ impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         match self {
+            Self::Matrix(m) => m.resolve(context),
             Self::Case(v) => v.resolve(context),
             Self::Link(v) => v.resolve(context),
             Self::Run(s) => Ok(vec![s.resolve(context)?]),
@@ -226,7 +263,7 @@ where
     }
 }
 
-impl Resolve for Vec<BuildSet> {
+impl Resolve for Build {
     fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let mut units = Vec::new();
         for build in self {
@@ -243,6 +280,24 @@ impl Resolve for PackageBundle {
             .into_iter()
             .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
             .collect()
+    }
+}
+
+impl<T> Resolve for Matrix<T>
+where
+    T: Resolve + Clone,
+{
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+        let groups = self.transpose()?;
+        let mut context = context.clone();
+        let mut units = Vec::with_capacity(groups.len() * groups[0].len());
+        for map in groups {
+            for (key, val) in map {
+                context.insert("matrix", key, val);
+            }
+            units.extend(self.include.clone().resolve(&context)?);
+        }
+        Ok(units)
     }
 }
 
@@ -301,7 +356,7 @@ pub struct Config {
     pub version: Option<String>,
     pub shell: Option<Shell>,
     pub repo: Option<Repo>,
-    pub build: Option<Vec<BuildSet>>,
+    pub build: Option<Build>,
 }
 
 impl Config {
@@ -427,9 +482,11 @@ mod tests {
     #[test]
     fn build_resolves() {
         let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
-        let mut links = 1;
         let mut comms = 1;
         let mut boots = 2;
+        let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
+            .into_iter()
+            .map(std::path::PathBuf::from);
         let mut names = vec![
             "package_0",
             "package_1",
@@ -440,13 +497,13 @@ mod tests {
         .into_iter();
         for unit in resolved.build.into_iter() {
             match unit {
-                BuildUnit::Link(_) => links -= 1,
+                BuildUnit::Link(ln) => assert_eq!(ln.tail, links.next().unwrap()),
                 BuildUnit::ShellCmd(_) => comms -= 1,
                 BuildUnit::Package(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
                 BuildUnit::Bootstrap(_) => boots -= 1,
             }
         }
-        assert_eq!(links, 0);
+        assert!(links.next().is_none());
         assert_eq!(comms, 0);
         assert_eq!(boots, 0);
         assert!(names.next().is_none());
@@ -468,6 +525,29 @@ mod tests {
         cfg.version = Some(crate_version!().to_string());
         assert!(cfg.version_matches(true));
         assert!(cfg.version_matches(false));
+    }
+
+    #[test]
+    fn matrix_expansion() {
+        let context = Context {
+            locale: Locale::new(String::new(), String::new(), String::new()),
+            variables: HashMap::new(),
+            managers: HashSet::new(),
+            home_dir: String::new(),
+        };
+        let values = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let matrix = Matrix {
+            values: {
+                let mut map = BTreeMap::new();
+                map.insert("key".to_string(), values.clone());
+                map
+            },
+            include: vec!["${{ matrix.key }}".to_string()],
+        };
+        assert_eq!(
+            matrix.resolve(&context).unwrap(),
+            values.resolve(&context).unwrap()
+        );
     }
 
     #[test]

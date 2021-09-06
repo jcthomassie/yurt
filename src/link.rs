@@ -22,11 +22,11 @@ pub enum Status {
     InvalidTail(Error),
 }
 
-#[derive(Debug, PartialEq, Deserialize)]
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Link {
     // head@ -> tail
-    head: PathBuf,
-    tail: PathBuf,
+    pub head: PathBuf,
+    pub tail: PathBuf,
 }
 
 impl Link {
