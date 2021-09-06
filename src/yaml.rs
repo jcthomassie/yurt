@@ -41,13 +41,20 @@ pub fn expand_context<S: ?Sized + AsRef<str>>(raw: &S) -> Result<String> {
 }
 
 #[inline]
-pub fn update_context<S: ToString>(namespace: S, variable: S, value: S) -> Option<String> {
-    CONTEXT.lock().unwrap().insert(namespace, variable, value)
+pub fn update_context<S: ?Sized + AsRef<str>>(
+    namespace: &S,
+    variable: &S,
+    value: &S,
+) -> Option<String> {
+    CONTEXT
+        .lock()
+        .unwrap()
+        .insert(namespace.as_ref(), variable.as_ref(), value.as_ref())
 }
 
 #[derive(Debug)]
 pub struct Context {
-    variables: HashMap<(String, String), String>,
+    variables: HashMap<String, String>,
     managers: HashSet<PackageManager>,
     home_dir: String,
 }
@@ -70,11 +77,9 @@ impl Context {
     }
 
     #[inline]
-    fn insert<S: ToString>(&mut self, namespace: S, variable: S, value: S) -> Option<String> {
-        self.variables.insert(
-            (namespace.to_string(), variable.to_string()),
-            value.to_string(),
-        )
+    fn insert(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+        self.variables
+            .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
 
     fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
@@ -82,7 +87,7 @@ impl Context {
             Ok(env::var(variable)?)
         } else {
             self.variables
-                .get(&(namespace.to_string(), variable.to_string()))
+                .get(&format!("{}.{}", namespace, variable))
                 .cloned()
                 .ok_or_else(|| anyhow!("Variable {}.{} is undefined", namespace, variable))
         }
