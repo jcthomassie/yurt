@@ -199,14 +199,14 @@ macro_rules! auto_convert {
 auto_convert!(BuildUnit::Link, Link, ln, ln.expand());
 auto_convert!(BuildUnit::Package, Package);
 auto_convert!(BuildUnit::Bootstrap, PackageManager);
-auto_convert!(BuildUnit::ShellCmd, String);
+auto_convert!(BuildUnit::ShellCmd, String, cmd, expand_context(&cmd));
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
     Case(Vec<Case<Vec<BuildSet>>>),
     Link(Vec<Link>),
-    Run(Vec<String>),
+    Run(String),
     Install(Vec<Package>),
     Bundle(PackageBundle),
     Bootstrap(Vec<PackageManager>),
@@ -222,7 +222,7 @@ impl Resolve for BuildSet {
         match self {
             Self::Case(v) => v.resolve(),
             Self::Link(v) => v.resolve(),
-            Self::Run(v) => v.resolve(),
+            Self::Run(s) => Ok(vec![s.try_into()?]),
             Self::Install(v) => v.resolve(),
             Self::Bundle(v) => v.resolve(),
             Self::Bootstrap(v) => v.resolve(),
