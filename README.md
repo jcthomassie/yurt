@@ -41,10 +41,12 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 `shell` set the shell for POSIX systems
 
 `repo`
+
 - `local` path to local dotfile repository
 - `remote` dotfile remote url for cloning
 
 `build`
+
 - `case` list of conditional build steps
   - `positive` if the spec matches the local spec
   - `negative` if the spec does not match the local spec
@@ -60,12 +62,13 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `packages` list of package names to install
 
 ### Example
+
 ```yaml
 ---
 version: 0.1.0
 
 repo:
-  local: $HOME/dotfiles
+  local: ~/dotfiles
   remote: https://github.com/jcthomassie/dotfiles.git
 
 build:
@@ -74,11 +77,11 @@ build:
     - positive:
         spec:
           platform: windows
-        build:
+        include:
           - bootstrap:
             - choco
     - default:
-        build:
+        include:
           - bootstrap:
             - brew
 
@@ -99,8 +102,8 @@ build:
 
   # Apply symlinks
   - link:
-    - tail: $YURT_REPO_LOCAL/.zsh/.zshrc
-      head: $HOME/.zshrc
-    - tail: $YURT_REPO_LOCAL/.gitconfig
-      head: $HOME/.gitconfig
+    - tail: ${{ repo.local }}/.zsh/.zshrc
+      head: ~/.zshrc
+    - tail: ${{ repo.local }}/.gitconfig
+      head: ~/.gitconfig
 ```
