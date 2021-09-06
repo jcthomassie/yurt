@@ -96,7 +96,7 @@ fn edit(matches: &ArgMatches) -> Result<()> {
         .arg(
             resolved
                 .repo
-                .ok_or(anyhow!("Dotfile repo root is not set"))?
+                .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
                 .local,
         )
         .output()

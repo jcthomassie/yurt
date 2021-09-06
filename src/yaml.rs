@@ -76,8 +76,8 @@ impl Context {
         } else {
             self.variables
                 .get(&(namespace.to_string(), variable.to_string()))
-                .map(|s| s.clone())
-                .ok_or(anyhow!("Variable {}.{} is undefined", namespace, variable))
+                .cloned()
+                .ok_or_else(|| anyhow!("Variable {}.{} is undefined", namespace, variable))
         }
     }
 
@@ -414,7 +414,7 @@ mod tests {
         let mut expander = Context::default();
         expander.insert("name", "var_1", "val_1");
         expander.insert("name", "var_2", "val_2");
-        assert!(expander.substitute("~").unwrap().len() > 0);
+        assert!(!expander.substitute("~").unwrap().is_empty());
         assert_eq!(expander.substitute("${{ name.var_1 }}").unwrap(), "val_1");
         assert_eq!(
             expander
