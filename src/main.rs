@@ -6,9 +6,8 @@ mod yaml;
 use anyhow::{anyhow, Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
-use pack::ShellCmd;
+use pack::{Cmd, ShellCmd, SHELL};
 use std::env;
-use std::process::Command;
 use yaml::{Config, ResolvedConfig};
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
@@ -91,15 +90,13 @@ fn clean(matches: &ArgMatches) -> Result<()> {
 }
 
 fn edit(matches: &ArgMatches) -> Result<()> {
-    let resolved = parse_resolved(matches)?;
-    Command::new(env::var("EDITOR").context("System editor is not set")?)
-        .arg(
-            resolved
-                .repo
-                .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
-                .local,
-        )
-        .output()
+    let editor = env::var("EDITOR").context("System editor is not set")?;
+    let path = parse_resolved(matches)?
+        .repo
+        .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
+        .local;
+    SHELL
+        .call(&["-c", &editor, &path])
         .context("Failed to open dotfiles in editor")?;
     Ok(())
 }
