@@ -3,7 +3,7 @@ mod pack;
 mod repo;
 mod yaml;
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
 use pack::ShellCmd;
@@ -90,9 +90,15 @@ fn clean(matches: &ArgMatches) -> Result<()> {
         .context("Failed to clean link heads")
 }
 
-fn edit() -> Result<()> {
+fn edit(matches: &ArgMatches) -> Result<()> {
+    let resolved = parse_resolved(matches)?;
     Command::new(env::var("EDITOR").context("System editor is not set")?)
-        .arg(env::var("YURT_REPO_ROOT").context("dotfile repo root is not set")?)
+        .arg(
+            resolved
+                .repo
+                .ok_or(anyhow!("dotfile repo root is not set"))?
+                .local,
+        )
         .output()
         .context("Failed to open dotfiles in editor")?;
     Ok(())
@@ -166,7 +172,7 @@ fn main() -> Result<()> {
         Some("uninstall") => uninstall(&matches),
         Some("clean") => clean(&matches),
         Some("update") => update(),
-        Some("edit") => edit(),
+        Some("edit") => edit(&matches),
         _ => unreachable!(),
     }
 }
