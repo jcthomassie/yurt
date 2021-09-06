@@ -1,4 +1,4 @@
-use super::yaml::expand_context;
+use super::yaml::Context;
 use anyhow::Result;
 use git2::Repository;
 use serde::Deserialize;
@@ -10,9 +10,9 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn resolve(self) -> Result<Self> {
+    pub fn resolve(self, context: &Context) -> Result<Self> {
         Ok(Self {
-            local: expand_context(&self.local)?,
+            local: context.substitute(&self.local)?,
             ..self
         })
     }

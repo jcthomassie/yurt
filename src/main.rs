@@ -19,7 +19,7 @@ fn parse_config(matches: &ArgMatches) -> Result<Config> {
             None => env::var("YURT_BUILD_FILE"),
         }
         .context("Config file not specified")?;
-        let path = link::expand_path(&yaml).context("Failed to expand path")?;
+        let path = link::expand_path(&yaml, None).context("Failed to expand path")?;
         Config::from_path(path).context("Failed to parse local build file")
     }
 }
@@ -38,9 +38,7 @@ macro_rules! skip {
 }
 
 fn show(matches: &ArgMatches) -> Result<()> {
-    let resolved = parse_resolved(matches)?;
-    println!("{:#?}", *yaml::LOCALE);
-    println!("{:#?}", resolved);
+    println!("{:#?}", parse_resolved(matches)?);
     Ok(())
 }
 

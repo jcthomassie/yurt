@@ -7,81 +7,46 @@ use lazy_static::lazy_static;
 use log::warn;
 use regex::{Captures, Regex};
 use serde::Deserialize;
-use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
-use std::iter::Zip;
 use std::path::Path;
-use std::sync::Mutex;
-use std::vec::IntoIter;
 
 lazy_static! {
-    pub static ref CONTEXT: Mutex<Context> = Mutex::default();
-    pub static ref LOCALE: Locale<String> = Locale::new(
-        whoami::username(),
-        format!("{:?}", whoami::platform()).to_lowercase(),
-        whoami::distro()
-            .split(' ')
-            .next()
-            .expect("Failed to determine distro")
-            .to_owned()
-            .to_lowercase(),
-    );
     // Matches: "${{ anything here }}"
     static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
     // Matches: "namespace.variable_name"
     static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
 }
 
-#[inline]
-pub fn expand_context<S: ?Sized + AsRef<str>>(raw: &S) -> Result<String> {
-    CONTEXT.lock().unwrap().substitute(raw.as_ref())
-}
-
-#[inline]
-pub fn update_context<S: ToString>(namespace: S, variable: S, value: S) -> Option<String> {
-    CONTEXT.lock().unwrap().insert(namespace, variable, value)
-}
-
+#[derive(Debug)]
 pub struct Context {
-    variables: HashMap<(String, String), String>,
+    locale: Locale<String>,
+    variables: HashMap<String, String>,
+    managers: HashSet<PackageManager>,
     home_dir: String,
 }
 
 impl Context {
-    fn new() -> Self {
-        Self {
-            variables: HashMap::new(),
-            home_dir: dirs::home_dir()
-                .as_ref()
-                .and_then(|p| p.to_str())
-                .unwrap_or("~")
-                .to_string(),
-        }
-    }
-
     #[inline]
-    fn insert<S: ToString>(&mut self, namespace: S, variable: S, value: S) -> Option<String> {
-        self.variables.insert(
-            (namespace.to_string(), variable.to_string()),
-            value.to_string(),
-        )
+    fn insert(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+        self.variables
+            .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
 
-    fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
+    pub fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
         if namespace == "env" {
             Ok(env::var(variable)?)
         } else {
             self.variables
-                .get(&(namespace.to_string(), variable.to_string()))
+                .get(&format!("{}.{}", namespace, variable))
                 .cloned()
                 .ok_or_else(|| anyhow!("Variable {}.{} is undefined", namespace, variable))
         }
     }
 
-    fn substitute(&self, input: &str) -> Result<String> {
+    pub fn substitute(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -100,7 +65,29 @@ impl Context {
 
 impl Default for Context {
     fn default() -> Self {
-        Self::new()
+        Self {
+            variables: HashMap::new(),
+            locale: Locale::new(
+                whoami::username(),
+                format!("{:?}", whoami::platform()).to_lowercase(),
+                whoami::distro()
+                    .split(' ')
+                    .next()
+                    .expect("Failed to determine distro")
+                    .to_owned()
+                    .to_lowercase(),
+            ),
+            managers: PackageManager::all()
+                .iter()
+                .filter(|pm| pm.is_available())
+                .cloned()
+                .collect(),
+            home_dir: dirs::home_dir()
+                .as_ref()
+                .and_then(|p| p.to_str())
+                .unwrap_or("~")
+                .to_string(),
+        }
     }
 }
 
@@ -122,22 +109,20 @@ impl<T> Locale<T> {
 }
 
 impl Locale<Option<String>> {
-    fn zipped(&self) -> Zip<IntoIter<Option<&str>>, IntoIter<&str>> {
+    pub fn is_local(&self, rubric: &Locale<String>) -> bool {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
             self.distro.as_deref(),
         ];
         let o_vals = vec![
-            LOCALE.user.as_ref(),
-            LOCALE.platform.as_ref(),
-            LOCALE.distro.as_ref(),
+            rubric.user.as_str(),
+            rubric.platform.as_str(),
+            rubric.distro.as_str(),
         ];
-        s_vals.into_iter().zip(o_vals.into_iter())
-    }
-
-    pub fn is_local(&self) -> bool {
-        self.zipped()
+        s_vals
+            .into_iter()
+            .zip(o_vals.into_iter())
             .all(|(s, o)| !matches!(s, Some(val) if val != o))
     }
 }
@@ -159,10 +144,10 @@ pub enum Case<T> {
 }
 
 impl<T> Case<T> {
-    pub fn rule(self, default: bool) -> Option<T> {
+    pub fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
         match self {
-            Case::Positive { spec, include } if spec.is_local() => Some(include),
-            Case::Negative { spec, include } if !spec.is_local() => Some(include),
+            Case::Positive { spec, include } if spec.is_local(&rubric) => Some(include),
+            Case::Negative { spec, include } if !spec.is_local(&rubric) => Some(include),
             Case::Default { include } if default => Some(include),
             _ => None,
         }
@@ -177,29 +162,31 @@ pub enum BuildUnit {
     Bootstrap(PackageManager),
 }
 
-macro_rules! auto_convert {
-    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        impl TryFrom<$inner> for BuildUnit {
-            type Error = anyhow::Error;
+trait ResolveUnit {
+    fn resolve(self, context: &Context) -> Result<BuildUnit>;
+}
 
-            fn try_from($var: $inner) -> Result<Self, Self::Error> {
-                ($var_map).map(BuildUnit::$outer)
+macro_rules! auto_convert {
+    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $self:ident, $context:ident, $mapped:expr) => {
+        impl ResolveUnit for $inner {
+            fn resolve($self, $context: &Context) -> Result<BuildUnit> {
+                ($mapped).map(BuildUnit::$outer)
             }
         }
     };
 
-    (BuildUnit::$outer:ident, $inner:ty) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, x, Ok(x));
+    (BuildUnit::$outer:ident($inner:ty)) => {
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, self, _context, Ok(self));
     };
-    (BuildUnit::$outer:ident, $inner:ty, $var:ident, $var_map:expr) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $var, $var_map);
+    (BuildUnit::$outer:ident($inner:ty), ($a:ident, $b:ident) => $mapped:expr) => {
+        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $a, $b, $mapped);
     };
 }
 
-auto_convert!(BuildUnit::Link, Link, ln, ln.expand());
-auto_convert!(BuildUnit::Package, Package);
-auto_convert!(BuildUnit::Bootstrap, PackageManager);
-auto_convert!(BuildUnit::ShellCmd, String, cmd, expand_context(&cmd));
+auto_convert!(BuildUnit::Link(Link), (self, context) => self.expand(context));
+auto_convert!(BuildUnit::Package(Package));
+auto_convert!(BuildUnit::Bootstrap(PackageManager));
+auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.substitute(&self));
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -213,48 +200,48 @@ pub enum BuildSet {
 }
 
 trait Resolve {
-    fn resolve(self) -> Result<Vec<BuildUnit>>;
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>>;
 }
 
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         match self {
-            Self::Case(v) => v.resolve(),
-            Self::Link(v) => v.resolve(),
-            Self::Run(s) => Ok(vec![s.try_into()?]),
-            Self::Install(v) => v.resolve(),
-            Self::Bundle(v) => v.resolve(),
-            Self::Bootstrap(v) => v.resolve(),
+            Self::Case(v) => v.resolve(context),
+            Self::Link(v) => v.resolve(context),
+            Self::Run(s) => Ok(vec![s.resolve(context)?]),
+            Self::Install(v) => v.resolve(context),
+            Self::Bundle(v) => v.resolve(context),
+            Self::Bootstrap(v) => v.resolve(context),
         }
     }
 }
 
 impl<T> Resolve for Vec<T>
 where
-    T: TryInto<BuildUnit, Error = anyhow::Error>,
+    T: ResolveUnit,
 {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
-        self.into_iter().map(|u| u.try_into()).collect()
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+        self.into_iter().map(|u| u.resolve(context)).collect()
     }
 }
 
 impl Resolve for Vec<BuildSet> {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let mut units = Vec::new();
         for build in self {
-            units.extend(build.resolve()?);
+            units.extend(build.resolve(context)?);
         }
         Ok(units)
     }
 }
 
 impl Resolve for PackageBundle {
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let manager = self.manager;
         self.packages
             .into_iter()
-            .map(|name| Package::new(name, vec![manager.clone()]).try_into())
+            .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
             .collect()
     }
 }
@@ -264,14 +251,14 @@ where
     T: Resolve,
 {
     // Process a block of cases
-    fn resolve(self) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
         let mut default = true;
         let mut units = Vec::new();
         for case in self {
-            match case.rule(default) {
+            match case.rule(default, &context.locale) {
                 Some(build) => {
                     default = false;
-                    units.extend(build.resolve()?);
+                    units.extend(build.resolve(context)?);
                 }
                 None => continue,
             };
@@ -282,6 +269,7 @@ where
 
 #[derive(Debug)]
 pub struct ResolvedConfig {
+    pub context: Context,
     pub version: Option<String>,
     pub shell: Option<Shell>,
     pub repo: Option<Repo>,
@@ -347,6 +335,7 @@ impl Config {
     }
 
     pub fn resolve(self) -> Result<ResolvedConfig> {
+        let mut context = Context::default();
         // Check version
         if !self.version_matches(false) {
             warn!(
@@ -358,18 +347,19 @@ impl Config {
         // Resolve repo
         let repo = match self.repo {
             Some(mut repo) => {
-                repo = repo.resolve()?;
-                update_context("repo", "local", &repo.local);
+                repo = repo.resolve(&context)?;
+                context.insert("repo", "local", &repo.local);
                 Some(repo)
             }
             None => None,
         };
         // Resolve build
         let build = match self.build {
-            Some(raw) => raw.resolve()?,
+            Some(raw) => raw.resolve(&context)?,
             None => Vec::new(),
         };
         Ok(ResolvedConfig {
+            context,
             version: self.version,
             shell: self.shell,
             repo,
@@ -483,10 +473,14 @@ mod tests {
     #[test]
     fn positive_match() {
         let set = BuildSet::Case(vec![Case::Positive {
-            spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
+            spec: Locale::new(
+                None,
+                Some(format!("{:?}", whoami::platform()).to_lowercase()),
+                None,
+            ),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve().unwrap().is_empty());
+        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -495,7 +489,7 @@ mod tests {
             spec: Locale::new(None, None, Some("nothere".to_string())),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve().unwrap().is_empty());
+        assert!(set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -504,15 +498,15 @@ mod tests {
             spec: Locale::new(None, Some("nothere".to_string()), None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve().unwrap().is_empty());
+        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_non_match() {
         let set = BuildSet::Case(vec![Case::Negative {
-            spec: Locale::new(Some(LOCALE.user.to_string()), None, None),
+            spec: Locale::new(Some(whoami::username()), None, None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve().unwrap().is_empty());
+        assert!(set.resolve(&Context::default()).unwrap().is_empty());
     }
 }

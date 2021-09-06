@@ -170,7 +170,7 @@ pub struct PackageBundle {
     pub packages: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Hash, Clone)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,
@@ -195,6 +195,11 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
+    #[inline]
+    pub fn all() -> [Self; 6] {
+        [Apt, AptGet, Brew, Cargo, Choco, Yum]
+    }
+
     fn _install(&self, package: &str, args: &[&str]) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.command()
@@ -401,8 +406,6 @@ impl Shell {
 mod tests {
     use super::*;
 
-    static ALL_PMS: [PackageManager; 6] = [Apt, AptGet, Brew, Cargo, Choco, Yum];
-
     macro_rules! check_missing {
         ($pm:ident, $mod_name:ident) => {
             mod $mod_name {
@@ -475,11 +478,15 @@ mod tests {
 
     #[test]
     fn package_check_success() {
-        assert!(Package::new("cargo".to_string(), ALL_PMS.to_vec()).is_installed());
+        assert!(Package::new("cargo".to_string(), PackageManager::all().to_vec()).is_installed());
     }
 
     #[test]
     fn package_check_failure() {
-        assert!(!Package::new("some_missing_package".to_string(), ALL_PMS.to_vec()).is_installed());
+        assert!(!Package::new(
+            "some_missing_package".to_string(),
+            PackageManager::all().to_vec()
+        )
+        .is_installed());
     }
 }
