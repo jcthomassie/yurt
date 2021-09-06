@@ -175,21 +175,18 @@ macro_rules! auto_convert {
         }
     };
 
-    (BuildUnit::$outer:ident, $inner:ty) => {
+    (BuildUnit::$outer:ident($inner:ty)) => {
         auto_convert!(@impl_try_from BuildUnit::$outer, $inner, self, _context, Ok(self));
     };
-    (BuildUnit::$outer:ident, $inner:ty, ($a:ident, $b:ident) => $mapped:expr) => {
+    (BuildUnit::$outer:ident($inner:ty), ($a:ident, $b:ident) => $mapped:expr) => {
         auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $a, $b, $mapped);
     };
 }
 
-auto_convert!(BuildUnit::Link, Link, (self, context) => self.expand(context));
-auto_convert!(BuildUnit::Package, Package);
-auto_convert!(BuildUnit::Bootstrap, PackageManager);
-auto_convert!(
-    BuildUnit::ShellCmd,
-    String, (self, context) => context.substitute(&self)
-);
+auto_convert!(BuildUnit::Link(Link), (self, context) => self.expand(context));
+auto_convert!(BuildUnit::Package(Package));
+auto_convert!(BuildUnit::Bootstrap(PackageManager));
+auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.substitute(&self));
 
 #[derive(Debug, PartialEq, Deserialize)]
 #[serde(rename_all = "snake_case")]
