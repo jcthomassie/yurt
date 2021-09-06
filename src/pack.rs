@@ -71,7 +71,7 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
     if output.status.success() {
         Ok(output)
     } else {
-        Err(anyhow!("failed to execute piped command"))
+        Err(anyhow!("Failed to execute piped command"))
     }
 }
 
@@ -287,7 +287,7 @@ impl PackageManager {
                 "-sSf",
                 "https://sh.rustup.rs",
             ]),
-            pm => Err(anyhow!("bootstrap not supported for {}", pm.name())),
+            pm => Err(anyhow!("Bootstrap not supported for {}", pm.name())),
         }
     }
 
