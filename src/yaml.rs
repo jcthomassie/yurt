@@ -11,21 +11,9 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io::BufReader;
-use std::iter::Zip;
 use std::path::Path;
-use std::vec::IntoIter;
 
 lazy_static! {
-    pub static ref LOCALE: Locale<String> = Locale::new(
-        whoami::username(),
-        format!("{:?}", whoami::platform()).to_lowercase(),
-        whoami::distro()
-            .split(' ')
-            .next()
-            .expect("Failed to determine distro")
-            .to_owned()
-            .to_lowercase(),
-    );
     // Matches: "${{ anything here }}"
     static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
     // Matches: "namespace.variable_name"
@@ -34,21 +22,13 @@ lazy_static! {
 
 #[derive(Debug)]
 pub struct Context {
+    locale: Locale<String>,
     variables: HashMap<String, String>,
     managers: HashSet<PackageManager>,
     home_dir: String,
 }
 
 impl Context {
-    #[allow(unused)]
-    fn new() -> Self {
-        Self {
-            variables: HashMap::new(),
-            managers: HashSet::new(),
-            home_dir: String::new(),
-        }
-    }
-
     #[inline]
     fn insert(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
         self.variables
@@ -87,6 +67,16 @@ impl Default for Context {
     fn default() -> Self {
         Self {
             variables: HashMap::new(),
+            locale: Locale::new(
+                whoami::username(),
+                format!("{:?}", whoami::platform()).to_lowercase(),
+                whoami::distro()
+                    .split(' ')
+                    .next()
+                    .expect("Failed to determine distro")
+                    .to_owned()
+                    .to_lowercase(),
+            ),
             managers: PackageManager::all()
                 .iter()
                 .filter(|pm| pm.is_available())
@@ -119,22 +109,20 @@ impl<T> Locale<T> {
 }
 
 impl Locale<Option<String>> {
-    fn zipped(&self) -> Zip<IntoIter<Option<&str>>, IntoIter<&str>> {
+    pub fn is_local(&self, rubric: &Locale<String>) -> bool {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
             self.distro.as_deref(),
         ];
         let o_vals = vec![
-            LOCALE.user.as_ref(),
-            LOCALE.platform.as_ref(),
-            LOCALE.distro.as_ref(),
+            rubric.user.as_str(),
+            rubric.platform.as_str(),
+            rubric.distro.as_str(),
         ];
-        s_vals.into_iter().zip(o_vals.into_iter())
-    }
-
-    pub fn is_local(&self) -> bool {
-        self.zipped()
+        s_vals
+            .into_iter()
+            .zip(o_vals.into_iter())
             .all(|(s, o)| !matches!(s, Some(val) if val != o))
     }
 }
@@ -156,10 +144,10 @@ pub enum Case<T> {
 }
 
 impl<T> Case<T> {
-    pub fn rule(self, default: bool) -> Option<T> {
+    pub fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
         match self {
-            Case::Positive { spec, include } if spec.is_local() => Some(include),
-            Case::Negative { spec, include } if !spec.is_local() => Some(include),
+            Case::Positive { spec, include } if spec.is_local(&rubric) => Some(include),
+            Case::Negative { spec, include } if !spec.is_local(&rubric) => Some(include),
             Case::Default { include } if default => Some(include),
             _ => None,
         }
@@ -270,7 +258,7 @@ where
         let mut default = true;
         let mut units = Vec::new();
         for case in self {
-            match case.rule(default) {
+            match case.rule(default, &context.locale) {
                 Some(build) => {
                     default = false;
                     units.extend(build.resolve(context)?);
@@ -488,10 +476,14 @@ mod tests {
     #[test]
     fn positive_match() {
         let set = BuildSet::Case(vec![Case::Positive {
-            spec: Locale::new(None, Some(LOCALE.platform.to_string()), None),
+            spec: Locale::new(
+                None,
+                Some(format!("{:?}", whoami::platform()).to_lowercase()),
+                None,
+            ),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&Context::new()).unwrap().is_empty());
+        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -500,7 +492,7 @@ mod tests {
             spec: Locale::new(None, None, Some("nothere".to_string())),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&Context::new()).unwrap().is_empty());
+        assert!(set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -509,15 +501,15 @@ mod tests {
             spec: Locale::new(None, Some("nothere".to_string()), None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&Context::new()).unwrap().is_empty());
+        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_non_match() {
         let set = BuildSet::Case(vec![Case::Negative {
-            spec: Locale::new(Some(LOCALE.user.to_string()), None, None),
+            spec: Locale::new(Some(whoami::username()), None, None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&Context::new()).unwrap().is_empty());
+        assert!(set.resolve(&Context::default()).unwrap().is_empty());
     }
 }
