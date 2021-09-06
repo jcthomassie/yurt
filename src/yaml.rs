@@ -293,7 +293,7 @@ where
         let mut units = Vec::with_capacity(groups.len() * groups[0].len());
         for map in groups {
             for (key, val) in map {
-                context.insert("matrix", key, val);
+                context.insert("matrix", key, &context.substitute(val)?);
             }
             units.extend(self.include.clone().resolve(&context)?);
         }
@@ -529,13 +529,18 @@ mod tests {
 
     #[test]
     fn matrix_expansion() {
-        let context = Context {
+        let mut context = Context {
             locale: Locale::new(String::new(), String::new(), String::new()),
             variables: HashMap::new(),
             managers: HashSet::new(),
             home_dir: String::new(),
         };
-        let values = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        context.insert("outer", "key", "value");
+        let values = vec![
+            "${{ outer.key }}_a".to_string(),
+            "${{ outer.key }}_b".to_string(),
+            "${{ outer.key }}_c".to_string(),
+        ];
         let matrix = Matrix {
             values: {
                 let mut map = BTreeMap::new();
