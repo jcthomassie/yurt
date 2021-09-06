@@ -105,7 +105,7 @@ mod tests {
     use std::fs::File;
 
     fn fixture() -> (tempfile::TempDir, Link) {
-        let dir = tempfile::tempdir().expect("failed to create tempdir");
+        let dir = tempfile::tempdir().expect("Failed to create tempdir");
         let ln = Link::new(dir.path().join("link.head"), dir.path().join("link.tail"));
         (dir, ln)
     }
@@ -119,15 +119,15 @@ mod tests {
     #[test]
     fn status_no_head() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&ln.tail).expect("Failed to create tempfile");
         assert!(matches!(ln.status(), Status::NullHead));
     }
 
     #[test]
     fn status_valid() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
-        symlink::symlink_file(&ln.tail, &ln.head).expect("failed to create symlink");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        symlink::symlink_file(&ln.tail, &ln.head).expect("Failed to create symlink");
         assert!(matches!(ln.status(), Status::Valid));
     }
 
@@ -135,68 +135,68 @@ mod tests {
     fn status_wrong_tail() {
         let (dir, ln) = fixture();
         let wrong = dir.path().join("wrong.thing");
-        File::create(&ln.tail).expect("failed to create tempfile");
-        File::create(&wrong).expect("failed to create tempfile");
-        symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        File::create(&wrong).expect("Failed to create tempfile");
+        symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
         assert!(matches!(ln.status(), Status::InvalidTail(_)));
     }
 
     #[test]
     fn status_head_is_file() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
-        File::create(&ln.head).expect("failed to create tempfile");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        File::create(&ln.head).expect("Failed to create tempfile");
         assert!(matches!(ln.status(), Status::InvalidHead(_)));
     }
 
     #[test]
     fn link_normal() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&ln.tail).expect("Failed to create tempfile");
         // Link once
-        ln.link().expect("failed to create link");
-        assert_eq!(ln.head.read_link().expect("failed to read link"), ln.tail);
+        ln.link().expect("Failed to create link");
+        assert_eq!(ln.head.read_link().expect("Failed to read link"), ln.tail);
     }
 
     #[test]
     fn unlink_normal() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
+        File::create(&ln.tail).expect("Failed to create tempfile");
         // Link and unlink once
-        ln.link().expect("failed to create link");
-        ln.unlink().expect("failed to remove link");
+        ln.link().expect("Failed to create link");
+        ln.unlink().expect("Failed to remove link");
         assert!(!ln.head.exists());
     }
 
     #[test]
     fn clean_invalid_head() {
         let (_dir, ln) = fixture();
-        File::create(&ln.tail).expect("failed to create tempfile");
-        File::create(&ln.head).expect("failed to create tempfile");
-        ln.clean().expect("failed to clean link");
-        ln.link().expect("failed to apply link");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        File::create(&ln.head).expect("Failed to create tempfile");
+        ln.clean().expect("Failed to clean link");
+        ln.link().expect("Failed to apply link");
     }
 
     #[test]
     fn clean_invalid_tail() {
         let (dir, ln) = fixture();
         let wrong = dir.path().join("wrong.thing");
-        File::create(&ln.tail).expect("failed to create tempfile");
-        File::create(&wrong).expect("failed to create tempfile");
-        symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
-        ln.clean().expect("failed to clean link");
-        ln.link().expect("failed to apply link");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        File::create(&wrong).expect("Failed to create tempfile");
+        symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
+        ln.clean().expect("Failed to clean link");
+        ln.link().expect("Failed to apply link");
     }
 
     #[test]
     fn clean_broken_link() {
         let (dir, ln) = fixture();
         let wrong = dir.path().join("wrong.thing");
-        File::create(&ln.tail).expect("failed to create tempfile");
-        File::create(&wrong).expect("failed to create tempfile");
-        symlink::symlink_file(&wrong, &ln.head).expect("failed to create symlink");
-        fs::remove_file(&wrong).expect("failed to delete tail");
-        ln.clean().expect("failed to clean link");
-        ln.link().expect("failed to apply link");
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        File::create(&wrong).expect("Failed to create tempfile");
+        symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
+        fs::remove_file(&wrong).expect("Failed to delete tail");
+        ln.clean().expect("Failed to clean link");
+        ln.link().expect("Failed to apply link");
     }
 }

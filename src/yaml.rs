@@ -25,7 +25,7 @@ lazy_static! {
         whoami::distro()
             .split(' ')
             .next()
-            .expect("failed to determine distro")
+            .expect("Failed to determine distro")
             .to_owned()
             .to_lowercase(),
     );
@@ -77,7 +77,7 @@ impl Context {
             self.variables
                 .get(&(namespace.to_string(), variable.to_string()))
                 .map(|s| s.clone())
-                .ok_or(anyhow!("variable {}.{} is undefined", namespace, variable))
+                .ok_or(anyhow!("Variable {}.{} is undefined", namespace, variable))
         }
     }
 
@@ -87,7 +87,7 @@ impl Context {
             .captures_iter(input)
             .map(|cap_outer| match RE_INNER.captures(&cap_outer["inner"]) {
                 Some(cap_inner) => self.lookup(&cap_inner["namespace"], &cap_inner["variable"]),
-                None => Err(anyhow!("invalid substitution: {}", &cap_outer["inner"])),
+                None => Err(anyhow!("Invalid substitution: {}", &cap_outer["inner"])),
             })
             .collect();
         let mut values_iter = values?.into_iter();
