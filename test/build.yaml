@@ -51,5 +51,6 @@ build:
       - package_2
       - package_3
       - package_4
-  - run:
-    - echo "hello world"
+  - run: |
+      echo "hello world"
+      echo "repo root ${{ repo.local }}"
