@@ -6,7 +6,7 @@ mod yaml;
 use anyhow::{anyhow, Context, Result};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
-use pack::{Cmd, ShellCmd, SHELL};
+use pack::ShellCmd;
 use std::env;
 use yaml::{Config, ResolvedConfig};
 
@@ -95,8 +95,9 @@ fn edit(matches: &ArgMatches) -> Result<()> {
         .repo
         .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
         .local;
-    SHELL
-        .call(&["-c", &editor, &path])
+    format!("{} {}", editor, path)
+        .as_str()
+        .run()
         .context("Failed to open dotfiles in editor")?;
     Ok(())
 }
