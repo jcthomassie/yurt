@@ -31,12 +31,6 @@ fn parse_resolved(matches: &ArgMatches) -> Result<ResolvedConfig> {
         .context("Failed to resolve build")
 }
 
-macro_rules! skip {
-    () => {
-        |_| Ok(())
-    };
-}
-
 fn show(matches: &ArgMatches) -> Result<()> {
     println!("{:#?}", parse_resolved(matches)?);
     Ok(())
@@ -44,46 +38,21 @@ fn show(matches: &ArgMatches) -> Result<()> {
 
 fn install(matches: &ArgMatches) -> Result<()> {
     let sub = matches.subcommand_matches("install").unwrap();
-    if sub.is_present("clean") {
-        clean(matches)?;
-    }
-    let resolved = parse_resolved(matches)?;
-    if let Some(repo) = &resolved.repo {
-        repo.require()?;
-    }
-    info!("Starting build steps...");
-    resolved
-        .map_build(
-            |ln| ln.link(),
-            |cmd| cmd.run(),
-            |pkg| pkg.install(),
-            |pm| pm.require(),
-        )
-        .context("Failed to complete build steps")?;
-    if let Some(shell) = &resolved.shell {
-        shell.chsh()?;
-    }
-    Ok(())
+    parse_resolved(matches)?
+        .install(sub.is_present("clean"))
+        .context("Failed to complete install steps")
 }
 
 fn uninstall(matches: &ArgMatches) -> Result<()> {
-    let resolved = parse_resolved(matches)?;
     let sub = matches.subcommand_matches("uninstall").unwrap();
-    if sub.is_present("packages") {
-        info!("Uninstalling dotfiles and packages...");
-        resolved.map_build(|ln| ln.unlink(), skip!(), |pkg| pkg.uninstall(), skip!())
-    } else {
-        info!("Uninstalling dotfiles...");
-        resolved.map_build(|ln| ln.unlink(), skip!(), skip!(), skip!())
-    }
-    .context("Failed to complete uninstall steps")
+    parse_resolved(matches)?
+        .uninstall(sub.is_present("packages"))
+        .context("Failed to complete uninstall steps")
 }
 
 fn clean(matches: &ArgMatches) -> Result<()> {
-    let resolved = parse_resolved(matches)?;
-    info!("Cleaning link heads...");
-    resolved
-        .map_build(|ln| ln.clean(), skip!(), skip!(), skip!())
+    parse_resolved(matches)?
+        .clean()
         .context("Failed to clean link heads")
 }
 

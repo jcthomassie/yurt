@@ -1,10 +1,10 @@
 use super::link::Link;
-use super::pack::{Package, PackageBundle, PackageManager, Shell};
+use super::pack::{Package, PackageBundle, PackageManager, Shell, ShellCmd};
 use super::repo::Repo;
 use anyhow::{anyhow, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
-use log::warn;
+use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -332,19 +332,50 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    pub fn map_build<RL, RS, RP, RB, E>(
-        &self,
-        lf: fn(&Link) -> Result<RL, E>,
-        sf: fn(&str) -> Result<RS, E>,
-        pf: fn(&Package) -> Result<RP, E>,
-        bf: fn(&PackageManager) -> Result<RB, E>,
-    ) -> Result<(), E> {
+    pub fn clean(&self) -> Result<()> {
+        info!("Cleaning link heads...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => drop(lf(ln)?),
-                BuildUnit::ShellCmd(cmd) => drop(sf(cmd)?),
-                BuildUnit::Package(pkg) => drop(pf(pkg)?),
-                BuildUnit::Bootstrap(pm) => drop(bf(pm)?),
+                BuildUnit::Link(ln) => drop(ln.clean()?),
+                _ => continue,
+            }
+        }
+        Ok(())
+    }
+
+    pub fn install(&self, clean: bool) -> Result<()> {
+        if let Some(repo) = &self.repo {
+            repo.require()?;
+        }
+        if clean {
+            self.clean()?;
+        }
+        info!("Starting build steps...");
+        for unit in &self.build {
+            match unit {
+                BuildUnit::Link(ln) => drop(ln.link()?),
+                BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
+                BuildUnit::Package(pkg) => drop(pkg.install()?),
+                BuildUnit::Bootstrap(pm) => drop(pm.require()?),
+            }
+        }
+        if let Some(shell) = &self.shell {
+            shell.chsh()?;
+        }
+        Ok(())
+    }
+
+    pub fn uninstall(&self, packages: bool) -> Result<()> {
+        if packages {
+            info!("Uninstalling dotfiles and packages...");
+        } else {
+            info!("Uninstalling dotfiles...");
+        }
+        for unit in &self.build {
+            match unit {
+                BuildUnit::Link(ln) => drop(ln.unlink()?),
+                BuildUnit::Package(pkg) if packages => drop(pkg.uninstall()?),
+                _ => continue,
             }
         }
         Ok(())
