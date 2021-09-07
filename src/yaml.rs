@@ -336,7 +336,7 @@ impl ResolvedConfig {
         info!("Cleaning link heads...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => drop(ln.clean()?),
+                BuildUnit::Link(ln) => ln.clean()?,
                 _ => continue,
             }
         }
@@ -353,10 +353,10 @@ impl ResolvedConfig {
         info!("Starting build steps...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => drop(ln.link()?),
+                BuildUnit::Link(ln) => ln.link()?,
                 BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
-                BuildUnit::Package(pkg) => drop(pkg.install()?),
-                BuildUnit::Bootstrap(pm) => drop(pm.require()?),
+                BuildUnit::Package(pkg) => pkg.install()?,
+                BuildUnit::Bootstrap(pm) => pm.require()?,
             }
         }
         if let Some(shell) = &self.shell {
@@ -373,8 +373,8 @@ impl ResolvedConfig {
         }
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => drop(ln.unlink()?),
-                BuildUnit::Package(pkg) if packages => drop(pkg.uninstall()?),
+                BuildUnit::Link(ln) => ln.unlink()?,
+                BuildUnit::Package(pkg) if packages => pkg.uninstall()?,
                 _ => continue,
             }
         }
