@@ -152,8 +152,8 @@ impl<T> Matrix<T> {
             .take(self.length()?)
             .collect();
         for (key, vals) in self.values.iter() {
-            for (i, val) in vals.into_iter().enumerate() {
-                groups[i].push((&key, &val));
+            for (i, val) in vals.iter().enumerate() {
+                groups[i].push((key, val));
             }
         }
         Ok(groups)
@@ -179,8 +179,8 @@ pub enum Case<T> {
 impl<T> Case<T> {
     pub fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
         match self {
-            Case::Positive { spec, include } if spec.is_local(&rubric) => Some(include),
-            Case::Negative { spec, include } if !spec.is_local(&rubric) => Some(include),
+            Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
+            Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
             Case::Default { include } if default => Some(include),
             _ => None,
         }
