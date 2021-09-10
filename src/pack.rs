@@ -2,9 +2,11 @@ use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
-use std::env;
-use std::io::{Read, Write};
-use std::process::{Child, Command, Output, Stdio};
+use std::{
+    env,
+    io::{Read, Write},
+    process::{Child, Command, Output, Stdio},
+};
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};

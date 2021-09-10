@@ -2,9 +2,11 @@ use super::yaml::Context;
 use anyhow::{anyhow, Result};
 use log::info;
 use serde::Deserialize;
-use std::fs;
-use std::io::{Error, ErrorKind};
-use std::path::PathBuf;
+use std::{
+    fs,
+    io::{Error, ErrorKind},
+    path::PathBuf,
+};
 
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S, context: Option<&Context>) -> Result<PathBuf> {
     Ok(PathBuf::from(match context {

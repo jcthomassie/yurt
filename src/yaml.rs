@@ -7,11 +7,13 @@ use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::Deserialize;
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::env;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use std::{
+    collections::{BTreeMap, HashMap, HashSet},
+    env,
+    fs::File,
+    io::BufReader,
+    path::Path,
+};
 
 lazy_static! {
     // Matches: "${{ anything here }}"
