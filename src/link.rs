@@ -72,6 +72,9 @@ impl Link {
             Status::Valid => Ok(()),
             Status::NullHead => {
                 info!("Linking {:?}@->{:?}", &self.head, &self.tail);
+                if let Some(dir) = self.head.parent() {
+                    fs::create_dir_all(dir)?;
+                }
                 Ok(symlink::symlink_file(&self.tail, &self.head)?)
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
@@ -156,6 +159,19 @@ mod tests {
     #[test]
     fn link_normal() {
         let (_dir, ln) = fixture();
+        File::create(&ln.tail).expect("Failed to create tempfile");
+        // Link once
+        ln.link().expect("Failed to create link");
+        assert_eq!(ln.head.read_link().expect("Failed to read link"), ln.tail);
+    }
+
+    #[test]
+    fn link_create_parent_dirs() {
+        let dir = tempfile::tempdir().expect("Failed to create tempdir");
+        let ln = Link::new(
+            dir.path().join("parent").join("link.head"),
+            dir.path().join("link.tail"),
+        );
         File::create(&ln.tail).expect("Failed to create tempfile");
         // Link once
         ln.link().expect("Failed to create link");
