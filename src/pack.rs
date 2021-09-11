@@ -4,7 +4,6 @@ use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
-    collections::BTreeSet,
     env,
     io::{Read, Write},
     process::{Child, Command, Output, Stdio},
@@ -101,11 +100,11 @@ where
 pub struct Package {
     pub name: String,
     alias: Option<String>,
-    managers: BTreeSet<PackageManager>,
+    managers: Vec<PackageManager>,
 }
 
 impl Package {
-    pub fn new(name: String, managers: BTreeSet<PackageManager>) -> Self {
+    pub fn new(name: String, managers: Vec<PackageManager>) -> Self {
         Package {
             name,
             alias: None,
@@ -122,6 +121,17 @@ impl Package {
             },
             ..self
         })
+    }
+
+    pub fn prune(self, context: &Context) -> Self {
+        Package {
+            managers: self
+                .managers
+                .into_iter()
+                .filter(|pm| context.managers.contains(pm))
+                .collect(),
+            ..self
+        }
     }
 
     fn _is_installed(&self, name: &str) -> bool {
@@ -149,14 +159,12 @@ impl Package {
             info!("Package already installed: {}", self.name);
         } else {
             let alias = self.alias.clone();
-            for pm in &self.managers {
-                if pm.is_available() {
-                    let res = pm.install(&self.name);
-                    return match alias {
-                        Some(a) if res.is_err() => pm.install(a.as_str()),
-                        _ => res,
-                    };
-                }
+            if let Some(manager) = self.managers.first() {
+                let res = manager.install(&self.name);
+                return match alias {
+                    Some(a) if res.is_err() => manager.install(a.as_str()),
+                    _ => res,
+                };
             }
             warn!("Package unavailable: {}", self.name);
         }
@@ -210,11 +218,6 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
-    #[inline]
-    pub fn all() -> [Self; 6] {
-        [Apt, AptGet, Brew, Cargo, Choco, Yum]
-    }
-
     fn _install(&self, package: &str, args: &[&str]) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.command()
@@ -319,6 +322,7 @@ impl PackageManager {
         self.bootstrap()
     }
 
+    // Check if package manager is installed
     pub fn is_available(&self) -> bool {
         which_has(self.name())
     }
@@ -491,21 +495,43 @@ mod tests {
         assert!(!which_has("some_missing_package"));
     }
 
-    #[test]
-    fn package_check_success() {
-        assert!(Package::new(
-            "cargo".to_string(),
-            PackageManager::all().iter().cloned().collect()
-        )
-        .is_installed());
-    }
+    mod package {
+        use super::*;
 
-    #[test]
-    fn package_check_failure() {
-        assert!(!Package::new(
-            "some_missing_package".to_string(),
-            PackageManager::all().iter().cloned().collect()
-        )
-        .is_installed());
+        macro_rules! managers {
+            () => {
+                vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
+            };
+        }
+
+        #[test]
+        fn check_installed() {
+            assert!(Package::new("cargo".to_string(), managers!()).is_installed());
+        }
+
+        #[test]
+        fn check_not_installed() {
+            assert!(!Package::new("some_missing_package".to_string(), managers!()).is_installed());
+        }
+
+        #[test]
+        fn prune_drained() {
+            assert!(Package::new("package".to_string(), managers!())
+                .prune(&Context::default())
+                .managers
+                .is_empty());
+        }
+
+        #[test]
+        fn prune_unchanged() {
+            let mut context = Context::default();
+            context.managers.extend(managers!());
+            assert_eq!(
+                Package::new("package".to_string(), managers!())
+                    .prune(&context)
+                    .managers,
+                managers!()
+            );
+        }
     }
 }
