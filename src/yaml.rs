@@ -12,7 +12,7 @@ use std::{
     env,
     fs::File,
     io::BufReader,
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 lazy_static! {
@@ -27,7 +27,7 @@ pub struct Context {
     locale: Locale<String>,
     variables: HashMap<String, String>,
     managers: HashSet<PackageManager>,
-    home_dir: String,
+    home_dir: PathBuf,
 }
 
 impl Context {
@@ -61,7 +61,12 @@ impl Context {
         // Build new string with replacements
         Ok(RE_OUTER
             .replace_all(input, |_: &Captures| values_iter.next().unwrap())
-            .replace("~", &self.home_dir))
+            .replace(
+                "~",
+                self.home_dir
+                    .to_str()
+                    .ok_or_else(|| anyhow!("Invalid home directory: {:?}", self.home_dir))?,
+            ))
     }
 }
 
@@ -84,11 +89,7 @@ impl Default for Context {
                 .filter(|pm| pm.is_available())
                 .cloned()
                 .collect(),
-            home_dir: dirs::home_dir()
-                .as_ref()
-                .and_then(|p| p.to_str())
-                .unwrap_or("~")
-                .to_string(),
+            home_dir: dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")),
         }
     }
 }
@@ -566,7 +567,7 @@ mod tests {
             locale: Locale::new(String::new(), String::new(), String::new()),
             variables: HashMap::new(),
             managers: HashSet::new(),
-            home_dir: String::new(),
+            home_dir: PathBuf::new(),
         };
         context.insert("outer", "key", "value");
         let values = vec![
