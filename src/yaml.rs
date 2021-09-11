@@ -8,7 +8,7 @@ use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::Deserialize;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet},
     env,
     fs::File,
     io::BufReader,
@@ -24,10 +24,10 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    locale: Locale<String>,
-    variables: HashMap<String, String>,
-    managers: HashSet<PackageManager>,
-    home_dir: PathBuf,
+    variables: BTreeMap<String, String>,
+    pub managers: BTreeSet<PackageManager>,
+    pub locale: Locale<String>,
+    pub home_dir: PathBuf,
 }
 
 impl Context {
@@ -73,7 +73,7 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self {
-            variables: HashMap::new(),
+            variables: BTreeMap::new(),
             locale: Locale::new(
                 whoami::username(),
                 format!("{:?}", whoami::platform()).to_lowercase(),
@@ -278,10 +278,12 @@ impl Resolve for Build {
 
 impl Resolve for PackageBundle {
     fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
-        let manager = self.manager;
+        let manager = self.manager.clone();
         self.packages
             .into_iter()
-            .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
+            .map(|name| {
+                Package::new(name, Some(manager.clone()).into_iter().collect()).resolve(context)
+            })
             .collect()
     }
 }
@@ -565,8 +567,8 @@ mod tests {
     fn matrix_expansion() {
         let mut context = Context {
             locale: Locale::new(String::new(), String::new(), String::new()),
-            variables: HashMap::new(),
-            managers: HashSet::new(),
+            variables: BTreeMap::new(),
+            managers: BTreeSet::new(),
             home_dir: PathBuf::new(),
         };
         context.insert("outer", "key", "value");

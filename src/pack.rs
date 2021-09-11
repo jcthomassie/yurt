@@ -3,6 +3,7 @@ use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
+    collections::BTreeSet,
     env,
     io::{Read, Write},
     process::{Child, Command, Output, Stdio},
@@ -98,12 +99,12 @@ where
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     pub name: String,
-    pub alias: Option<String>,
-    pub managers: Vec<PackageManager>,
+    alias: Option<String>,
+    managers: BTreeSet<PackageManager>,
 }
 
 impl Package {
-    pub fn new(name: String, managers: Vec<PackageManager>) -> Self {
+    pub fn new(name: String, managers: BTreeSet<PackageManager>) -> Self {
         Package {
             name,
             alias: None,
@@ -172,7 +173,7 @@ pub struct PackageBundle {
     pub packages: Vec<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Hash, Clone, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,
@@ -480,14 +481,18 @@ mod tests {
 
     #[test]
     fn package_check_success() {
-        assert!(Package::new("cargo".to_string(), PackageManager::all().to_vec()).is_installed());
+        assert!(Package::new(
+            "cargo".to_string(),
+            PackageManager::all().iter().cloned().collect()
+        )
+        .is_installed());
     }
 
     #[test]
     fn package_check_failure() {
         assert!(!Package::new(
             "some_missing_package".to_string(),
-            PackageManager::all().to_vec()
+            PackageManager::all().iter().cloned().collect()
         )
         .is_installed());
     }
