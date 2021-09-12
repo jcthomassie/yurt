@@ -12,7 +12,7 @@ pub struct Repo {
 impl Repo {
     pub fn resolve(self, context: &mut Context) -> Result<Self> {
         Ok(Self {
-            local: context.substitute(&self.local)?,
+            local: context.replace_variables(&self.local)?,
             ..self
         })
     }

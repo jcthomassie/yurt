@@ -10,8 +10,8 @@ use std::{
 
 pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S, context: Option<&Context>) -> Result<PathBuf> {
     Ok(PathBuf::from(match context {
-        Some(c) => c.substitute(path.as_ref()),
-        None => Context::default().substitute(path.as_ref()),
+        Some(c) => c.replace_variables(path.as_ref()),
+        None => Context::default().replace_variables(path.as_ref()),
     }?))
 }
 

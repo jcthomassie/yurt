@@ -33,12 +33,12 @@ pub struct Context {
 
 impl Context {
     #[inline]
-    fn insert(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+    fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
         self.variables
             .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
 
-    pub fn lookup(&self, namespace: &str, variable: &str) -> Result<String> {
+    pub fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
         if namespace == "env" {
             Ok(env::var(variable)?)
         } else {
@@ -49,13 +49,13 @@ impl Context {
         }
     }
 
-    pub fn substitute(&self, input: &str) -> Result<String> {
+    pub fn replace_variables(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
-            .map(|cap_outer| match RE_INNER.captures(&cap_outer["inner"]) {
-                Some(cap_inner) => self.lookup(&cap_inner["namespace"], &cap_inner["variable"]),
-                None => Err(anyhow!("Invalid substitution: {}", &cap_outer["inner"])),
+            .map(|outer| match RE_INNER.captures(&outer["inner"]) {
+                Some(inner) => self.get_variable(&inner["namespace"], &inner["variable"]),
+                None => Err(anyhow!("Invalid substitution: {}", &outer["inner"])),
             })
             .collect();
         let mut values_iter = values?.into_iter();
@@ -223,7 +223,7 @@ macro_rules! auto_convert {
 auto_convert!(BuildUnit::Link(Link), (self, context) => self.expand(context));
 auto_convert!(BuildUnit::Package(Package));
 auto_convert!(BuildUnit::Bootstrap(PackageManager));
-auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.substitute(&self));
+auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.replace_variables(&self));
 
 type Build = Vec<BuildSet>;
 
@@ -299,7 +299,7 @@ where
         let mut units = Vec::with_capacity(groups.len() * groups[0].len());
         for map in groups {
             for (key, val) in map {
-                context.insert("matrix", key, &context.substitute(val)?);
+                context.set_variable("matrix", key, &context.replace_variables(val)?);
             }
             units.extend(self.include.clone().resolve(&mut context)?);
         }
@@ -451,7 +451,7 @@ impl Config {
         let repo = match self.repo {
             Some(mut repo) => {
                 repo = repo.resolve(&mut context)?;
-                context.insert("repo", "local", &repo.local);
+                context.set_variable("repo", "local", &repo.local);
                 Some(repo)
             }
             None => None,
@@ -503,15 +503,18 @@ mod tests {
     }
 
     #[test]
-    fn substitute_from_context() {
-        let mut expander = Context::default();
-        expander.insert("name", "var_1", "val_1");
-        expander.insert("name", "var_2", "val_2");
-        assert!(!expander.substitute("~").unwrap().is_empty());
-        assert_eq!(expander.substitute("${{ name.var_1 }}").unwrap(), "val_1");
+    fn replace_from_context() {
+        let mut context = Context::default();
+        context.set_variable("name", "var_1", "val_1");
+        context.set_variable("name", "var_2", "val_2");
+        assert!(!context.replace_variables("~").unwrap().is_empty());
         assert_eq!(
-            expander
-                .substitute("${{ name.var_1 }}/${{ name.var_2 }}")
+            context.replace_variables("${{ name.var_1 }}").unwrap(),
+            "val_1"
+        );
+        assert_eq!(
+            context
+                .replace_variables("${{ name.var_1 }}/${{ name.var_2 }}")
                 .unwrap(),
             "val_1/val_2"
         );
@@ -583,7 +586,7 @@ mod tests {
             managers: BTreeSet::new(),
             home_dir: PathBuf::new(),
         };
-        context.insert("outer", "key", "value");
+        context.set_variable("outer", "key", "value");
         let values = vec![
             "${{ outer.key }}_a".to_string(),
             "${{ outer.key }}_b".to_string(),
