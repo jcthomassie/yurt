@@ -10,7 +10,7 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn resolve(self, context: &Context) -> Result<Self> {
+    pub fn resolve(self, context: &mut Context) -> Result<Self> {
         Ok(Self {
             local: context.substitute(&self.local)?,
             ..self

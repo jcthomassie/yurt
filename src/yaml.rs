@@ -199,13 +199,13 @@ pub enum BuildUnit {
 }
 
 trait ResolveUnit {
-    fn resolve(self, context: &Context) -> Result<BuildUnit>;
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
 }
 
 macro_rules! auto_convert {
     (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $self:ident, $context:ident, $mapped:expr) => {
         impl ResolveUnit for $inner {
-            fn resolve($self, $context: &Context) -> Result<BuildUnit> {
+            fn resolve($self, $context: &mut Context) -> Result<BuildUnit> {
                 ($mapped).map(BuildUnit::$outer)
             }
         }
@@ -239,12 +239,12 @@ pub enum BuildSet {
 }
 
 trait Resolve {
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>>;
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>;
 }
 
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         match self {
             Self::Matrix(m) => m.resolve(context),
             Self::Case(v) => v.resolve(context),
@@ -261,13 +261,13 @@ impl<T> Resolve for Vec<T>
 where
     T: ResolveUnit,
 {
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         self.into_iter().map(|u| u.resolve(context)).collect()
     }
 }
 
 impl Resolve for Build {
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         let mut units = Vec::new();
         for build in self {
             units.extend(build.resolve(context)?);
@@ -277,7 +277,7 @@ impl Resolve for Build {
 }
 
 impl Resolve for PackageBundle {
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         let manager = self.manager.clone();
         self.packages
             .into_iter()
@@ -292,7 +292,7 @@ impl<T> Resolve for Matrix<T>
 where
     T: Resolve + Clone,
 {
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         let groups = self.transpose()?;
         let mut context = context.clone();
         let mut units = Vec::with_capacity(groups.len() * groups[0].len());
@@ -300,7 +300,7 @@ where
             for (key, val) in map {
                 context.insert("matrix", key, &context.substitute(val)?);
             }
-            units.extend(self.include.clone().resolve(&context)?);
+            units.extend(self.include.clone().resolve(&mut context)?);
         }
         Ok(units)
     }
@@ -311,7 +311,7 @@ where
     T: Resolve,
 {
     // Process a block of cases
-    fn resolve(self, context: &Context) -> Result<Vec<BuildUnit>> {
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         let mut default = true;
         let mut units = Vec::new();
         for case in self {
@@ -438,7 +438,7 @@ impl Config {
         // Resolve repo
         let repo = match self.repo {
             Some(mut repo) => {
-                repo = repo.resolve(&context)?;
+                repo = repo.resolve(&mut context)?;
                 context.insert("repo", "local", &repo.local);
                 Some(repo)
             }
@@ -446,7 +446,7 @@ impl Config {
         };
         // Resolve build
         let build = match self.build {
-            Some(raw) => raw.resolve(&context)?,
+            Some(raw) => raw.resolve(&mut context)?,
             None => Vec::new(),
         };
         Ok(ResolvedConfig {
@@ -586,8 +586,8 @@ mod tests {
             include: vec!["${{ matrix.key }}".to_string()],
         };
         assert_eq!(
-            matrix.resolve(&context).unwrap(),
-            values.resolve(&context).unwrap()
+            matrix.resolve(&mut context).unwrap(),
+            values.resolve(&mut context).unwrap()
         );
     }
 
@@ -601,7 +601,7 @@ mod tests {
             ),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
+        assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -610,7 +610,7 @@ mod tests {
             spec: Locale::new(None, None, Some("nothere".to_string())),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&Context::default()).unwrap().is_empty());
+        assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -619,7 +619,7 @@ mod tests {
             spec: Locale::new(None, Some("nothere".to_string()), None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&Context::default()).unwrap().is_empty());
+        assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
@@ -628,6 +628,6 @@ mod tests {
             spec: Locale::new(Some(whoami::username()), None, None),
             include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&Context::default()).unwrap().is_empty());
+        assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 }
