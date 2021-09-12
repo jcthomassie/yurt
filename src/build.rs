@@ -1,7 +1,7 @@
 use super::files::Link;
 use super::repo::Repo;
 use super::shell::{Package, PackageBundle, PackageManager, Shell, ShellCmd};
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, ensure, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
 use log::{info, warn};
@@ -134,29 +134,15 @@ pub struct Matrix<T> {
 }
 
 impl<T> Matrix<T> {
-    // Number of expanded elements; returns Err if value counts do not match
-    pub fn length(&self) -> Result<usize> {
-        let counts: Vec<usize> = self.values.values().map(Vec::len).collect();
-        if counts.is_empty() {
-            return Err(anyhow!("Matrix values must be non-empty"));
-        }
-        if counts.windows(2).any(|w| w[1] != w[0]) {
-            return Err(anyhow!("Matrix array length mismatch"));
-        }
-        Ok(counts[0])
-    }
-
-    // Transpose into nested vec of key, value pairs
-    pub fn transpose(&self) -> Result<Vec<Vec<(&str, &str)>>> {
-        let mut groups: Vec<Vec<(&str, &str)>> = std::iter::repeat_with(Vec::new)
-            .take(self.length()?)
-            .collect();
-        for (key, vals) in self.values.iter() {
-            for (i, val) in vals.iter().enumerate() {
-                groups[i].push((key, val));
+    fn length(&self) -> Result<usize> {
+        let mut counts = self.values.values().map(Vec::len);
+        match counts.next() {
+            Some(len) => {
+                ensure!(counts.all(|next| next == len), "Matrix array size mismatch");
+                Ok(len)
             }
+            None => bail!("Matrix values must be non-empty"),
         }
-        Ok(groups)
     }
 }
 
@@ -293,12 +279,15 @@ where
     T: Resolve + Clone,
 {
     fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
-        let groups = self.transpose()?;
+        let len = self.length()?;
+        let mut iters: Vec<_> = self.values.iter().map(|(k, v)| (k, v.iter())).collect();
         let mut context = context.clone();
-        let mut units = Vec::with_capacity(groups.len() * groups[0].len());
-        for map in groups {
-            for (key, val) in map {
-                context.set_variable("matrix", key, &context.replace_variables(val)?);
+        let mut units = Vec::with_capacity(len);
+        for _ in 0..len {
+            for (variable, values) in &mut iters {
+                // Iterator size has been validated as count; unwrap here is safe
+                let value = &context.replace_variables(values.next().unwrap())?;
+                context.set_variable("matrix", variable, value);
             }
             units.extend(self.include.clone().resolve(&mut context)?);
         }
@@ -579,6 +568,30 @@ mod tests {
         cfg.version = Some(crate_version!().to_string());
         assert!(cfg.version_matches(true));
         assert!(cfg.version_matches(false));
+    }
+
+    #[test]
+    fn matrix_length() {
+        #[rustfmt::skip]
+        let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
+            values:
+              a: [1, 2, 3]
+              b: [4, 5, 6]
+            include: [ ]
+        ").unwrap();
+        assert_eq!(matrix.length().unwrap(), 3);
+    }
+
+    #[test]
+    fn matrix_array_mismatch() {
+        #[rustfmt::skip]
+        let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
+            values:
+              a: [1, 2, 3]
+              b: [4, 5, 6, 7]
+            include: [ ]
+        ").unwrap();
+        assert!(matrix.resolve(&mut Context::default()).is_err());
     }
 
     #[test]
