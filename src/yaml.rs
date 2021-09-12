@@ -220,8 +220,8 @@ macro_rules! auto_convert {
     };
 }
 
-auto_convert!(BuildUnit::Link(Link), (self, context) => self.expand(context));
-auto_convert!(BuildUnit::Package(Package), (self, context) => self.replace(context));
+auto_convert!(BuildUnit::Link(Link), (self, context) => self.replace_variables(context));
+auto_convert!(BuildUnit::Package(Package), (self, context) => self.replace_variables(context));
 auto_convert!(BuildUnit::Bootstrap(PackageManager));
 auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.replace_variables(&self));
 

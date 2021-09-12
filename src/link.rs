@@ -40,7 +40,7 @@ impl Link {
     }
 
     // Returns new link with paths expanded
-    pub fn expand(&self, context: &mut Context) -> Result<Self> {
+    pub fn replace_variables(&self, context: &mut Context) -> Result<Self> {
         Ok(Self::new(
             expand_path(self.head.to_str().unwrap(), Some(context))?,
             expand_path(self.tail.to_str().unwrap(), Some(context))?,

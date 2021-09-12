@@ -113,7 +113,7 @@ impl Package {
         }
     }
 
-    pub fn replace(self, context: &Context) -> Result<Self> {
+    pub fn replace_variables(self, context: &Context) -> Result<Self> {
         Ok(Package {
             name: context.replace_variables(&self.name)?,
             alias: match self.alias {
