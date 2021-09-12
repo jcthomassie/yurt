@@ -6,8 +6,8 @@ mod shell;
 use anyhow::{Context, Result};
 use build::{yaml::Config, ResolvedConfig};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
-use log::info;
-use std::env;
+use log::{debug, info};
+use std::{env, time::Instant};
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
     if let Some(yaml_url) = matches.value_of("yaml-url") {
@@ -125,7 +125,8 @@ fn main() -> Result<()> {
     }
     env_logger::init();
 
-    match matches.subcommand_name() {
+    let timer = Instant::now();
+    let result = match matches.subcommand_name() {
         Some("show") => show(&matches),
         Some("install") => install(&matches),
         Some("uninstall") => uninstall(&matches),
@@ -133,5 +134,7 @@ fn main() -> Result<()> {
         Some("update") => update(),
         Some("edit") => edit(&matches),
         _ => unreachable!(),
-    }
+    };
+    debug!("Runtime: {:?}", timer.elapsed());
+    result
 }
