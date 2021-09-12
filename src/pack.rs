@@ -1,3 +1,4 @@
+use super::yaml::Context;
 use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
@@ -110,6 +111,17 @@ impl Package {
             alias: None,
             managers,
         }
+    }
+
+    pub fn replace(self, context: &Context) -> Result<Self> {
+        Ok(Package {
+            name: context.replace_variables(&self.name)?,
+            alias: match self.alias {
+                Some(a) => Some(context.replace_variables(&a)?),
+                None => None,
+            },
+            ..self
+        })
     }
 
     fn _is_installed(&self, name: &str) -> bool {
