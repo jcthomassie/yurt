@@ -7,6 +7,7 @@ use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::Deserialize;
+use std::process::Output;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -329,14 +330,16 @@ where
 
 #[derive(Debug)]
 pub struct ResolvedConfig {
-    pub context: Context,
-    pub version: Option<String>,
-    pub shell: Option<Shell>,
-    pub repo: Option<Repo>,
-    pub build: Vec<BuildUnit>,
+    // Members should be treated as immutable
+    context: Context,
+    version: Option<String>,
+    shell: Option<Shell>,
+    repo: Option<Repo>,
+    build: Vec<BuildUnit>,
 }
 
 impl ResolvedConfig {
+    // Eliminate elements that will conflict with installation
     pub fn clean(&self) -> Result<()> {
         info!("Cleaning link heads...");
         for unit in &self.build {
@@ -384,6 +387,15 @@ impl ResolvedConfig {
             }
         }
         Ok(())
+    }
+
+    pub fn edit(&self, editor: &str) -> Result<Output> {
+        let path = &self
+            .repo
+            .as_ref()
+            .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
+            .local;
+        format!("{} {}", editor, path).as_str().run()
     }
 }
 
