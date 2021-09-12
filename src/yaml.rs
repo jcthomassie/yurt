@@ -85,11 +85,7 @@ impl Default for Context {
                     .to_owned()
                     .to_lowercase(),
             ),
-            managers: PackageManager::all()
-                .iter()
-                .filter(|pm| pm.is_available())
-                .cloned()
-                .collect(),
+            managers: BTreeSet::new(),
             home_dir: dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")),
         }
     }
@@ -195,8 +191,8 @@ impl<T> Case<T> {
 pub enum BuildUnit {
     Link(Link),
     ShellCmd(String),
-    Package(Package),
-    Bootstrap(PackageManager),
+    Install(Package),
+    Require(PackageManager),
 }
 
 trait ResolveUnit {
@@ -221,9 +217,12 @@ macro_rules! auto_convert {
 }
 
 auto_convert!(BuildUnit::Link(Link), (self, context) => self.replace_variables(context));
-auto_convert!(BuildUnit::Package(Package), (self, context) => self.replace_variables(context));
-auto_convert!(BuildUnit::Bootstrap(PackageManager));
 auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.replace_variables(&self));
+auto_convert!(BuildUnit::Install(Package), (self, context) => self.replace_variables(context).map(|p| p.prune(context)));
+auto_convert!(BuildUnit::Require(PackageManager), (self, context) => {
+    context.managers.insert(self.clone());
+    Ok(self)
+});
 
 type Build = Vec<BuildSet>;
 
@@ -236,7 +235,7 @@ pub enum BuildSet {
     Run(String),
     Install(Vec<Package>),
     Bundle(PackageBundle),
-    Bootstrap(Vec<PackageManager>),
+    Require(Vec<PackageManager>),
 }
 
 trait Resolve {
@@ -253,7 +252,7 @@ impl Resolve for BuildSet {
             Self::Run(s) => Ok(vec![s.resolve(context)?]),
             Self::Install(v) => v.resolve(context),
             Self::Bundle(v) => v.resolve(context),
-            Self::Bootstrap(v) => v.resolve(context),
+            Self::Require(v) => v.resolve(context),
         }
     }
 }
@@ -351,7 +350,7 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    pub fn install(&self, clean: bool) -> Result<()> {
+    pub fn install(&mut self, clean: bool) -> Result<()> {
         if let Some(repo) = &self.repo {
             repo.require()?;
         }
@@ -363,8 +362,8 @@ impl ResolvedConfig {
             match unit {
                 BuildUnit::Link(ln) => ln.link()?,
                 BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
-                BuildUnit::Package(pkg) => pkg.install()?,
-                BuildUnit::Bootstrap(pm) => pm.require()?,
+                BuildUnit::Install(pkg) => pkg.install()?,
+                BuildUnit::Require(pm) => pm.require()?,
             }
         }
         if let Some(shell) = &self.shell {
@@ -382,7 +381,7 @@ impl ResolvedConfig {
         for unit in &self.build {
             match unit {
                 BuildUnit::Link(ln) => ln.unlink()?,
-                BuildUnit::Package(pkg) if packages => pkg.uninstall()?,
+                BuildUnit::Install(pkg) if packages => pkg.uninstall()?,
                 _ => continue,
             }
         }
@@ -550,8 +549,8 @@ mod tests {
             match unit {
                 BuildUnit::Link(ln) => assert_eq!(ln.tail, links.next().unwrap()),
                 BuildUnit::ShellCmd(_) => comms -= 1,
-                BuildUnit::Package(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
-                BuildUnit::Bootstrap(_) => boots -= 1,
+                BuildUnit::Install(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
+                BuildUnit::Require(_) => boots -= 1,
             }
         }
         assert!(links.next().is_none());

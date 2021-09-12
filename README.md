@@ -56,7 +56,7 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `name` package name
   - `alias` package alias for package managers
   - `managers` list of package managers that provide the package
-- `bootstrap` list of package managers to bootstrap
+- `require` list of package managers to bootstrap
 - `bundle`
   - `manager` single package manager
   - `packages` list of package names to install
@@ -72,21 +72,24 @@ repo:
   remote: https://github.com/jcthomassie/dotfiles.git
 
 build:
-  # Bootstrap package managers
+  # Specify package managers
   - case:
     - positive:
-        spec:
-          platform: windows
+        spec: { distro: ubuntu }
         include:
-          - bootstrap:
+          - require:
+            - apt
+            - apt-get
+    - positive:
+        spec: { platform: windows }
+        include:
+          - require:
             - choco
-    - default:
+    - negative:
+        spec: { platform: windows }
         include:
-          - bootstrap:
+          - require:
             - brew
-
-  - bootstrap:
-    - cargo
 
   # Install packages
   - install:

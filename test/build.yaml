@@ -23,7 +23,7 @@ build:
               spec:
                 user: not_user
               include:
-                - bootstrap:
+                - require:
                   - choco
           - negative:
               spec:
@@ -39,7 +39,7 @@ build:
             - apt
             - apt-get
   # Top level instructions
-  - bootstrap:
+  - require:
     - cargo
     - brew
   - matrix:
