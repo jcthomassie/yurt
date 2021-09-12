@@ -1,13 +1,13 @@
-mod link;
-mod pack;
+mod build;
+mod files;
 mod repo;
-mod yaml;
+mod shell;
 
 use anyhow::{Context, Result};
+use build::{yaml::Config, ResolvedConfig};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
 use log::info;
 use std::env;
-use yaml::{Config, ResolvedConfig};
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
     if let Some(yaml_url) = matches.value_of("yaml-url") {
@@ -18,7 +18,7 @@ fn parse_config(matches: &ArgMatches) -> Result<Config> {
             None => env::var("YURT_BUILD_FILE"),
         }
         .context("Config file not specified")?;
-        let path = link::expand_path(&yaml, None).context("Failed to expand path")?;
+        let path = files::expand_path(&yaml, None).context("Failed to expand path")?;
         Config::from_path(path).context("Failed to parse local build file")
     }
 }
