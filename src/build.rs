@@ -7,7 +7,6 @@ use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::Deserialize;
-use std::process::Output;
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -175,6 +174,7 @@ impl<T> Case<T> {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum BuildUnit {
+    Repo(Repo),
     Link(Link),
     ShellCmd(String),
     Install(Package),
@@ -184,7 +184,8 @@ pub enum BuildUnit {
 impl BuildUnit {
     fn trivial(&self) -> bool {
         match self {
-            Self::Link(ln) => ln.is_valid(),
+            Self::Repo(repo) => repo.is_available(),
+            Self::Link(link) => link.is_valid(),
             Self::ShellCmd(_) => false,
             Self::Install(pkg) => pkg.is_installed(),
             Self::Require(pm) => pm.is_available(),
@@ -220,12 +221,18 @@ auto_convert!(BuildUnit::Require(PackageManager), (self, context) => {
     context.managers.insert(self.clone());
     Ok(self)
 });
+auto_convert!(BuildUnit::Repo(Repo), (self, context) => {
+    let new = self.replace_variables(context)?;
+    context.set_variable(&new.name, "local", &new.local);
+    Ok(new)
+});
 
 type Build = Vec<BuildSet>;
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
+    Repo(Repo),
     Matrix(Matrix<Build>),
     Case(Vec<Case<Build>>),
     Link(Vec<Link>),
@@ -243,6 +250,7 @@ impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
         match self {
+            Self::Repo(r) => Ok(vec![r.resolve(context)?]),
             Self::Matrix(m) => m.resolve(context),
             Self::Case(v) => v.resolve(context),
             Self::Link(v) => v.resolve(context),
@@ -333,7 +341,6 @@ pub struct ResolvedConfig {
     context: Context,
     version: Option<String>,
     shell: Option<Shell>,
-    repo: Option<Repo>,
     build: Vec<BuildUnit>,
 }
 
@@ -369,16 +376,14 @@ impl ResolvedConfig {
     }
 
     pub fn install(&mut self, clean: bool) -> Result<()> {
-        if let Some(repo) = &self.repo {
-            repo.require()?;
-        }
         if clean {
             self.clean()?;
         }
         info!("Starting build steps...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => ln.link()?,
+                BuildUnit::Repo(repo) => drop(repo.require()?),
+                BuildUnit::Link(link) => link.link()?,
                 BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
                 BuildUnit::Install(pkg) => pkg.install()?,
                 BuildUnit::Require(pm) => pm.require()?,
@@ -405,15 +410,6 @@ impl ResolvedConfig {
         }
         Ok(())
     }
-
-    pub fn edit(&self, editor: &str) -> Result<Output> {
-        let path = &self
-            .repo
-            .as_ref()
-            .ok_or_else(|| anyhow!("Dotfile repo root is not set"))?
-            .local;
-        format!("{} {}", editor, path).as_str().run()
-    }
 }
 
 pub mod yaml {
@@ -423,7 +419,6 @@ pub mod yaml {
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
-        pub repo: Option<Repo>,
         pub build: Option<Build>,
     }
 
@@ -467,15 +462,6 @@ pub mod yaml {
                     crate_version!()
                 );
             }
-            // Resolve repo
-            let repo = match self.repo {
-                Some(mut repo) => {
-                    repo = repo.resolve(&mut context)?;
-                    context.set_variable("repo", "local", &repo.local);
-                    Some(repo)
-                }
-                None => None,
-            };
             // Resolve build
             let build = match self.build {
                 Some(raw) => raw.resolve(&mut context)?,
@@ -485,7 +471,6 @@ pub mod yaml {
                 context,
                 version: self.version,
                 shell: self.shell,
-                repo,
                 build,
             })
         }
@@ -554,6 +539,7 @@ mod tests {
     #[test]
     fn build_resolves() {
         let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
+        let mut repos = 1;
         let mut comms = 1;
         let mut boots = 2;
         let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
@@ -569,12 +555,14 @@ mod tests {
         .into_iter();
         for unit in resolved.build.into_iter() {
             match unit {
-                BuildUnit::Link(ln) => assert_eq!(ln.tail, links.next().unwrap()),
+                BuildUnit::Repo(_) => repos -= 1,
+                BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
                 BuildUnit::ShellCmd(_) => comms -= 1,
                 BuildUnit::Install(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
                 BuildUnit::Require(_) => boots -= 1,
             }
         }
+        assert_eq!(repos, 0);
         assert!(links.next().is_none());
         assert_eq!(comms, 0);
         assert_eq!(boots, 0);
@@ -586,7 +574,6 @@ mod tests {
         let mut cfg = Config {
             version: None,
             shell: None,
-            repo: None,
             build: None,
         };
         assert!(!cfg.version_matches(true));

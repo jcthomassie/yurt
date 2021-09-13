@@ -40,13 +40,11 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 
 `shell` set the shell for POSIX systems
 
-`repo`
-
-- `local` path to local dotfile repository
-- `remote` dotfile remote url for cloning
-
 `build`
 
+- `repo`
+  - `local` path to local dotfile repository
+  - `remote` dotfile remote url for cloning
 - `case` list of conditional build steps
   - `positive` if the spec matches the local spec
   - `negative` if the spec does not match the local spec
@@ -67,11 +65,11 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 ---
 version: 0.1.0
 
-repo:
-  local: ~/dotfiles
-  remote: https://github.com/jcthomassie/dotfiles.git
-
 build:
+  # Require dotfile repo
+  - repo:
+      local: ~/dotfiles
+      remote: https://github.com/jcthomassie/dotfiles.git
   # Specify package managers
   - case:
     - positive:
@@ -105,8 +103,8 @@ build:
 
   # Apply symlinks
   - link:
-    - tail: ${{ repo.local }}/.zsh/.zshrc
+    - tail: ${{ dotfiles.local }}/.zsh/.zshrc
       head: ~/.zshrc
-    - tail: ${{ repo.local }}/.gitconfig
+    - tail: ${{ dotfiles.local }}/.gitconfig
       head: ~/.gitconfig
 ```

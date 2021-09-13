@@ -1,10 +1,11 @@
 ---
 version: 0.2.0
-repo:
-  local: ~/dotfiles
-  remote: https://github.com/user/dotfiles.git
 shell: zsh
 build:
+  - repo:
+      name: dotfiles
+      local: ~/dotfiles
+      remote: https://github.com/user/dotfiles.git
   # Conditional instructions
   - case:
     - positive:
@@ -58,4 +59,4 @@ build:
       - package_4
   - run: |
       echo "hello world"
-      echo "repo root ${{ repo.local }}"
+      echo "repo root ${{ dotfiles.local }}"

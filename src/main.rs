@@ -57,14 +57,6 @@ fn clean(matches: &ArgMatches) -> Result<()> {
         .context("Failed to clean link heads")
 }
 
-fn edit(matches: &ArgMatches) -> Result<()> {
-    let editor = env::var("EDITOR").context("System editor is not set")?;
-    parse_resolved(matches)?
-        .edit(&editor)
-        .context("Failed to open dotfiles in editor")?;
-    Ok(())
-}
-
 fn update() -> Result<()> {
     info!("Updating dotfiles...");
     Ok(())
@@ -97,7 +89,6 @@ fn main() -> Result<()> {
         )
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
         .subcommand(App::new("clean").about("Cleans output destinations"))
-        .subcommand(App::new("edit").about("Opens dotfile repo in system editor"))
         .subcommand(
             App::new("show").about("Shows the build config").arg(
                 Arg::new("non-trivial")
@@ -142,7 +133,6 @@ fn main() -> Result<()> {
         Some("uninstall") => uninstall(&matches),
         Some("clean") => clean(&matches),
         Some("update") => update(),
-        Some("edit") => edit(&matches),
         _ => unreachable!(),
     };
     debug!("Runtime: {:?}", timer.elapsed());
