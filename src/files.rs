@@ -16,7 +16,7 @@ pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S, context: Option<&Context>) 
 }
 
 #[derive(Debug)]
-pub enum Status {
+enum Status {
     Valid,
     NullHead,
     NullTail,
@@ -48,7 +48,7 @@ impl Link {
     }
 
     // Get current status of link
-    pub fn status(&self) -> Status {
+    fn status(&self) -> Status {
         if !self.tail.exists() {
             return Status::NullTail;
         }
@@ -64,6 +64,11 @@ impl Link {
             Err(e) if self.head.exists() => Status::InvalidHead(e),
             Err(_) => Status::NullHead,
         }
+    }
+
+    // Return true if the link is valid
+    pub fn is_valid(&self) -> bool {
+        matches!(self.status(), Status::Valid)
     }
 
     // Try to create link if it does not already exist
@@ -121,6 +126,7 @@ mod tests {
     fn status_no_tail() {
         let (_dir, ln) = fixture();
         assert!(matches!(ln.status(), Status::NullTail));
+        assert!(!ln.is_valid());
     }
 
     #[test]
@@ -128,6 +134,7 @@ mod tests {
         let (_dir, ln) = fixture();
         File::create(&ln.tail).expect("Failed to create tempfile");
         assert!(matches!(ln.status(), Status::NullHead));
+        assert!(!ln.is_valid());
     }
 
     #[test]
@@ -136,6 +143,7 @@ mod tests {
         File::create(&ln.tail).expect("Failed to create tempfile");
         symlink::symlink_file(&ln.tail, &ln.head).expect("Failed to create symlink");
         assert!(matches!(ln.status(), Status::Valid));
+        assert!(ln.is_valid());
     }
 
     #[test]
@@ -146,6 +154,7 @@ mod tests {
         File::create(&wrong).expect("Failed to create tempfile");
         symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
         assert!(matches!(ln.status(), Status::InvalidTail(_)));
+        assert!(!ln.is_valid());
     }
 
     #[test]
@@ -154,6 +163,7 @@ mod tests {
         File::create(&ln.tail).expect("Failed to create tempfile");
         File::create(&ln.head).expect("Failed to create tempfile");
         assert!(matches!(ln.status(), Status::InvalidHead(_)));
+        assert!(!ln.is_valid());
     }
 
     #[test]

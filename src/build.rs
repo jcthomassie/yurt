@@ -173,12 +173,23 @@ impl<T> Case<T> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum BuildUnit {
     Link(Link),
     ShellCmd(String),
     Install(Package),
     Require(PackageManager),
+}
+
+impl BuildUnit {
+    fn trivial(&self) -> bool {
+        match self {
+            Self::Link(ln) => ln.is_valid(),
+            Self::ShellCmd(_) => false,
+            Self::Install(pkg) => pkg.is_installed(),
+            Self::Require(pm) => pm.is_available(),
+        }
+    }
 }
 
 trait ResolveUnit {
@@ -327,6 +338,24 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
+    fn filtered_build(&self) -> Vec<BuildUnit> {
+        self.build
+            .iter()
+            .filter(|&unit| !unit.trivial())
+            .cloned()
+            .collect()
+    }
+
+    // Pretty-print the complete build; optionally filter out trivial units
+    pub fn show(&self, nontrivial: bool) -> Result<()> {
+        if nontrivial {
+            println!("{:#?}", self.filtered_build());
+        } else {
+            println!("{:#?}", self);
+        }
+        Ok(())
+    }
+
     // Eliminate elements that will conflict with installation
     pub fn clean(&self) -> Result<()> {
         info!("Cleaning link heads...");

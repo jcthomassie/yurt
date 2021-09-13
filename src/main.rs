@@ -31,8 +31,10 @@ fn parse_resolved(matches: &ArgMatches) -> Result<ResolvedConfig> {
 }
 
 fn show(matches: &ArgMatches) -> Result<()> {
-    println!("{:#?}", parse_resolved(matches)?);
-    Ok(())
+    let sub = matches.subcommand_matches("show").unwrap();
+    parse_resolved(matches)?
+        .show(sub.is_present("non-trivial"))
+        .context("Failed to show resolved build")
 }
 
 fn install(matches: &ArgMatches) -> Result<()> {
@@ -96,7 +98,15 @@ fn main() -> Result<()> {
         .subcommand(App::new("update").about("Updates dotfiles and/or system"))
         .subcommand(App::new("clean").about("Cleans output destinations"))
         .subcommand(App::new("edit").about("Opens dotfile repo in system editor"))
-        .subcommand(App::new("show").about("Shows the build config"))
+        .subcommand(
+            App::new("show").about("Shows the build config").arg(
+                Arg::new("non-trivial")
+                    .about("Hide trivial build units")
+                    .short('n')
+                    .long("non-trivial")
+                    .takes_value(false),
+            ),
+        )
         .arg(
             Arg::new("yaml")
                 .about("YAML build file path")
