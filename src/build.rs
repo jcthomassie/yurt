@@ -194,13 +194,13 @@ impl BuildUnit {
 }
 
 trait ResolveUnit {
-    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
+    fn resolve_unit(self, context: &mut Context) -> Result<BuildUnit>;
 }
 
 macro_rules! auto_convert {
     (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $self:ident, $context:ident, $mapped:expr) => {
         impl ResolveUnit for $inner {
-            fn resolve($self, $context: &mut Context) -> Result<BuildUnit> {
+            fn resolve_unit($self, $context: &mut Context) -> Result<BuildUnit> {
                 ($mapped).map(BuildUnit::$outer)
             }
         }
@@ -243,22 +243,31 @@ pub enum BuildSet {
 }
 
 trait Resolve {
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>;
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
+
+    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>
+    where
+        Self: Sized,
+    {
+        let mut output = Vec::new();
+        self.resolve_into(context, &mut output)?;
+        Ok(output)
+    }
 }
 
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
-        match self {
-            Self::Repo(r) => Ok(vec![r.resolve(context)?]),
-            Self::Matrix(m) => m.resolve(context),
-            Self::Case(v) => v.resolve(context),
-            Self::Link(v) => v.resolve(context),
-            Self::Run(s) => Ok(vec![s.resolve(context)?]),
-            Self::Install(v) => v.resolve(context),
-            Self::Bundle(v) => v.resolve(context),
-            Self::Require(v) => v.resolve(context),
-        }
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        Ok(match self {
+            Self::Repo(r) => output.push(r.resolve_unit(context)?),
+            Self::Matrix(m) => m.resolve_into(context, output)?,
+            Self::Case(v) => v.resolve_into(context, output)?,
+            Self::Link(v) => v.resolve_into(context, output)?,
+            Self::Run(s) => output.push(s.resolve_unit(context)?),
+            Self::Install(v) => v.resolve_into(context, output)?,
+            Self::Bundle(v) => v.resolve_into(context, output)?,
+            Self::Require(v) => v.resolve_into(context, output)?,
+        })
     }
 }
 
@@ -266,28 +275,30 @@ impl<T> Resolve for Vec<T>
 where
     T: ResolveUnit,
 {
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
-        self.into_iter().map(|u| u.resolve(context)).collect()
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        for raw in self {
+            output.push(raw.resolve_unit(context)?);
+        }
+        Ok(())
     }
 }
 
 impl Resolve for Build {
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
-        let mut units = Vec::new();
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         for build in self {
-            units.extend(build.resolve(context)?);
+            build.resolve_into(context, output)?;
         }
-        Ok(units)
+        Ok(())
     }
 }
 
 impl Resolve for PackageBundle {
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let manager = self.manager;
-        self.packages
-            .into_iter()
-            .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
-            .collect()
+        for name in self.packages {
+            output.push(Package::new(name, vec![manager.clone()]).resolve_unit(context)?);
+        }
+        Ok(())
     }
 }
 
@@ -295,20 +306,19 @@ impl<T> Resolve for Matrix<T>
 where
     T: Resolve + Clone,
 {
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let len = self.length()?;
         let mut iters: Vec<_> = self.values.iter().map(|(k, v)| (k, v.iter())).collect();
         let mut context = context.clone();
-        let mut units = Vec::with_capacity(len);
         for _ in 0..len {
             for (variable, values) in &mut iters {
                 // Iterator size has been validated as count; unwrap here is safe
                 let value = &context.replace_variables(values.next().unwrap())?;
                 context.set_variable("matrix", variable, value);
             }
-            units.extend(self.include.clone().resolve(&mut context)?);
+            self.include.clone().resolve_into(&mut context, output)?;
         }
-        Ok(units)
+        Ok(())
     }
 }
 
@@ -317,19 +327,18 @@ where
     T: Resolve,
 {
     // Process a block of cases
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;
-        let mut units = Vec::new();
         for case in self {
             match case.rule(default, &context.locale) {
                 Some(build) => {
                     default = false;
-                    units.extend(build.resolve(context)?);
+                    build.resolve_into(context, output)?;
                 }
                 None => continue,
             };
         }
-        Ok(units)
+        Ok(())
     }
 }
 
