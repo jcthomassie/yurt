@@ -283,12 +283,10 @@ impl Resolve for Build {
 
 impl Resolve for PackageBundle {
     fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>> {
-        let manager = self.manager.clone();
+        let manager = self.manager;
         self.packages
             .into_iter()
-            .map(|name| {
-                Package::new(name, Some(manager.clone()).into_iter().collect()).resolve(context)
-            })
+            .map(|name| Package::new(name, vec![manager.clone()]).resolve(context))
             .collect()
     }
 }

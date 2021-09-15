@@ -162,7 +162,7 @@ impl Package {
             if let Some(manager) = self.managers.first() {
                 let res = manager.install(&self.name);
                 return match alias {
-                    Some(a) if res.is_err() => manager.install(a.as_str()),
+                    Some(ref a) if res.is_err() => manager.install(a),
                     _ => res,
                 };
             }
