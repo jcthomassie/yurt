@@ -105,11 +105,15 @@ pub struct Package {
 }
 
 impl Package {
-    pub fn new(name: String, managers: Vec<PackageManager>) -> Self {
+    pub fn new(
+        name: String,
+        managers: Vec<PackageManager>,
+        aliases: Option<BTreeMap<PackageManager, String>>,
+    ) -> Self {
         Package {
             name,
             managers,
-            aliases: None,
+            aliases,
         }
     }
 
@@ -185,12 +189,6 @@ impl Package {
         }
         Ok(())
     }
-}
-
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-pub struct PackageBundle {
-    pub manager: PackageManager,
-    pub packages: Vec<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Deserialize, Hash, Clone, PartialOrd, Ord)]
@@ -525,17 +523,19 @@ mod tests {
 
         #[test]
         fn check_installed() {
-            assert!(Package::new("cargo".to_string(), managers!()).is_installed());
+            assert!(Package::new("cargo".to_string(), managers!(), None).is_installed());
         }
 
         #[test]
         fn check_not_installed() {
-            assert!(!Package::new("some_missing_package".to_string(), managers!()).is_installed());
+            assert!(
+                !Package::new("some_missing_package".to_string(), managers!(), None).is_installed()
+            );
         }
 
         #[test]
         fn prune_drained() {
-            assert!(Package::new("package".to_string(), managers!())
+            assert!(Package::new("package".to_string(), managers!(), None)
                 .prune(&Context::default())
                 .managers
                 .is_empty());
@@ -546,7 +546,7 @@ mod tests {
             let mut context = Context::default();
             context.managers.extend(managers!());
             assert_eq!(
-                Package::new("package".to_string(), managers!())
+                Package::new("package".to_string(), managers!(), None)
                     .prune(&context)
                     .managers,
                 managers!()

@@ -14,8 +14,6 @@ build:
         include:
         - install:
           - name: not_package
-            managers:
-            - apt
     - default:
         include:
         # Nested conditional
@@ -32,16 +30,12 @@ build:
               include:
                 - install:
                   - name: package_0
-                    managers:
-                      - choco
         - install:
           - name: package_1
             managers: [ apt, apt-get ]
             aliases: { apt: package_1-alias }
   # Top level instructions
-  - require:
-    - cargo
-    - brew
+  - require: [ cargo, brew ]
   - matrix:
       values:
         number: [ 1, 2, 3 ]
@@ -50,12 +44,10 @@ build:
       - link:
         - tail: dir_${{ matrix.letter }}/tail_${{ matrix.number }}
           head: dir_${{ matrix.letter }}/head_${{ matrix.number }}
-  - bundle:
-      manager: brew
-      packages:
-      - package_2
-      - package_3
-      - package_4
+  - install:
+    - name: package_2
+    - name: package_3
+    - name: package_4
   - run: |
       echo "hello world"
       echo "repo root ${{ dotfiles.local }}"

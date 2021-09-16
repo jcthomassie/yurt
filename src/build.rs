@@ -1,6 +1,6 @@
 use super::files::Link;
 use super::repo::Repo;
-use super::shell::{Package, PackageBundle, PackageManager, Shell, ShellCmd};
+use super::shell::{Package, PackageManager, Shell, ShellCmd};
 use anyhow::{anyhow, bail, ensure, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
@@ -237,9 +237,15 @@ pub enum BuildSet {
     Case(Vec<Case<Build>>),
     Link(Vec<Link>),
     Run(String),
-    Install(Vec<Package>),
-    Bundle(PackageBundle),
+    Install(Vec<PackageSpec>),
     Require(Vec<PackageManager>),
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub struct PackageSpec {
+    name: String,
+    managers: Option<Vec<PackageManager>>,
+    aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
 trait Resolve {
@@ -287,19 +293,23 @@ impl Resolve for BuildSet {
             Self::Link(v) => v.resolve_into(context, output)?,
             Self::Run(s) => output.push(s.resolve_unit(context)?),
             Self::Install(v) => v.resolve_into(context, output)?,
-            Self::Bundle(v) => v.resolve_into(context, output)?,
             Self::Require(v) => v.resolve_into(context, output)?,
         }
         Ok(())
     }
 }
 
-impl Resolve for PackageBundle {
+impl Resolve for PackageSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let manager = self.manager;
-        for name in self.packages {
-            output.push(Package::new(name, vec![manager.clone()]).resolve_unit(context)?);
-        }
+        output.push(
+            Package::new(
+                self.name,
+                self.managers
+                    .unwrap_or_else(|| context.managers.iter().cloned().collect()),
+                self.aliases,
+            )
+            .resolve_unit(context)?,
+        );
         Ok(())
     }
 }
