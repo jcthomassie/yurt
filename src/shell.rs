@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
+    collections::BTreeMap,
     env,
     io::{Read, Write},
     process::{Child, Command, Output, Stdio},
@@ -99,24 +100,29 @@ where
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     pub name: String,
-    alias: Option<String>,
     managers: Vec<PackageManager>,
+    aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
 impl Package {
     pub fn new(name: String, managers: Vec<PackageManager>) -> Self {
         Package {
             name,
-            alias: None,
             managers,
+            aliases: None,
         }
     }
 
     pub fn replace_variables(self, context: &Context) -> Result<Self> {
         Ok(Package {
             name: context.replace_variables(&self.name)?,
-            alias: match self.alias {
-                Some(a) => Some(context.replace_variables(&a)?),
+            aliases: match self.aliases {
+                Some(mut map) => {
+                    for (_, alias) in map.iter_mut() {
+                        *alias = context.replace_variables(alias)?;
+                    }
+                    Some(map)
+                }
                 None => None,
             },
             ..self
@@ -128,43 +134,41 @@ impl Package {
             managers: self
                 .managers
                 .into_iter()
-                .filter(|pm| context.managers.contains(pm))
+                .filter(|manager| context.managers.contains(manager))
                 .collect(),
             ..self
         }
     }
 
-    fn _is_installed(&self, name: &str) -> bool {
-        if which_has(name) {
-            return true;
-        }
-        for pm in &self.managers {
-            if pm.has(name) {
-                return true;
-            }
-        }
-        false
+    fn get_alias(&self, manager: &PackageManager) -> Option<&String> {
+        self.aliases
+            .as_ref()
+            .and_then(|aliases| aliases.get(manager))
+    }
+
+    fn get_name(&self, manager: &PackageManager) -> &String {
+        self.get_alias(manager).unwrap_or(&self.name)
+    }
+
+    fn manager_names(&self) -> impl Iterator<Item = (&PackageManager, &String)> {
+        self.managers
+            .iter()
+            .map(move |manager| (manager, self.get_name(manager)))
     }
 
     pub fn is_installed(&self) -> bool {
-        self._is_installed(&self.name)
-            || match &self.alias {
-                Some(alias) => self._is_installed(alias),
-                None => false,
-            }
+        which_has(&self.name)
+            || self
+                .manager_names()
+                .any(|(manager, package)| manager.has(package))
     }
 
     pub fn install(&self) -> Result<()> {
         if self.is_installed() {
             info!("Package already installed: {}", self.name);
         } else {
-            let alias = self.alias.clone();
-            if let Some(manager) = self.managers.first() {
-                let res = manager.install(&self.name);
-                return match alias {
-                    Some(ref a) if res.is_err() => manager.install(a),
-                    _ => res,
-                };
+            if let Some((manager, package)) = self.manager_names().next() {
+                manager.install(package)?;
             }
             warn!("Package unavailable: {}", self.name);
         }
@@ -173,13 +177,9 @@ impl Package {
 
     pub fn uninstall(&self) -> Result<()> {
         if self.is_installed() {
-            for pm in &self.managers {
-                if pm.has(&self.name) {
-                    pm.uninstall(&self.name)?;
-                    continue;
-                }
-                if matches!(self.alias, Some(ref a) if pm.has(a)) {
-                    pm.uninstall(&self.alias.clone().unwrap())?;
+            for (manager, package) in self.manager_names() {
+                if manager.has(package) {
+                    manager.uninstall(package)?;
                 }
             }
         }
@@ -502,6 +502,25 @@ mod tests {
             () => {
                 vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
             };
+        }
+
+        #[test]
+        fn get_name_for_manager() {
+            let mut managers = managers!();
+            let aliased = managers.pop().unwrap();
+            let package = Package {
+                name: "name".to_string(),
+                managers: managers!(),
+                aliases: Some({
+                    let mut map = BTreeMap::new();
+                    map.insert(aliased.clone(), "alias".into());
+                    map
+                }),
+            };
+            assert_eq!(package.get_name(&aliased), "alias");
+            for manager in &managers {
+                assert_eq!(package.get_name(manager), "name");
+            }
         }
 
         #[test]

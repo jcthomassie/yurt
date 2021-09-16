@@ -36,9 +36,8 @@ build:
                       - choco
         - install:
           - name: package_1
-            managers:
-            - apt
-            - apt-get
+            managers: [ apt, apt-get ]
+            aliases: { apt: package_1-alias }
   # Top level instructions
   - require:
     - cargo
