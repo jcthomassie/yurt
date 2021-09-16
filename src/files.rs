@@ -1,4 +1,3 @@
-use super::build::Context;
 use anyhow::{anyhow, Result};
 use log::info;
 use serde::Deserialize;
@@ -7,13 +6,6 @@ use std::{
     io::{Error, ErrorKind},
     path::PathBuf,
 };
-
-pub fn expand_path<S: ?Sized + AsRef<str>>(path: &S, context: Option<&Context>) -> Result<PathBuf> {
-    Ok(PathBuf::from(match context {
-        Some(c) => c.replace_variables(path.as_ref()),
-        None => Context::default().replace_variables(path.as_ref()),
-    }?))
-}
 
 #[derive(Debug)]
 enum Status {
@@ -37,14 +29,6 @@ impl Link {
             head: head.into(),
             tail: tail.into(),
         }
-    }
-
-    // Returns new link with paths expanded
-    pub fn replace_variables(&self, context: &mut Context) -> Result<Self> {
-        Ok(Self::new(
-            expand_path(self.head.to_str().unwrap(), Some(context))?,
-            expand_path(self.tail.to_str().unwrap(), Some(context))?,
-        ))
     }
 
     // Get current status of link

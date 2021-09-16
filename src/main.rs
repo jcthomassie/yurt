@@ -10,15 +10,14 @@ use log::{debug, info};
 use std::{env, time::Instant};
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
-    if let Some(yaml_url) = matches.value_of("yaml-url") {
-        Config::from_url(yaml_url).context("Failed to parse remote build file")
+    if let Some(url) = matches.value_of("yaml-url") {
+        Config::from_url(url).context("Failed to parse remote build file")
     } else {
-        let yaml = match matches.value_of("yaml") {
+        let path = match matches.value_of("yaml") {
             Some(path) => Ok(path.to_string()),
             None => env::var("YURT_BUILD_FILE"),
         }
         .context("Config file not specified")?;
-        let path = files::expand_path(&yaml, None).context("Failed to expand path")?;
         Config::from_path(path).context("Failed to parse local build file")
     }
 }

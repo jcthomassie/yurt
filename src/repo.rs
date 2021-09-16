@@ -1,4 +1,3 @@
-use super::build::Context;
 use anyhow::Result;
 use git2::Repository;
 use serde::Deserialize;
@@ -11,13 +10,6 @@ pub struct Repo {
 }
 
 impl Repo {
-    pub fn replace_variables(self, context: &mut Context) -> Result<Self> {
-        Ok(Self {
-            local: context.replace_variables(&self.local)?,
-            ..self
-        })
-    }
-
     pub fn open(&self) -> Result<Repository> {
         Ok(Repository::open(&self.local)?)
     }

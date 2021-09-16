@@ -23,11 +23,11 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-pub struct Context {
+struct Context {
     variables: BTreeMap<String, String>,
-    pub managers: BTreeSet<PackageManager>,
-    pub locale: Locale<String>,
-    pub home_dir: PathBuf,
+    managers: BTreeSet<PackageManager>,
+    locale: Locale<String>,
+    home_dir: PathBuf,
 }
 
 impl Context {
@@ -37,7 +37,7 @@ impl Context {
             .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
 
-    pub fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
+    fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
         if namespace == "env" {
             Ok(env::var(variable)?)
         } else {
@@ -48,7 +48,7 @@ impl Context {
         }
     }
 
-    pub fn replace_variables(&self, input: &str) -> Result<String> {
+    fn replace_variables(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -238,22 +238,34 @@ macro_rules! resolve_unit {
     };
 }
 
-resolve_unit!(Link, (self, context) => BuildUnit::Link(self.replace_variables(context)?));
+resolve_unit!(Link, (self, context) => {
+    BuildUnit::Link(Link::new(
+        context.replace_variables(self.head.to_str().unwrap())?,
+        context.replace_variables(self.tail.to_str().unwrap())?,
+    ))
+});
 resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
 resolve_unit!(PackageSpec, (self, context) => {
-    BuildUnit::Install(Package::new(
-        self.name,
-        self.managers
-            .unwrap_or_else(|| context.managers.iter().cloned().collect()),
-        self.aliases,
-    ).prune(context))
+    BuildUnit::Install(Package {
+        name: self.name,
+        managers: self
+            .managers
+            .unwrap_or_else(|| context.managers.iter().cloned().collect())
+            .into_iter()
+            .filter(|manager| context.managers.contains(manager))
+            .collect(),
+        aliases: self.aliases,
+    })
 });
 resolve_unit!(PackageManager, (self, context) => {
     context.managers.insert(self.clone());
     BuildUnit::Require(self)
 });
 resolve_unit!(Repo, (self, context) => {
-    let new = self.replace_variables(context)?;
+    let new = Repo {
+        local: context.replace_variables(&self.local)?,
+        ..self
+    };
     context.set_variable(&new.name, "local", &new.local);
     BuildUnit::Repo(new)
 });
@@ -575,6 +587,52 @@ mod tests {
         cfg.version = Some(crate_version!().to_string());
         assert!(cfg.version_matches(true));
         assert!(cfg.version_matches(false));
+    }
+
+    macro_rules! unpack {
+        (@unit $value:expr, BuildUnit::$variant:ident) => {
+            if let BuildUnit::$variant(ref unwrapped) = $value {
+                unwrapped
+            } else {
+                panic!("Failed to unpack build unit");
+            }
+        };
+        (@unit_vec $value:expr, BuildUnit::$variant:ident) => {
+            {
+                assert_eq!($value.len(), 1);
+                unpack!(@unit ($value)[0], BuildUnit::$variant)
+            }
+        };
+    }
+
+    #[test]
+    fn package_manager_prune_empty() {
+        #[rustfmt::skip]
+        let spec: PackageSpec = serde_yaml::from_str("
+            name: some-package
+        ").unwrap();
+        let mut context = Context::default();
+        // No managers remain
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert!(package.managers.is_empty());
+    }
+
+    #[test]
+    fn package_manager_prune_some() {
+        #[rustfmt::skip]
+        let spec: PackageSpec = serde_yaml::from_str("
+            name: some-package
+            managers: [ apt, brew ]
+        ").unwrap();
+        // Add partially overlapping managers
+        let mut context = Context::default();
+        context.managers.insert(PackageManager::Cargo);
+        context.managers.insert(PackageManager::Brew);
+        // Overlap remains
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert_eq!(package.managers, vec![PackageManager::Brew]);
     }
 
     #[test]

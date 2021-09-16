@@ -1,4 +1,3 @@
-use super::build::Context;
 use anyhow::{anyhow, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
@@ -100,34 +99,11 @@ where
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     pub name: String,
-    managers: Vec<PackageManager>,
-    aliases: Option<BTreeMap<PackageManager, String>>,
+    pub managers: Vec<PackageManager>,
+    pub aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
 impl Package {
-    pub fn new(
-        name: String,
-        managers: Vec<PackageManager>,
-        aliases: Option<BTreeMap<PackageManager, String>>,
-    ) -> Self {
-        Package {
-            name,
-            managers,
-            aliases,
-        }
-    }
-
-    pub fn prune(self, context: &Context) -> Self {
-        Package {
-            managers: self
-                .managers
-                .into_iter()
-                .filter(|manager| context.managers.contains(manager))
-                .collect(),
-            ..self
-        }
-    }
-
     fn get_alias(&self, manager: &PackageManager) -> Option<&String> {
         self.aliases
             .as_ref()
@@ -507,34 +483,22 @@ mod tests {
 
         #[test]
         fn check_installed() {
-            assert!(Package::new("cargo".to_string(), managers!(), None).is_installed());
+            assert!(Package {
+                name: "cargo".to_string(),
+                managers: managers!(),
+                aliases: None,
+            }
+            .is_installed());
         }
 
         #[test]
         fn check_not_installed() {
-            assert!(
-                !Package::new("some_missing_package".to_string(), managers!(), None).is_installed()
-            );
-        }
-
-        #[test]
-        fn prune_drained() {
-            assert!(Package::new("package".to_string(), managers!(), None)
-                .prune(&Context::default())
-                .managers
-                .is_empty());
-        }
-
-        #[test]
-        fn prune_unchanged() {
-            let mut context = Context::default();
-            context.managers.extend(managers!());
-            assert_eq!(
-                Package::new("package".to_string(), managers!(), None)
-                    .prune(&context)
-                    .managers,
-                managers!()
-            );
+            assert!(!Package {
+                name: "some_missing_package".to_string(),
+                managers: managers!(),
+                aliases: None
+            }
+            .is_installed());
         }
     }
 }
