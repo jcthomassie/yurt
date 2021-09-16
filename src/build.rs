@@ -258,7 +258,7 @@ trait Resolve {
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        Ok(match self {
+        match self {
             Self::Repo(r) => output.push(r.resolve_unit(context)?),
             Self::Matrix(m) => m.resolve_into(context, output)?,
             Self::Case(v) => v.resolve_into(context, output)?,
@@ -267,7 +267,8 @@ impl Resolve for BuildSet {
             Self::Install(v) => v.resolve_into(context, output)?,
             Self::Bundle(v) => v.resolve_into(context, output)?,
             Self::Require(v) => v.resolve_into(context, output)?,
-        })
+        }
+        Ok(())
     }
 }
 
