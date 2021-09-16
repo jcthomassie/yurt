@@ -255,6 +255,28 @@ trait Resolve {
     }
 }
 
+impl<T> Resolve for T
+where
+    T: ResolveUnit,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        output.push(self.resolve_unit(context)?);
+        Ok(())
+    }
+}
+
+impl<T> Resolve for Vec<T>
+where
+    T: Resolve,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        for raw in self {
+            raw.resolve_into(context, output)?;
+        }
+        Ok(())
+    }
+}
+
 impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
@@ -267,27 +289,6 @@ impl Resolve for BuildSet {
             Self::Install(v) => v.resolve_into(context, output)?,
             Self::Bundle(v) => v.resolve_into(context, output)?,
             Self::Require(v) => v.resolve_into(context, output)?,
-        }
-        Ok(())
-    }
-}
-
-impl<T> Resolve for Vec<T>
-where
-    T: ResolveUnit,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        for raw in self {
-            output.push(raw.resolve_unit(context)?);
-        }
-        Ok(())
-    }
-}
-
-impl Resolve for Build {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        for build in self {
-            build.resolve_into(context, output)?;
         }
         Ok(())
     }
