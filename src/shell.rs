@@ -117,22 +117,6 @@ impl Package {
         }
     }
 
-    pub fn replace_variables(self, context: &Context) -> Result<Self> {
-        Ok(Package {
-            name: context.replace_variables(&self.name)?,
-            aliases: match self.aliases {
-                Some(mut map) => {
-                    for (_, alias) in map.iter_mut() {
-                        *alias = context.replace_variables(alias)?;
-                    }
-                    Some(map)
-                }
-                None => None,
-            },
-            ..self
-        })
-    }
-
     pub fn prune(self, context: &Context) -> Self {
         Package {
             managers: self

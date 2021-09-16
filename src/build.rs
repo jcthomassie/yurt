@@ -193,40 +193,6 @@ impl BuildUnit {
     }
 }
 
-trait ResolveUnit {
-    fn resolve_unit(self, context: &mut Context) -> Result<BuildUnit>;
-}
-
-macro_rules! auto_convert {
-    (@impl_try_from BuildUnit::$outer:ident, $inner:ty, $self:ident, $context:ident, $mapped:expr) => {
-        impl ResolveUnit for $inner {
-            fn resolve_unit($self, $context: &mut Context) -> Result<BuildUnit> {
-                ($mapped).map(BuildUnit::$outer)
-            }
-        }
-    };
-
-    (BuildUnit::$outer:ident($inner:ty)) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, self, _context, Ok(self));
-    };
-    (BuildUnit::$outer:ident($inner:ty), ($a:ident, $b:ident) => $mapped:expr) => {
-        auto_convert!(@impl_try_from BuildUnit::$outer, $inner, $a, $b, $mapped);
-    };
-}
-
-auto_convert!(BuildUnit::Link(Link), (self, context) => self.replace_variables(context));
-auto_convert!(BuildUnit::ShellCmd(String), (self, context) => context.replace_variables(&self));
-auto_convert!(BuildUnit::Install(Package), (self, context) => self.replace_variables(context).map(|p| p.prune(context)));
-auto_convert!(BuildUnit::Require(PackageManager), (self, context) => {
-    context.managers.insert(self.clone());
-    Ok(self)
-});
-auto_convert!(BuildUnit::Repo(Repo), (self, context) => {
-    let new = self.replace_variables(context)?;
-    context.set_variable(&new.name, "local", &new.local);
-    Ok(new)
-});
-
 type Build = Vec<BuildSet>;
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -261,15 +227,36 @@ trait Resolve {
     }
 }
 
-impl<T> Resolve for T
-where
-    T: ResolveUnit,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        output.push(self.resolve_unit(context)?);
-        Ok(())
-    }
+macro_rules! resolve_unit {
+    ($type:ty, ($self:ident, $context:ident) => $mapped:expr) => {
+        impl Resolve for $type {
+            fn resolve_into($self, $context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+                output.push($mapped);
+                Ok(())
+            }
+        }
+    };
 }
+
+resolve_unit!(Link, (self, context) => BuildUnit::Link(self.replace_variables(context)?));
+resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
+resolve_unit!(PackageSpec, (self, context) => {
+    BuildUnit::Install(Package::new(
+        self.name,
+        self.managers
+            .unwrap_or_else(|| context.managers.iter().cloned().collect()),
+        self.aliases,
+    ).prune(context))
+});
+resolve_unit!(PackageManager, (self, context) => {
+    context.managers.insert(self.clone());
+    BuildUnit::Require(self)
+});
+resolve_unit!(Repo, (self, context) => {
+    let new = self.replace_variables(context)?;
+    context.set_variable(&new.name, "local", &new.local);
+    BuildUnit::Repo(new)
+});
 
 impl<T> Resolve for Vec<T>
 where
@@ -287,29 +274,14 @@ impl Resolve for BuildSet {
     // Recursively resolve all case units; collect into single vec
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
-            Self::Repo(r) => output.push(r.resolve_unit(context)?),
+            Self::Repo(r) => r.resolve_into(context, output)?,
             Self::Matrix(m) => m.resolve_into(context, output)?,
             Self::Case(v) => v.resolve_into(context, output)?,
             Self::Link(v) => v.resolve_into(context, output)?,
-            Self::Run(s) => output.push(s.resolve_unit(context)?),
+            Self::Run(s) => s.resolve_into(context, output)?,
             Self::Install(v) => v.resolve_into(context, output)?,
             Self::Require(v) => v.resolve_into(context, output)?,
         }
-        Ok(())
-    }
-}
-
-impl Resolve for PackageSpec {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        output.push(
-            Package::new(
-                self.name,
-                self.managers
-                    .unwrap_or_else(|| context.managers.iter().cloned().collect()),
-                self.aliases,
-            )
-            .resolve_unit(context)?,
-        );
         Ok(())
     }
 }
