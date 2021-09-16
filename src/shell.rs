@@ -331,9 +331,9 @@ impl PackageManager {
 // Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(windows))]
     let name = "which";
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     let name = "where";
     match name.call_bool(&[cmd]) {
         Ok(has) => has,
@@ -367,12 +367,12 @@ impl Cmd for Shell {
 }
 
 impl Default for Shell {
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     fn default() -> Shell {
         Shell::Powershell
     }
 
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(windows))]
     fn default() -> Shell {
         Shell::Sh
     }
@@ -404,7 +404,7 @@ impl Shell {
     }
 
     // Set self as the default system shell
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(windows))]
     pub fn chsh(&self) -> Result<()> {
         info!("Current shell: {}", SHELL.name());
         if std::mem::discriminant(self) == std::mem::discriminant(&SHELL) {
@@ -414,7 +414,7 @@ impl Shell {
         pipe("which", &[], "chsh", &["-s"])?;
         Ok(())
     }
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     pub fn chsh(&self) -> Result<()> {
         warn!("Shell change not implemented for windows");
         Ok(())
