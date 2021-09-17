@@ -1,11 +1,7 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Error, Result};
 use log::info;
 use serde::Deserialize;
-use std::{
-    fs,
-    io::{Error, ErrorKind},
-    path::PathBuf,
-};
+use std::{fs, path::PathBuf};
 
 #[derive(Debug)]
 enum Status {
@@ -38,14 +34,12 @@ impl Link {
         }
         match self.head.read_link() {
             Ok(target) if target == self.tail => Status::Valid,
-            Ok(target) => Status::InvalidTail(Error::new(
-                ErrorKind::AlreadyExists,
-                format!(
-                    "link source points to wrong target: {:?}@=>{:?} != {:?}",
-                    self.head, target, self.tail
-                ),
+            Ok(target) => Status::InvalidTail(anyhow!(
+                "link source points to wrong target: {:?} -> {:?}",
+                self.head,
+                target
             )),
-            Err(e) if self.head.exists() => Status::InvalidHead(e),
+            Err(e) if self.head.exists() => Status::InvalidHead(anyhow!(e)),
             Err(_) => Status::NullHead,
         }
     }
@@ -60,15 +54,15 @@ impl Link {
         match self.status() {
             Status::Valid => Ok(()),
             Status::NullHead => {
-                info!("Linking {:?}@->{:?}", &self.head, &self.tail);
+                info!("Linking {:?} -> {:?}", &self.head, &self.tail);
                 if let Some(dir) = self.head.parent() {
                     fs::create_dir_all(dir)?;
                 }
                 Ok(symlink::symlink_file(&self.tail, &self.head)?)
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
-            Status::InvalidHead(e) => Err(anyhow!(e).context("Invalid link head")),
-            Status::InvalidTail(e) => Err(anyhow!(e).context("Invalid link tail")),
+            Status::InvalidHead(e) => Err(e.context("Invalid link head")),
+            Status::InvalidTail(e) => Err(e.context("Invalid link tail")),
         }
     }
 
@@ -76,7 +70,7 @@ impl Link {
     pub fn unlink(&self) -> Result<()> {
         match self.status() {
             Status::Valid => {
-                info!("Unlinking {:?}@->{:?}", &self.head, &self.tail);
+                info!("Unlinking {:?} -> {:?}", &self.head, &self.tail);
                 Ok(symlink::remove_symlink_file(&self.head)?)
             }
             _ => Ok(()),
