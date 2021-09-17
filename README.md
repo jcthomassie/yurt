@@ -4,7 +4,7 @@
 [![build](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml/badge.svg?event=release)](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml)
 [![release](https://img.shields.io/github/v/release/jcthomassie/yurt?include_prereleases&label=release)](https://github.com/jcthomassie/yurt/releases/latest)
 
-Experimental cross-platform dotfile and package manager.
+Experimental cross-platform dotfile and package manager wrapper.
 
 Build instructions are specified via YAML. Features include symlink application, installation of packages (and package managers), execution of remote shell scripts via curl, and system specific build steps.
 
@@ -43,8 +43,14 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 `build`
 
 - `repo`
-  - `local` path to local dotfile repository
-  - `remote` dotfile remote url for cloning
+  - `local` local repo directory path
+  - `remote` remote url for cloning the repo
+- `namespace` map of substitution values
+  - `name` name of the namespace
+  - `values` variable definitions
+- `matrix` repeat include block for each value
+  - `values` values to substitute in the include block
+  - `include` build steps to be repeated
 - `case` list of conditional build steps
   - `positive` if the spec matches the local spec
   - `negative` if the spec does not match the local spec
@@ -52,24 +58,26 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 - `link` list of symlinks to be applied
 - `install` list of packages to install
   - `name` package name
-  - `alias` package alias for package managers
-  - `managers` list of package managers that provide the package
+  - `managers` (optional) list of package managers that provide the package
+  - `aliases` (optional) package aliases for specific package managers
 - `require` list of package managers to bootstrap
-- `bundle`
-  - `manager` single package manager
-  - `packages` list of package names to install
+
+Some build steps (such as `require` and `namespace`) modify the resolver state.
+The order of build steps may change the resolved values.
 
 ### Example
 
 ```yaml
 ---
-version: 0.1.0
-
+version: 0.2.0
+shell: zsh
 build:
   # Require dotfile repo
   - repo:
+      name: dotfiles
       local: ~/dotfiles
       remote: https://github.com/jcthomassie/dotfiles.git
+
   # Specify package managers
   - case:
     - positive:
@@ -91,15 +99,15 @@ build:
 
   # Install packages
   - install:
-    - name: zsh
-      managers:
-      - brew
-      - apt-get
+    - name: bat
     - name: git
       managers:
-      - brew
       - apt
       - choco
+    - name: delta
+      aliases:
+        brew: git-delta
+        cargo: git-delta
 
   # Apply symlinks
   - link:
