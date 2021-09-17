@@ -267,15 +267,10 @@ resolve_unit!(PackageManager, (self, context) => {
     BuildUnit::Require(self)
 });
 resolve_unit!(Repo, (self, context) => {
-    let new = Repo {
-        local: context.replace_variables(&self.local)?,
-        ..self
-    };
-    context.set_variable(
-        new.local.split('/').last().ok_or_else(|| anyhow!("Repo local path is empty"))?,
-        "local",
-        &new.local
-    );
+    let path = context.replace_variables(&self.path)?;
+    let new = Repo { path, ..self };
+    let name = new.path.split('/').last().ok_or_else(|| anyhow!("Repo local path is empty"))?;
+    context.set_variable(name, "path", &new.path);
     BuildUnit::Repo(new)
 });
 

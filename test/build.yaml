@@ -3,8 +3,8 @@ version: 0.2.0
 shell: zsh
 build:
   - repo:
-      local: ~/dotfiles
-      remote: https://github.com/user/dotfiles.git
+      path: ~/dotfiles
+      url: https://github.com/user/dotfiles.git
   # Conditional instructions
   - case:
     - positive:
@@ -55,4 +55,4 @@ build:
     - name: ${{ names.gamma }}
   - run: |
       echo "hello world"
-      echo "repo root ${{ dotfiles.local }}"
+      echo "repo root ${{ dotfiles.path }}"

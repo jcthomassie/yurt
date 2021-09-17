@@ -4,20 +4,17 @@ use serde::Deserialize;
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Repo {
-    pub local: String,
-    pub remote: String,
+    pub path: String,
+    pub url: String,
 }
 
 impl Repo {
     pub fn open(&self) -> Result<Repository> {
-        Ok(Repository::open(&self.local)?)
+        Ok(Repository::open(&self.path)?)
     }
 
     pub fn clone(&self) -> Result<Repository> {
-        Ok(Repository::clone_recurse(
-            self.remote.as_ref(),
-            &self.local,
-        )?)
+        Ok(Repository::clone_recurse(&self.url, &self.path)?)
     }
 
     pub fn require(&self) -> Result<Repository> {

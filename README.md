@@ -43,8 +43,8 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 `build`
 
 - `repo`
-  - `local` local repo directory path
-  - `remote` remote url for cloning the repo
+  - `path` local repo directory path
+  - `url` remote url for cloning the repo
 - `namespace` map of substitution values
   - `name` name of the namespace
   - `values` variable definitions
@@ -74,8 +74,8 @@ shell: zsh
 build:
   # Require dotfile repo
   - repo:
-      local: ~/dotfiles
-      remote: https://github.com/jcthomassie/dotfiles.git
+      path: ~/dotfiles
+      url: https://github.com/jcthomassie/dotfiles.git
 
   # Specify package managers
   - case:
@@ -110,8 +110,8 @@ build:
 
   # Apply symlinks
   - link:
-    - tail: ${{ dotfiles.local }}/.zsh/.zshrc
+    - tail: ${{ dotfiles.path }}/.zsh/.zshrc
       head: ~/.zshrc
-    - tail: ${{ dotfiles.local }}/.gitconfig
+    - tail: ${{ dotfiles.path }}/.gitconfig
       head: ~/.gitconfig
 ```
