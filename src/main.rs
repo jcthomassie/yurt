@@ -6,7 +6,7 @@ mod shell;
 use anyhow::{Context, Result};
 use build::{yaml::Config, ResolvedConfig};
 use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
-use log::{debug, info};
+use log::debug;
 use std::{env, time::Instant};
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
@@ -56,9 +56,10 @@ fn clean(matches: &ArgMatches) -> Result<()> {
         .context("Failed to clean link heads")
 }
 
-fn update() -> Result<()> {
-    info!("Updating dotfiles...");
-    Ok(())
+fn update(matches: &ArgMatches) -> Result<()> {
+    parse_resolved(matches)?
+        .update()
+        .context("Failed to complete update")
 }
 
 fn main() -> Result<()> {
@@ -131,7 +132,7 @@ fn main() -> Result<()> {
         Some("install") => install(&matches),
         Some("uninstall") => uninstall(&matches),
         Some("clean") => clean(&matches),
-        Some("update") => update(),
+        Some("update") => update(&matches),
         _ => unreachable!(),
     };
     debug!("Runtime: {:?}", timer.elapsed());

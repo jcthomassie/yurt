@@ -427,6 +427,10 @@ impl ResolvedConfig {
         }
         Ok(())
     }
+
+    pub fn update(&self) -> Result<()> {
+        todo!()
+    }
 }
 
 pub mod yaml {
