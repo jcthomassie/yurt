@@ -127,7 +127,7 @@ impl Locale<Option<String>> {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
-struct Namespace {
+pub struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
 }
@@ -210,6 +210,7 @@ impl BuildUnit {
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
     Repo(Repo),
+    Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSet>>),
     Case(Vec<Case<Vec<BuildSet>>>),
     Link(Vec<Link>),
@@ -291,6 +292,7 @@ impl Resolve for BuildSet {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
             Self::Repo(r) => r.resolve_into(context, output)?,
+            Self::Namespace(n) => n.resolve_into(context, output)?,
             Self::Matrix(m) => m.resolve_into(context, output)?,
             Self::Case(v) => v.resolve_into(context, output)?,
             Self::Link(v) => v.resolve_into(context, output)?,
