@@ -271,7 +271,11 @@ resolve_unit!(Repo, (self, context) => {
         local: context.replace_variables(&self.local)?,
         ..self
     };
-    context.set_variable(&new.name, "local", &new.local);
+    context.set_variable(
+        new.local.split('/').last().ok_or_else(|| anyhow!("Repo local path is empty"))?,
+        "local",
+        &new.local
+    );
     BuildUnit::Repo(new)
 });
 

@@ -74,7 +74,6 @@ shell: zsh
 build:
   # Require dotfile repo
   - repo:
-      name: dotfiles
       local: ~/dotfiles
       remote: https://github.com/jcthomassie/dotfiles.git
 

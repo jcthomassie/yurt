@@ -3,7 +3,6 @@ version: 0.2.0
 shell: zsh
 build:
   - repo:
-      name: dotfiles
       local: ~/dotfiles
       remote: https://github.com/user/dotfiles.git
   # Conditional instructions

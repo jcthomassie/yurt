@@ -4,7 +4,6 @@ use serde::Deserialize;
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Repo {
-    pub name: String,
     pub local: String,
     pub remote: String,
 }
