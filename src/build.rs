@@ -127,6 +127,12 @@ impl Locale<Option<String>> {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
+struct Namespace {
+    name: String,
+    values: BTreeMap<String, String>,
+}
+
+#[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Matrix<T> {
     values: BTreeMap<String, Vec<String>>,
     include: T,
@@ -245,7 +251,7 @@ resolve_unit!(Link, (self, context) => {
 resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
 resolve_unit!(PackageSpec, (self, context) => {
     BuildUnit::Install(Package {
-        name: self.name,
+        name: context.replace_variables(&self.name)?,
         managers: self
             .managers
             .unwrap_or_else(|| context.managers.iter().cloned().collect())
@@ -291,6 +297,15 @@ impl Resolve for BuildSet {
             Self::Run(s) => s.resolve_into(context, output)?,
             Self::Install(v) => v.resolve_into(context, output)?,
             Self::Require(v) => v.resolve_into(context, output)?,
+        }
+        Ok(())
+    }
+}
+
+impl Resolve for Namespace {
+    fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
+        for (variable, value) in &self.values {
+            context.set_variable(&self.name, variable, value);
         }
         Ok(())
     }
@@ -604,11 +619,19 @@ mod tests {
     }
 
     #[test]
+    fn package_name_substitution() {
+        let spec: PackageSpec = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
+        let mut context = Context::default();
+        context.set_variable("namespace", "key", "value");
+        // No managers remain
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert_eq!(package.name, "value");
+    }
+
+    #[test]
     fn package_manager_prune_empty() {
-        #[rustfmt::skip]
-        let spec: PackageSpec = serde_yaml::from_str("
-            name: some-package
-        ").unwrap();
+        let spec: PackageSpec = serde_yaml::from_str("name: some-package").unwrap();
         let mut context = Context::default();
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
@@ -631,6 +654,21 @@ mod tests {
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
         assert_eq!(package.managers, vec![PackageManager::Brew]);
+    }
+
+    #[test]
+    fn namespace_resolves() {
+        #[rustfmt::skip]
+        let namespace: Namespace = serde_yaml::from_str("
+            name: namespace
+            values:
+              key_a: val_a
+              key_b: val_b
+        ").unwrap();
+        let mut context = Context::default();
+        namespace.resolve(&mut context).unwrap();
+        assert_eq!(context.get_variable("namespace", "key_a").unwrap(), "val_a");
+        assert_eq!(context.get_variable("namespace", "key_b").unwrap(), "val_b");
     }
 
     #[test]
