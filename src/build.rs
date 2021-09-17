@@ -258,7 +258,7 @@ resolve_unit!(PackageSpec, (self, context) => {
             .into_iter()
             .filter(|manager| context.managers.contains(manager))
             .collect(),
-        aliases: self.aliases,
+        aliases: self.aliases.unwrap_or_default(),
     })
 });
 resolve_unit!(PackageManager, (self, context) => {

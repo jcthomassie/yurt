@@ -100,18 +100,12 @@ where
 pub struct Package {
     pub name: String,
     pub managers: Vec<PackageManager>,
-    pub aliases: Option<BTreeMap<PackageManager, String>>,
+    pub aliases: BTreeMap<PackageManager, String>,
 }
 
 impl Package {
-    fn get_alias(&self, manager: &PackageManager) -> Option<&String> {
-        self.aliases
-            .as_ref()
-            .and_then(|aliases| aliases.get(manager))
-    }
-
     fn get_name(&self, manager: &PackageManager) -> &String {
-        self.get_alias(manager).unwrap_or(&self.name)
+        self.aliases.get(manager).unwrap_or(&self.name)
     }
 
     fn manager_names(&self) -> impl Iterator<Item = (&PackageManager, &String)> {
@@ -469,11 +463,11 @@ mod tests {
             let package = Package {
                 name: "name".to_string(),
                 managers: managers!(),
-                aliases: Some({
+                aliases: {
                     let mut map = BTreeMap::new();
                     map.insert(aliased.clone(), "alias".into());
                     map
-                }),
+                },
             };
             assert_eq!(package.get_name(&aliased), "alias");
             for manager in &managers {
@@ -486,7 +480,7 @@ mod tests {
             assert!(Package {
                 name: "cargo".to_string(),
                 managers: managers!(),
-                aliases: None,
+                aliases: BTreeMap::new(),
             }
             .is_installed());
         }
@@ -496,7 +490,7 @@ mod tests {
             assert!(!Package {
                 name: "some_missing_package".to_string(),
                 managers: managers!(),
-                aliases: None
+                aliases: BTreeMap::new()
             }
             .is_installed());
         }
