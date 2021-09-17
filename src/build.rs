@@ -98,7 +98,7 @@ pub struct Locale<T> {
 }
 
 impl<T> Locale<T> {
-    pub fn new(user: T, platform: T, distro: T) -> Self {
+    fn new(user: T, platform: T, distro: T) -> Self {
         Self {
             user,
             platform,
@@ -108,7 +108,7 @@ impl<T> Locale<T> {
 }
 
 impl Locale<Option<String>> {
-    pub fn is_local(&self, rubric: &Locale<String>) -> bool {
+    fn is_local(&self, rubric: &Locale<String>) -> bool {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
@@ -162,7 +162,7 @@ pub enum Case<T> {
 }
 
 impl<T> Case<T> {
-    pub fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
+    fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
         match self {
             Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
             Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
@@ -172,8 +172,15 @@ impl<T> Case<T> {
     }
 }
 
+#[derive(Debug, PartialEq, Deserialize, Clone)]
+pub struct PackageSpec {
+    name: String,
+    managers: Option<Vec<PackageManager>>,
+    aliases: Option<BTreeMap<PackageManager, String>>,
+}
+
 #[derive(Debug, PartialEq, Clone)]
-pub enum BuildUnit {
+enum BuildUnit {
     Repo(Repo),
     Link(Link),
     ShellCmd(String),
@@ -193,25 +200,16 @@ impl BuildUnit {
     }
 }
 
-type Build = Vec<BuildSet>;
-
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
     Repo(Repo),
-    Matrix(Matrix<Build>),
-    Case(Vec<Case<Build>>),
+    Matrix(Matrix<Vec<BuildSet>>),
+    Case(Vec<Case<Vec<BuildSet>>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<PackageSpec>),
     Require(Vec<PackageManager>),
-}
-
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-pub struct PackageSpec {
-    name: String,
-    managers: Option<Vec<PackageManager>>,
-    aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
 trait Resolve {
@@ -422,7 +420,7 @@ pub mod yaml {
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
-        pub build: Option<Build>,
+        pub build: Option<Vec<BuildSet>>,
     }
 
     impl Config {
