@@ -3,7 +3,7 @@ use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     env,
     io::{Read, Write},
     process::{Child, Command, Output, Stdio},
@@ -99,7 +99,7 @@ where
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct Package {
     pub name: String,
-    pub managers: Vec<PackageManager>,
+    pub managers: BTreeSet<PackageManager>,
     pub aliases: BTreeMap<PackageManager, String>,
 }
 
@@ -449,19 +449,19 @@ mod tests {
     mod package {
         use super::*;
 
-        macro_rules! managers {
-            () => {
-                vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
-            };
+        fn all() -> BTreeSet<PackageManager> {
+            vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
+                .into_iter()
+                .collect()
         }
 
         #[test]
         fn get_name_for_manager() {
-            let mut managers = managers!();
-            let aliased = managers.pop().unwrap();
+            let mut managers = all();
+            let aliased = managers.take(&Brew).unwrap();
             let package = Package {
                 name: "name".to_string(),
-                managers: managers!(),
+                managers: all(),
                 aliases: {
                     let mut map = BTreeMap::new();
                     map.insert(aliased.clone(), "alias".into());
@@ -478,7 +478,7 @@ mod tests {
         fn check_installed() {
             assert!(Package {
                 name: "cargo".to_string(),
-                managers: managers!(),
+                managers: all(),
                 aliases: BTreeMap::new(),
             }
             .is_installed());
@@ -488,7 +488,7 @@ mod tests {
         fn check_not_installed() {
             assert!(!Package {
                 name: "some_missing_package".to_string(),
-                managers: managers!(),
+                managers: all(),
                 aliases: BTreeMap::new()
             }
             .is_installed());

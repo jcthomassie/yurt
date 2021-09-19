@@ -181,7 +181,7 @@ impl<T> Case<T> {
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 pub struct PackageSpec {
     name: String,
-    managers: Option<Vec<PackageManager>>,
+    managers: Option<BTreeSet<PackageManager>>,
     aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
@@ -241,12 +241,10 @@ resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_var
 resolve_unit!(PackageSpec, (self, context) => {
     BuildUnit::Install(Package {
         name: context.replace_variables(&self.name)?,
-        managers: self
-            .managers
-            .unwrap_or_else(|| context.managers.iter().cloned().collect())
-            .into_iter()
-            .filter(|manager| context.managers.contains(manager))
-            .collect(),
+        managers: match &self.managers {
+            Some(m) => context.managers.intersection(m).cloned().collect(),
+            None => context.managers.clone()
+        },
         aliases: self.aliases.unwrap_or_default(),
     })
 });
@@ -642,7 +640,10 @@ mod tests {
         // Overlap remains
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
-        assert_eq!(package.managers, vec![PackageManager::Brew]);
+        assert_eq!(
+            package.managers,
+            vec![PackageManager::Brew].into_iter().collect()
+        );
     }
 
     #[test]
