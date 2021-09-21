@@ -287,7 +287,6 @@ where
 }
 
 impl Resolve for BuildSet {
-    // Recursively resolve all case units; collect into single vec
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
             Self::Repo(r) => r.resolve_into(context, output)?,
@@ -336,7 +335,6 @@ impl<T> Resolve for Vec<Case<T>>
 where
     T: Resolve,
 {
-    // Process a block of cases
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;
         for case in self {
@@ -392,15 +390,12 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    pub fn install(&mut self, clean: bool) -> Result<()> {
-        if clean {
-            self.clean()?;
-        }
-        info!("Starting build steps...");
+    pub fn install(&self, clean: bool) -> Result<()> {
+        info!("Installing...");
         for unit in &self.build {
             match unit {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
-                BuildUnit::Link(link) => link.link()?,
+                BuildUnit::Link(link) => link.link(clean)?,
                 BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
                 BuildUnit::Install(pkg) => pkg.install()?,
                 BuildUnit::Require(pm) => pm.require()?,
@@ -413,11 +408,7 @@ impl ResolvedConfig {
     }
 
     pub fn uninstall(&self, packages: bool) -> Result<()> {
-        if packages {
-            info!("Uninstalling dotfiles and packages...");
-        } else {
-            info!("Uninstalling dotfiles...");
-        }
+        info!("Uninstalling...");
         for unit in &self.build {
             match unit {
                 BuildUnit::Link(ln) => ln.unlink()?,

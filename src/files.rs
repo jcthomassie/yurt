@@ -50,7 +50,10 @@ impl Link {
     }
 
     // Try to create link if it does not already exist
-    pub fn link(&self) -> Result<()> {
+    pub fn link(&self, clean: bool) -> Result<()> {
+        if clean {
+            self.clean()?;
+        }
         match self.status() {
             Status::Valid => Ok(()),
             Status::NullHead => {
@@ -149,7 +152,7 @@ mod tests {
         let (_dir, ln) = fixture();
         File::create(&ln.tail).expect("Failed to create tempfile");
         // Link once
-        ln.link().expect("Failed to create link");
+        ln.link(false).expect("Failed to create link");
         assert_eq!(ln.head.read_link().expect("Failed to read link"), ln.tail);
     }
 
@@ -162,7 +165,7 @@ mod tests {
         );
         File::create(&ln.tail).expect("Failed to create tempfile");
         // Link once
-        ln.link().expect("Failed to create link");
+        ln.link(false).expect("Failed to create link");
         assert_eq!(ln.head.read_link().expect("Failed to read link"), ln.tail);
     }
 
@@ -171,7 +174,7 @@ mod tests {
         let (_dir, ln) = fixture();
         File::create(&ln.tail).expect("Failed to create tempfile");
         // Link and unlink once
-        ln.link().expect("Failed to create link");
+        ln.link(false).expect("Failed to create link");
         ln.unlink().expect("Failed to remove link");
         assert!(!ln.head.exists());
     }
@@ -182,7 +185,7 @@ mod tests {
         File::create(&ln.tail).expect("Failed to create tempfile");
         File::create(&ln.head).expect("Failed to create tempfile");
         ln.clean().expect("Failed to clean link");
-        ln.link().expect("Failed to apply link");
+        ln.link(false).expect("Failed to apply link");
     }
 
     #[test]
@@ -193,7 +196,7 @@ mod tests {
         File::create(&wrong).expect("Failed to create tempfile");
         symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
         ln.clean().expect("Failed to clean link");
-        ln.link().expect("Failed to apply link");
+        ln.link(false).expect("Failed to apply link");
     }
 
     #[test]
@@ -205,6 +208,6 @@ mod tests {
         symlink::symlink_file(&wrong, &ln.head).expect("Failed to create symlink");
         fs::remove_file(&wrong).expect("Failed to delete tail");
         ln.clean().expect("Failed to clean link");
-        ln.link().expect("Failed to apply link");
+        ln.link(false).expect("Failed to apply link");
     }
 }
