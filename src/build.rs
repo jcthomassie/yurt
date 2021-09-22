@@ -194,18 +194,6 @@ enum BuildUnit {
     Require(PackageManager),
 }
 
-impl BuildUnit {
-    fn trivial(&self) -> bool {
-        match self {
-            Self::Repo(repo) => repo.is_available(),
-            Self::Link(link) => link.is_valid(),
-            Self::ShellCmd(_) => false,
-            Self::Install(pkg) => pkg.is_installed(),
-            Self::Require(pm) => pm.is_available(),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSet {
@@ -360,18 +348,23 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    fn filtered_build(&self) -> Vec<BuildUnit> {
+    fn nontrivial(&self) -> Vec<&BuildUnit> {
         self.build
             .iter()
-            .filter(|&unit| !unit.trivial())
-            .cloned()
+            .filter(|&unit| match unit {
+                BuildUnit::Repo(repo) => !repo.is_available(),
+                BuildUnit::Link(link) => !link.is_valid(),
+                BuildUnit::Install(pkg) => !pkg.is_installed(),
+                BuildUnit::Require(pm) => !pm.is_available(),
+                BuildUnit::ShellCmd(_) => true,
+            })
             .collect()
     }
 
     // Pretty-print the complete build; optionally filter out trivial units
     pub fn show(&self, nontrivial: bool) -> Result<()> {
         if nontrivial {
-            println!("{:#?}", self.filtered_build());
+            println!("{:#?}", self.nontrivial());
         } else {
             println!("{:#?}", self);
         }
