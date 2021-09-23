@@ -124,10 +124,9 @@ impl Package {
     pub fn install(&self) -> Result<()> {
         if self.is_installed() {
             info!("Package already installed: {}", self.name);
+        } else if let Some((manager, package)) = self.manager_names().next() {
+            manager.install(package)?;
         } else {
-            if let Some((manager, package)) = self.manager_names().next() {
-                manager.install(package)?;
-            }
             warn!("Package unavailable: {}", self.name);
         }
         Ok(())
