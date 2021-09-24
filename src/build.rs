@@ -352,8 +352,8 @@ impl ResolvedConfig {
             .filter(|&unit| match unit {
                 BuildUnit::Repo(repo) => !repo.is_available(),
                 BuildUnit::Link(link) => !link.is_valid(),
-                BuildUnit::Install(pkg) => !pkg.is_installed(),
-                BuildUnit::Require(pm) => !pm.is_available(),
+                BuildUnit::Install(package) => !package.is_installed(),
+                BuildUnit::Require(manager) => !manager.is_available(),
                 BuildUnit::ShellCmd(_) => true,
             })
             .collect()
@@ -374,7 +374,7 @@ impl ResolvedConfig {
         info!("Cleaning link heads...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => ln.clean()?,
+                BuildUnit::Link(link) => link.clean()?,
                 _ => continue,
             }
         }
@@ -388,8 +388,8 @@ impl ResolvedConfig {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
                 BuildUnit::Link(link) => link.link(clean)?,
                 BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
-                BuildUnit::Install(pkg) => pkg.install()?,
-                BuildUnit::Require(pm) => pm.require()?,
+                BuildUnit::Install(package) => package.install()?,
+                BuildUnit::Require(manager) => manager.require()?,
             }
         }
         if let Some(shell) = &self.shell {
@@ -402,8 +402,8 @@ impl ResolvedConfig {
         info!("Uninstalling...");
         for unit in &self.build {
             match unit {
-                BuildUnit::Link(ln) => ln.unlink()?,
-                BuildUnit::Install(pkg) if packages => pkg.uninstall()?,
+                BuildUnit::Link(link) => link.unlink()?,
+                BuildUnit::Install(package) if packages => package.uninstall()?,
                 _ => continue,
             }
         }
@@ -561,7 +561,7 @@ mod tests {
                 BuildUnit::Repo(_) => repos -= 1,
                 BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
                 BuildUnit::ShellCmd(_) => comms -= 1,
-                BuildUnit::Install(pkg) => assert_eq!(pkg.name, names.next().unwrap()),
+                BuildUnit::Install(package) => assert_eq!(package.name, names.next().unwrap()),
                 BuildUnit::Require(_) => boots -= 1,
             }
         }

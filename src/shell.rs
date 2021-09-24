@@ -261,7 +261,7 @@ impl PackageManager {
                 "-sSf",
                 "https://sh.rustup.rs",
             ]),
-            pm => Err(anyhow!("Bootstrap not supported for {}", pm.name())),
+            manager => Err(anyhow!("Bootstrap not supported for {}", manager.name())),
         }
     }
 
@@ -377,18 +377,18 @@ mod tests {
     use super::*;
 
     macro_rules! check_missing {
-        ($pm:ident, $mod_name:ident) => {
+        ($manager:ident, $mod_name:ident) => {
             mod $mod_name {
                 use super::*;
 
                 #[test]
                 fn not_has_fake() {
-                    assert!(!$pm.has("some_missing_package"));
+                    assert!(!$manager.has("some_missing_package"));
                 }
 
                 #[test]
                 fn not_has_empty() {
-                    assert!(!$pm.has(""));
+                    assert!(!$manager.has(""));
                 }
             }
         };
