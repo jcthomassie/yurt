@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
@@ -127,17 +127,15 @@ impl Package {
         } else if let Some((manager, package)) = self.manager_names().next() {
             manager.install(package)?;
         } else {
-            warn!("Package unavailable: {}", self.name);
+            bail!("Package unavailable: {}", self.name);
         }
         Ok(())
     }
 
     pub fn uninstall(&self) -> Result<()> {
-        if self.is_installed() {
-            for (manager, package) in self.manager_names() {
-                if manager.has(package) {
-                    manager.uninstall(package)?;
-                }
+        for (manager, package) in self.manager_names() {
+            if manager.has(package) {
+                manager.uninstall(package)?;
             }
         }
         Ok(())
