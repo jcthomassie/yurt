@@ -5,8 +5,7 @@ on:
   push:
     branches: [ master ]
     paths-ignore:
-      - ".github/workflows/release.yaml"
-      - ".github/workflows/publish.yaml"
+      - ".github/**"
       - ".gitignore"
       - "README.md"
       - "LICENSE"
@@ -14,8 +13,7 @@ on:
   pull_request:
     branches: [ master ]
     paths-ignore:
-      - ".github/workflows/release.yaml"
-      - ".github/workflows/publish.yaml"
+      - ".github/**"
       - ".gitignore"
       - "README.md"
       - "LICENSE"
