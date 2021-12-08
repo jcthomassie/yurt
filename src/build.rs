@@ -38,13 +38,10 @@ impl Context {
     }
 
     fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
-        if namespace == "env" {
-            Ok(env::var(variable)?)
-        } else {
-            self.variables
-                .get(&format!("{}.{}", namespace, variable))
-                .cloned()
-                .ok_or_else(|| anyhow!("Variable {}.{} is undefined", namespace, variable))
+        match self.variables.get(&format!("{}.{}", namespace, variable)) {
+            Some(value) => Ok(value.clone()),
+            None if namespace == "env" => Ok(env::var(variable)?),
+            None => Err(anyhow!("Variable {}.{} is undefined", namespace, variable)),
         }
     }
 
