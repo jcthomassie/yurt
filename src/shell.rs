@@ -316,12 +316,17 @@ impl Cmd for Shell {
 }
 
 impl Default for Shell {
-    #[cfg(windows)]
+    #[cfg(target_os = "windows")]
     fn default() -> Shell {
         Shell::Powershell
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "macos")]
+    fn default() -> Shell {
+        Shell::Zsh
+    }
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn default() -> Shell {
         Shell::Sh
     }
