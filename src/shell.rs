@@ -225,7 +225,7 @@ impl PackageManager {
                 "cargo",
                 &["install", "--list"],
                 "grep",
-                &[&format!("    {}$", package)],
+                &[&format!("^{} v", package)],
             )
             .map(|o| o.status.success()),
             _ => Ok(false),
