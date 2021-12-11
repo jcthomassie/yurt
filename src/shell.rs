@@ -1,5 +1,4 @@
 use anyhow::{anyhow, bail, Result};
-use lazy_static::lazy_static;
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
@@ -11,10 +10,6 @@ use std::{
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 pub use Shell::{Bash, Powershell, Sh, Zsh};
-
-lazy_static! {
-    pub static ref SHELL: Shell = Shell::from_env();
-}
 
 pub trait Cmd {
     fn name(&self) -> &str;
@@ -53,12 +48,12 @@ impl Cmd for &str {
 }
 
 pub trait ShellCmd {
-    fn run(&self) -> Result<Output>;
+    fn run(&self, shell: &Shell) -> Result<Output>;
 }
 
 impl ShellCmd for &str {
-    fn run(&self) -> Result<Output> {
-        SHELL.call(&["-c", self])
+    fn run(&self, shell: &Shell) -> Result<Output> {
+        shell.call(&["-c", self])
     }
 }
 
@@ -280,7 +275,7 @@ impl PackageManager {
 // Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
-    #[cfg(not(windows))]
+    #[cfg(unix)]
     let name = "which";
     #[cfg(windows)]
     let name = "where";
@@ -403,22 +398,25 @@ mod tests {
 
     #[test]
     fn shell_from_env() {
+        let shell = Shell::from_env();
         match env::var("SHELL") {
             // Other shells should be added as needed
-            Ok(_) => assert!(!matches!(*SHELL, Shell::Other(_))),
-            Err(_) => assert_eq!(*SHELL, Shell::default()),
+            Ok(_) => assert!(!matches!(shell, Shell::Other(_))),
+            Err(_) => assert_eq!(shell, Shell::default()),
         }
     }
 
     #[test]
     fn shell_command_success() {
-        let out = "ls ~".run().unwrap();
+        let out = "ls ~".run(&Shell::default()).unwrap();
         assert!(out.status.success());
     }
 
     #[test]
     fn shell_command_failure() {
-        let out = "made_up_command with parameters".run().unwrap();
+        let out = "made_up_command with parameters"
+            .run(&Shell::default())
+            .unwrap();
         assert!(!out.status.success());
     }
 
