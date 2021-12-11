@@ -194,9 +194,8 @@ impl PackageManager {
     // Install a package
     pub fn install(&self, package: &str) -> Result<()> {
         match self {
-            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &[]),
-            Self::Choco => self._install(package, &["-y"]),
-            _ => self._install(package, &[]),
+            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
+            _ => self._install(package, &["-y"]),
         }
     }
 
