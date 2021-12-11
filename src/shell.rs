@@ -351,23 +351,6 @@ impl Shell {
         pipe("curl", curl_args, self, &[])?;
         Ok(())
     }
-
-    // Set self as the default system shell
-    #[cfg(not(windows))]
-    pub fn chsh(&self) -> Result<()> {
-        info!("Current shell: {}", SHELL.name());
-        if std::mem::discriminant(self) == std::mem::discriminant(&SHELL) {
-            return Ok(());
-        }
-        info!("Changing shell to: {}", self.name());
-        pipe("which", &[], "chsh", &["-s"])?;
-        Ok(())
-    }
-    #[cfg(windows)]
-    pub fn chsh(&self) -> Result<()> {
-        warn!("Shell change not implemented for windows");
-        Ok(())
-    }
 }
 
 #[cfg(test)]

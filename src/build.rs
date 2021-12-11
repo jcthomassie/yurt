@@ -389,9 +389,6 @@ impl ResolvedConfig {
                 BuildUnit::Require(manager) => manager.require()?,
             }
         }
-        if let Some(shell) = &self.shell {
-            shell.chsh()?;
-        }
         Ok(())
     }
 
