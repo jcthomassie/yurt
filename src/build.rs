@@ -338,7 +338,7 @@ pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
     version: Option<String>,
-    shell: Option<Shell>,
+    shell: Shell,
     build: Vec<BuildUnit>,
 }
 
@@ -384,13 +384,10 @@ impl ResolvedConfig {
             match unit {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
                 BuildUnit::Link(link) => link.link(clean)?,
-                BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run()?),
+                BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run(&self.shell)?),
                 BuildUnit::Install(package) => package.install()?,
                 BuildUnit::Require(manager) => manager.require()?,
             }
-        }
-        if let Some(shell) = &self.shell {
-            shell.chsh()?;
         }
         Ok(())
     }
@@ -470,7 +467,7 @@ pub mod yaml {
             Ok(ResolvedConfig {
                 context,
                 version: self.version,
-                shell: self.shell,
+                shell: self.shell.unwrap_or_else(Shell::from_env),
                 build,
             })
         }
