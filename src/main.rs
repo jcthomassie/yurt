@@ -68,11 +68,10 @@ fn main() -> Result<()> {
         .version(crate_version!())
         .about("Simple CLI tool for dotfile management.")
         .setting(AppSettings::SubcommandRequiredElseHelp)
-        .setting(AppSettings::ColoredHelp)
         .subcommand(
             App::new("install").about("Installs dotfiles").arg(
                 Arg::new("clean")
-                    .about("Run `dots clean` before install")
+                    .help("Run `dots clean` before install")
                     .short('c')
                     .long("clean")
                     .takes_value(false),
@@ -81,7 +80,7 @@ fn main() -> Result<()> {
         .subcommand(
             App::new("uninstall").about("Uninstalls dotfiles").arg(
                 Arg::new("packages")
-                    .about("Uninstall packages too")
+                    .help("Uninstall packages too")
                     .short('p')
                     .long("packages")
                     .takes_value(false),
@@ -92,7 +91,7 @@ fn main() -> Result<()> {
         .subcommand(
             App::new("show").about("Shows the build config").arg(
                 Arg::new("non-trivial")
-                    .about("Hide trivial build units")
+                    .help("Hide trivial build units")
                     .short('n')
                     .long("non-trivial")
                     .takes_value(false),
@@ -100,21 +99,21 @@ fn main() -> Result<()> {
         )
         .arg(
             Arg::new("yaml")
-                .about("YAML build file path")
+                .help("YAML build file path")
                 .short('y')
                 .long("yaml")
                 .takes_value(true),
         )
         .arg(
             Arg::new("yaml-url")
-                .about("YAML build file URL")
+                .help("YAML build file URL")
                 .long("yaml-url")
                 .takes_value(true)
                 .conflicts_with("yaml"),
         )
         .arg(
             Arg::new("log")
-                .about("Logging level")
+                .help("Logging level")
                 .short('l')
                 .long("log")
                 .takes_value(true),

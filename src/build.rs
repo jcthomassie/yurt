@@ -333,6 +333,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
