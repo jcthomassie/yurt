@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use log::{debug, info, warn};
 use serde::Deserialize;
 use std::{
@@ -20,14 +20,26 @@ pub trait Cmd {
     }
 
     #[inline]
-    fn call(&self, args: &[&str]) -> Result<Output> {
-        debug!("Calling command: {} {:?}", self.name(), args);
+    fn call_unchecked(&self, args: &[&str]) -> Result<Output> {
+        debug!("Calling command: `{} {}`", self.name(), args.join(" "));
         Ok(self.command().args(args).output()?)
     }
 
     #[inline]
+    fn call(&self, args: &[&str]) -> Result<()> {
+        match self.call_unchecked(args)?.status.success() {
+            true => Ok(()),
+            false => Err(anyhow!(
+                "Failed command: `{} {}`",
+                self.name(),
+                args.join(" ")
+            )),
+        }
+    }
+
+    #[inline]
     fn call_bool(&self, args: &[&str]) -> Result<bool> {
-        Ok(self.call(args)?.status.success())
+        Ok(self.call_unchecked(args)?.status.success())
     }
 
     #[inline]
@@ -53,7 +65,7 @@ pub trait ShellCmd {
 
 impl ShellCmd for &str {
     fn run(&self, shell: &Shell) -> Result<Output> {
-        shell.call(&["-c", self])
+        shell.call_unchecked(&["-c", self])
     }
 }
 
@@ -69,7 +81,7 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
     if output.status.success() {
         Ok(output)
     } else {
-        Err(anyhow!("Failed to execute piped command"))
+        Err(anyhow!("Piped command returned error"))
     }
 }
 
@@ -78,17 +90,34 @@ where
     T: Cmd,
     U: Cmd,
 {
+    debug!(
+        "Calling command: `{} {} | {} {}`",
+        cmd_a.name(),
+        args_a.join(" "),
+        cmd_b.name(),
+        args_b.join(" ")
+    );
     let proc_a = cmd_a
         .command()
         .args(args_a)
         .stdout(Stdio::piped())
-        .spawn()?;
+        .spawn()
+        .context("Failed to spawn primary pipe command")?;
     let proc_b = cmd_b
         .command() //
         .args(args_b)
         .stdin(Stdio::piped())
-        .spawn()?;
-    pipe_existing(proc_a, proc_b)
+        .spawn()
+        .context("Failed to spawn secondary pipe command")?;
+    pipe_existing(proc_a, proc_b).with_context(|| {
+        format!(
+            "Failed command: `{} {} | {} {}`",
+            cmd_a.name(),
+            args_a.join(" "),
+            cmd_b.name(),
+            args_b.join(" ")
+        )
+    })
 }
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
@@ -164,14 +193,7 @@ impl Cmd for PackageManager {
 impl PackageManager {
     fn _install(&self, package: &str, args: &[&str]) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
-        self.command()
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .arg("install")
-            .arg(package)
-            .args(args)
-            .output()?;
-        Ok(())
+        self.call(&[&["install", package], args].concat())
     }
 
     fn _sudo_install(&self, package: &str, args: &[&str]) -> Result<()> {
@@ -180,21 +202,14 @@ impl PackageManager {
             self.name(),
             package
         );
-        Command::new("sudo")
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .arg(self.name())
-            .arg("install")
-            .arg(package)
-            .args(args)
-            .output()?;
-        Ok(())
+        "sudo".call(&[&[self.name(), "install", package], args].concat())
     }
 
     // Install a package
     pub fn install(&self, package: &str) -> Result<()> {
         match self {
             Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
+            Self::Cargo => self._install(package, &[]),
             _ => self._install(package, &["-y"]),
         }
     }
@@ -206,13 +221,7 @@ impl PackageManager {
             self.name(),
             package
         );
-        self.command()
-            .stdin(Stdio::null())
-            .stdout(Stdio::inherit())
-            .arg("uninstall")
-            .arg(package)
-            .output()?;
-        Ok(())
+        self.call(&["uninstall", package])
     }
 
     // Check if a package is installed
@@ -220,19 +229,16 @@ impl PackageManager {
         let res = match self {
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
             Self::Brew => self.call_bool(&["list", package]),
-            Self::Cargo => pipe(
-                "cargo",
-                &["install", "--list"],
-                "grep",
-                &[&format!("^{} v", package)],
-            )
-            .map(|o| o.status.success()),
+            Self::Cargo => format!("cargo install --list | grep '^{} v'", package)
+                .as_str()
+                .run(&Shell::default())
+                .map(|o| o.status.success()),
             _ => Ok(false),
         };
         match res {
             Ok(has) => has,
-            Err(_) => {
-                warn!("{} failed to check for package", self.name());
+            Err(err) => {
+                warn!("{}", err);
                 false
             }
         }
