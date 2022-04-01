@@ -193,11 +193,11 @@ enum BuildUnit {
 
 #[derive(Debug, PartialEq, Deserialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum BuildSet {
+pub enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
-    Matrix(Matrix<Vec<BuildSet>>),
-    Case(Vec<Case<Vec<BuildSet>>>),
+    Matrix(Matrix<Vec<BuildSpec>>),
+    Case(Vec<Case<Vec<BuildSpec>>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<PackageSpec>),
@@ -269,7 +269,7 @@ where
     }
 }
 
-impl Resolve for BuildSet {
+impl Resolve for BuildSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
             Self::Repo(r) => r.resolve_into(context, output)?,
@@ -417,7 +417,7 @@ pub mod yaml {
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
-        pub build: Option<Vec<BuildSet>>,
+        pub build: Option<Vec<BuildSpec>>,
     }
 
     impl Config {
@@ -710,40 +710,40 @@ mod tests {
 
     #[test]
     fn positive_match() {
-        let set = BuildSet::Case(vec![Case::Positive {
+        let set = BuildSpec::Case(vec![Case::Positive {
             spec: Locale::new(
                 None,
                 Some(format!("{:?}", whoami::platform()).to_lowercase()),
                 None,
             ),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn positive_non_match() {
-        let set = BuildSet::Case(vec![Case::Positive {
+        let set = BuildSpec::Case(vec![Case::Positive {
             spec: Locale::new(None, None, Some("nothere".to_string())),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_match() {
-        let set = BuildSet::Case(vec![Case::Negative {
+        let set = BuildSpec::Case(vec![Case::Negative {
             spec: Locale::new(None, Some("nothere".to_string()), None),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_non_match() {
-        let set = BuildSet::Case(vec![Case::Negative {
+        let set = BuildSpec::Case(vec![Case::Negative {
             spec: Locale::new(Some(whoami::username()), None, None),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
