@@ -1,5 +1,6 @@
 mod build;
 mod files;
+mod package;
 mod repo;
 mod shell;
 

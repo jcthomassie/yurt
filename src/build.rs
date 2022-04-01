@@ -1,6 +1,7 @@
 use super::files::Link;
+use super::package::{Package, PackageManager};
 use super::repo::Repo;
-use super::shell::{Package, PackageManager, Shell, ShellCmd};
+use super::shell::{Shell, ShellCmd};
 use anyhow::{anyhow, bail, ensure, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
