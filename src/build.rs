@@ -2,7 +2,7 @@ use super::files::Link;
 use super::package::{Package, PackageManager};
 use super::repo::Repo;
 use super::shell::{Shell, ShellCmd};
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
 use log::{info, warn};
@@ -378,7 +378,7 @@ impl ResolvedConfig {
         if nontrivial {
             println!("{:#?}", self.nontrivial());
         } else {
-            print!("{}", serde_yaml::to_string(&self.clone().into_config())?);
+            print!("{}", self.clone().into_yaml()?);
         }
         Ok(())
     }
@@ -446,6 +446,10 @@ impl ResolvedConfig {
             shell: Some(self.shell),
             build: Some(build).filter(|spec| !spec.is_empty()),
         }
+    }
+
+    fn into_yaml(self) -> Result<String> {
+        serde_yaml::to_string(&self.into_config()).context("failed to construct yaml string")
     }
 }
 
@@ -516,9 +520,90 @@ pub mod yaml {
 
 #[cfg(test)]
 mod tests {
-    use super::{yaml::*, *};
+    use super::*;
 
-    static YAML: &str = include_str!("../test/build.yaml");
+    mod yaml {
+        use super::super::{yaml::*, *};
+
+        static YAML: &str = include_str!("../test/build.yaml");
+
+        #[test]
+        fn empty_build_fails() {
+            assert!(Config::from_str("").is_err())
+        }
+
+        #[test]
+        fn build_parses() {
+            Config::from_str(YAML).unwrap();
+        }
+
+        #[test]
+        fn build_resolves() {
+            let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
+            let mut repos = 1;
+            let mut comms = 1;
+            let mut boots = 2;
+            let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
+                .into_iter()
+                .map(std::path::PathBuf::from);
+            let mut names = vec![
+                "package_0",
+                "package_1",
+                "package_2",
+                "package_3",
+                "package_4",
+            ]
+            .into_iter();
+            for unit in resolved.build.into_iter() {
+                match unit {
+                    BuildUnit::Repo(_) => repos -= 1,
+                    BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
+                    BuildUnit::ShellCmd(_) => comms -= 1,
+                    BuildUnit::Install(package) => assert_eq!(package.name, names.next().unwrap()),
+                    BuildUnit::Require(_) => boots -= 1,
+                }
+            }
+            assert_eq!(repos, 0);
+            assert!(links.next().is_none());
+            assert_eq!(comms, 0);
+            assert_eq!(boots, 0);
+            assert!(names.next().is_none());
+        }
+
+        #[test]
+        fn build_version_check() {
+            let mut cfg = Config {
+                version: None,
+                shell: None,
+                build: None,
+            };
+            assert!(!cfg.version_matches(true));
+            assert!(cfg.version_matches(false));
+            cfg.version = Some("9.9.9".to_string());
+            assert!(!cfg.version_matches(true));
+            assert!(!cfg.version_matches(false));
+            cfg.version = Some(crate_version!().to_string());
+            assert!(cfg.version_matches(true));
+            assert!(cfg.version_matches(false));
+        }
+
+        macro_rules! yaml_case {
+            ($name:ident) => {
+                #[test]
+                fn $name() {
+                    let raw_input =
+                        include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
+                    let raw_output =
+                        include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
+                    let config = Config::from_str(raw_input).expect("failed to parse input case");
+                    let resolved = config.resolve().expect("failed to resolve input case");
+                    assert_eq!(resolved.into_yaml().unwrap(), raw_output)
+                }
+            };
+        }
+
+        yaml_case!(packages);
+    }
 
     fn check_pattern_outer(input: &str, output: &str) {
         let caps = RE_OUTER.captures(input).unwrap();
@@ -561,66 +646,6 @@ mod tests {
                 .unwrap(),
             "val_1/val_2"
         );
-    }
-
-    #[test]
-    fn empty_build_fails() {
-        assert!(Config::from_str("").is_err())
-    }
-
-    #[test]
-    fn build_parses() {
-        Config::from_str(YAML).unwrap();
-    }
-
-    #[test]
-    fn build_resolves() {
-        let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
-        let mut repos = 1;
-        let mut comms = 1;
-        let mut boots = 2;
-        let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
-            .into_iter()
-            .map(std::path::PathBuf::from);
-        let mut names = vec![
-            "package_0",
-            "package_1",
-            "package_2",
-            "package_3",
-            "package_4",
-        ]
-        .into_iter();
-        for unit in resolved.build.into_iter() {
-            match unit {
-                BuildUnit::Repo(_) => repos -= 1,
-                BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
-                BuildUnit::ShellCmd(_) => comms -= 1,
-                BuildUnit::Install(package) => assert_eq!(package.name, names.next().unwrap()),
-                BuildUnit::Require(_) => boots -= 1,
-            }
-        }
-        assert_eq!(repos, 0);
-        assert!(links.next().is_none());
-        assert_eq!(comms, 0);
-        assert_eq!(boots, 0);
-        assert!(names.next().is_none());
-    }
-
-    #[test]
-    fn build_version_check() {
-        let mut cfg = Config {
-            version: None,
-            shell: None,
-            build: None,
-        };
-        assert!(!cfg.version_matches(true));
-        assert!(cfg.version_matches(false));
-        cfg.version = Some("9.9.9".to_string());
-        assert!(!cfg.version_matches(true));
-        assert!(!cfg.version_matches(false));
-        cfg.version = Some(crate_version!().to_string());
-        assert!(cfg.version_matches(true));
-        assert!(cfg.version_matches(false));
     }
 
     macro_rules! unpack {

@@ -1,0 +1,10 @@
+---
+version: 0.0 # becomes explicit string
+shell: zsh
+build:
+  - install:
+    - name: package_a
+    - name: package_b
+  # Separate chunk should be joined
+  - install:
+    - name: package_c
