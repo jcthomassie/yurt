@@ -183,6 +183,16 @@ pub struct PackageSpec {
     aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
+impl From<Package> for PackageSpec {
+    fn from(package: Package) -> PackageSpec {
+        PackageSpec {
+            name: package.name,
+            managers: Some(package.managers).filter(|set| !set.is_empty()),
+            aliases: Some(package.aliases).filter(|map| !map.is_empty()),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 enum BuildUnit {
     Repo(Repo),
@@ -335,7 +345,7 @@ where
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
@@ -363,7 +373,7 @@ impl ResolvedConfig {
         if nontrivial {
             println!("{:#?}", self.nontrivial());
         } else {
-            println!("{:#?}", self);
+            println!("{:#?}", self.clone().into_config());
         }
         Ok(())
     }
@@ -408,6 +418,27 @@ impl ResolvedConfig {
 
     pub fn update(&self) -> Result<()> {
         todo!()
+    }
+
+    fn into_config(self) -> yaml::Config {
+        // TODO: Flatten vec specs
+        yaml::Config {
+            version: self.version,
+            shell: Some(self.shell),
+            build: Some(
+                self.build
+                    .into_iter()
+                    .map(|unit| match unit {
+                        BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
+                        BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
+                        BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
+                        BuildUnit::Install(package) => BuildSpec::Install(vec![package.into()]),
+                        BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
+                    })
+                    .collect::<Vec<BuildSpec>>(),
+            )
+            .filter(|spec| !spec.is_empty()),
+        }
     }
 }
 

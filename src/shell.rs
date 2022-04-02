@@ -118,7 +118,7 @@ where
     })
 }
 
-#[derive(PartialEq, Debug, Deserialize)]
+#[derive(PartialEq, Clone, Debug, Deserialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Shell {
     Sh,
