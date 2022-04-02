@@ -201,18 +201,18 @@ pub enum BuildSpec {
 }
 
 impl BuildSpec {
-    fn absorb(self: &mut BuildSpec, other: &mut BuildSpec) -> bool {
-        match (self, other) {
-            (BuildSpec::Link(a), BuildSpec::Link(b)) => {
-                a.append(b);
+    fn absorb(self: &mut BuildSpec, unit: &BuildUnit) -> bool {
+        match (self, unit) {
+            (BuildSpec::Link(a), BuildUnit::Link(b)) => {
+                a.push(b.clone());
                 true
             }
-            (BuildSpec::Install(a), BuildSpec::Install(b)) => {
-                a.append(b);
+            (BuildSpec::Install(a), BuildUnit::Install(b)) => {
+                a.push(b.clone());
                 true
             }
-            (BuildSpec::Require(a), BuildSpec::Require(b)) => {
-                a.append(b);
+            (BuildSpec::Require(a), BuildUnit::Require(b)) => {
+                a.push(b.clone());
                 true
             }
             _ => false,
@@ -428,19 +428,18 @@ impl ResolvedConfig {
     fn into_config(self) -> yaml::Config {
         let mut build: Vec<BuildSpec> = Vec::new();
         for unit in self.build.into_iter() {
-            let mut next = match unit {
+            if let Some(spec) = build.last_mut() {
+                if spec.absorb(&unit) {
+                    continue;
+                }
+            }
+            build.push(match unit {
                 BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
                 BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
                 BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
                 BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
                 BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
-            };
-            if let Some(spec) = build.last_mut() {
-                if spec.absorb(&mut next) {
-                    continue;
-                }
-            }
-            build.push(next);
+            });
         }
         yaml::Config {
             version: self.version,
