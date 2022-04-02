@@ -27,7 +27,7 @@ lazy_static! {
 struct Context {
     variables: BTreeMap<String, String>,
     managers: BTreeSet<PackageManager>,
-    locale: Locale<String>,
+    locale: Locale,
     home_dir: PathBuf,
 }
 
@@ -88,15 +88,15 @@ impl Default for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
-pub struct Locale<T> {
-    user: T,
-    platform: T,
-    distro: T,
+#[derive(Debug, PartialEq, Clone)]
+pub struct Locale {
+    user: String,
+    platform: String,
+    distro: String,
 }
 
-impl<T> Locale<T> {
-    fn new(user: T, platform: T, distro: T) -> Self {
+impl Locale {
+    fn new(user: String, platform: String, distro: String) -> Self {
         Self {
             user,
             platform,
@@ -105,8 +105,18 @@ impl<T> Locale<T> {
     }
 }
 
-impl Locale<Option<String>> {
-    fn is_local(&self, rubric: &Locale<String>) -> bool {
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct LocaleSpec {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    distro: Option<String>,
+}
+
+impl LocaleSpec {
+    fn is_local(&self, rubric: &Locale) -> bool {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
@@ -152,21 +162,13 @@ impl<T> Matrix<T> {
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case<T> {
-    Positive {
-        spec: Locale<Option<String>>,
-        include: T,
-    },
-    Negative {
-        spec: Locale<Option<String>>,
-        include: T,
-    },
-    Default {
-        include: T,
-    },
+    Positive { spec: LocaleSpec, include: T },
+    Negative { spec: LocaleSpec, include: T },
+    Default { include: T },
 }
 
 impl<T> Case<T> {
-    fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
+    fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
         match self {
             Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
             Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
@@ -766,11 +768,11 @@ mod tests {
     #[test]
     fn positive_match() {
         let set = BuildSpec::Case(vec![Case::Positive {
-            spec: Locale::new(
-                None,
-                Some(format!("{:?}", whoami::platform()).to_lowercase()),
-                None,
-            ),
+            spec: LocaleSpec {
+                user: None,
+                platform: Some(format!("{:?}", whoami::platform()).to_lowercase()),
+                distro: None,
+            },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
@@ -779,7 +781,11 @@ mod tests {
     #[test]
     fn positive_non_match() {
         let set = BuildSpec::Case(vec![Case::Positive {
-            spec: Locale::new(None, None, Some("nothere".to_string())),
+            spec: LocaleSpec {
+                user: None,
+                platform: None,
+                distro: Some("nothere".to_string()),
+            },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
@@ -788,7 +794,11 @@ mod tests {
     #[test]
     fn negative_match() {
         let set = BuildSpec::Case(vec![Case::Negative {
-            spec: Locale::new(None, Some("nothere".to_string()), None),
+            spec: LocaleSpec {
+                user: None,
+                platform: Some("nothere".to_string()),
+                distro: None,
+            },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
@@ -797,7 +807,11 @@ mod tests {
     #[test]
     fn negative_non_match() {
         let set = BuildSpec::Case(vec![Case::Negative {
-            spec: Locale::new(Some(whoami::username()), None, None),
+            spec: LocaleSpec {
+                user: Some(whoami::username()),
+                platform: None,
+                distro: None,
+            },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
