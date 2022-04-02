@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Error, Result};
 use log::info;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
 
 #[derive(Debug)]
@@ -12,7 +12,7 @@ enum Status {
     InvalidTail(Error),
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {
     // head@ -> tail
     pub head: PathBuf,

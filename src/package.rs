@@ -1,7 +1,7 @@
 use super::shell::{Cmd, Shell, ShellCmd};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
@@ -52,7 +52,7 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Hash, Clone, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Hash, Clone, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,

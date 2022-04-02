@@ -1,6 +1,6 @@
 use anyhow::{anyhow, Context, Result};
 use log::{debug, info};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     io::{Read, Write},
@@ -118,7 +118,7 @@ where
     })
 }
 
-#[derive(PartialEq, Clone, Debug, Deserialize)]
+#[derive(PartialEq, Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Shell {
     Sh,

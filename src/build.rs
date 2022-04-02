@@ -7,7 +7,7 @@ use clap::crate_version;
 use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -88,7 +88,7 @@ impl Default for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Locale<T> {
     user: T,
     platform: T,
@@ -124,13 +124,13 @@ impl Locale<Option<String>> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
     values: BTreeMap<String, Vec<String>>,
     include: T,
@@ -149,7 +149,7 @@ impl<T> Matrix<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case<T> {
     Positive {
@@ -176,7 +176,7 @@ impl<T> Case<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct PackageSpec {
     name: String,
     managers: Option<BTreeSet<PackageManager>>,
@@ -202,7 +202,7 @@ enum BuildUnit {
     Require(PackageManager),
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
     Repo(Repo),
@@ -373,7 +373,7 @@ impl ResolvedConfig {
         if nontrivial {
             println!("{:#?}", self.nontrivial());
         } else {
-            println!("{:#?}", self.clone().into_config());
+            print!("{}", serde_yaml::to_string(&self.clone().into_config())?);
         }
         Ok(())
     }
@@ -445,7 +445,7 @@ impl ResolvedConfig {
 pub mod yaml {
     use super::*;
 
-    #[derive(Debug, PartialEq, Deserialize)]
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
