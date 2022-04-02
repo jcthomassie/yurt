@@ -119,7 +119,7 @@ where
 }
 
 #[derive(PartialEq, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all(deserialize = "snake_case"))]
+#[serde(rename_all = "kebab-case")]
 pub enum Shell {
     Sh,
     Bash,
