@@ -360,26 +360,33 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    fn nontrivial(&self) -> Vec<&BuildUnit> {
-        self.build
-            .iter()
-            .filter(|&unit| match unit {
-                BuildUnit::Repo(repo) => !repo.is_available(),
-                BuildUnit::Link(link) => !link.is_valid(),
-                BuildUnit::Install(package) => !package.is_installed(),
-                BuildUnit::Require(manager) => !manager.is_available(),
-                BuildUnit::ShellCmd(_) => true,
-            })
-            .collect()
+    fn nontrivial(self) -> ResolvedConfig {
+        ResolvedConfig {
+            build: self
+                .build
+                .into_iter()
+                .filter(|unit| match unit {
+                    BuildUnit::Repo(repo) => !repo.is_available(),
+                    BuildUnit::Link(link) => !link.is_valid(),
+                    BuildUnit::Install(package) => !package.is_installed(),
+                    BuildUnit::Require(manager) => !manager.is_available(),
+                    BuildUnit::ShellCmd(_) => true,
+                })
+                .collect(),
+            ..self
+        }
     }
 
     // Pretty-print the complete build; optionally filter out trivial units
     pub fn show(&self, nontrivial: bool) -> Result<()> {
-        if nontrivial {
-            println!("{:#?}", self.nontrivial());
-        } else {
-            print!("{}", self.clone().into_yaml()?);
-        }
+        print!(
+            "{}",
+            match nontrivial {
+                true => self.clone().nontrivial(),
+                false => self.clone(),
+            }
+            .into_yaml()?
+        );
         Ok(())
     }
 
