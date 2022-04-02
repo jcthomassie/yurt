@@ -215,6 +215,26 @@ pub enum BuildSpec {
     Require(Vec<PackageManager>),
 }
 
+impl BuildSpec {
+    fn absorb(self: &mut BuildSpec, other: &mut BuildSpec) -> bool {
+        match (self, other) {
+            (BuildSpec::Link(a), BuildSpec::Link(b)) => {
+                a.append(b);
+                true
+            }
+            (BuildSpec::Install(a), BuildSpec::Install(b)) => {
+                a.append(b);
+                true
+            }
+            (BuildSpec::Require(a), BuildSpec::Require(b)) => {
+                a.append(b);
+                true
+            }
+            _ => false,
+        }
+    }
+}
+
 trait Resolve {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
 
@@ -421,23 +441,26 @@ impl ResolvedConfig {
     }
 
     fn into_config(self) -> yaml::Config {
-        // TODO: Flatten vec specs
+        let mut build: Vec<BuildSpec> = Vec::new();
+        for unit in self.build.into_iter() {
+            let mut next = match unit {
+                BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
+                BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
+                BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
+                BuildUnit::Install(package) => BuildSpec::Install(vec![package.into()]),
+                BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
+            };
+            if let Some(spec) = build.last_mut() {
+                if spec.absorb(&mut next) {
+                    continue;
+                }
+            }
+            build.push(next);
+        }
         yaml::Config {
             version: self.version,
             shell: Some(self.shell),
-            build: Some(
-                self.build
-                    .into_iter()
-                    .map(|unit| match unit {
-                        BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
-                        BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
-                        BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
-                        BuildUnit::Install(package) => BuildSpec::Install(vec![package.into()]),
-                        BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
-                    })
-                    .collect::<Vec<BuildSpec>>(),
-            )
-            .filter(|spec| !spec.is_empty()),
+            build: Some(build).filter(|spec| !spec.is_empty()),
         }
     }
 }
