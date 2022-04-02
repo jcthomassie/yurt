@@ -456,7 +456,7 @@ impl ResolvedConfig {
     }
 
     fn into_yaml(self) -> Result<String> {
-        serde_yaml::to_string(&self.into_config()).context("failed to construct yaml string")
+        serde_yaml::to_string(&self.into_config()).context("Failed to serialize config")
     }
 }
 

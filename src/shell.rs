@@ -13,14 +13,22 @@ pub trait Cmd {
     fn name(&self) -> &str;
 
     #[inline]
+    fn format(&self, args: &[&str]) -> String {
+        format!("{} {}", self.name(), args.join(" "))
+    }
+
+    #[inline]
     fn command(&self) -> Command {
         Command::new(self.name())
     }
 
     #[inline]
     fn call_unchecked(&self, args: &[&str]) -> Result<Output> {
-        debug!("Calling command: `{} {}`", self.name(), args.join(" "));
-        Ok(self.command().args(args).output()?)
+        debug!("Calling command: `{}`", self.format(args));
+        self.command()
+            .args(args)
+            .output()
+            .with_context(|| format!("Failed to run command: `{}`", self.format(args)))
     }
 
     #[inline]
@@ -28,9 +36,8 @@ pub trait Cmd {
         match self.call_unchecked(args)?.status.success() {
             true => Ok(()),
             false => Err(anyhow!(
-                "Failed command: `{} {}`",
-                self.name(),
-                args.join(" ")
+                "Command exited with error: `{}`",
+                self.format(args)
             )),
         }
     }
@@ -89,11 +96,9 @@ where
     U: Cmd,
 {
     debug!(
-        "Calling command: `{} {} | {} {}`",
-        cmd_a.name(),
-        args_a.join(" "),
-        cmd_b.name(),
-        args_b.join(" ")
+        "Calling command: `{} | {}`",
+        cmd_a.format(args_a),
+        cmd_b.format(args_b)
     );
     let proc_a = cmd_a
         .command()
@@ -109,11 +114,9 @@ where
         .context("Failed to spawn secondary pipe command")?;
     pipe_existing(proc_a, proc_b).with_context(|| {
         format!(
-            "Failed command: `{} {} | {} {}`",
-            cmd_a.name(),
-            args_a.join(" "),
-            cmd_b.name(),
-            args_b.join(" ")
+            "Failed command: `{} | {}`",
+            cmd_a.format(args_a),
+            cmd_b.format(args_b)
         )
     })
 }
