@@ -1,0 +1,24 @@
+---
+version: "0.0"
+shell: Zsh
+build:
+  - install:
+      - name: package_a
+      - name: package_b
+  - require:
+      - cargo
+      - apt
+  - install:
+      - name: package_c
+        managers:
+          - cargo
+      - name: package_d
+        managers:
+          - apt
+      - name: package_e
+      - name: package_f
+        managers:
+          - apt
+          - cargo
+        aliases:
+          cargo: pack-f

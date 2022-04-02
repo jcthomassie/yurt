@@ -524,6 +524,7 @@ mod tests {
 
     mod yaml {
         use super::super::{yaml::*, *};
+        use pretty_assertions::assert_eq;
 
         static YAML: &str = include_str!("../test/build.yaml");
 
@@ -597,12 +598,14 @@ mod tests {
                         include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
                     let config = Config::from_str(raw_input).expect("failed to parse input case");
                     let resolved = config.resolve().expect("failed to resolve input case");
-                    assert_eq!(resolved.into_yaml().unwrap(), raw_output)
+                    let yaml = resolved.into_yaml().unwrap();
+                    assert_eq!(yaml, raw_output)
                 }
             };
         }
 
         yaml_case!(packages);
+        yaml_case!(packages_expanded);
     }
 
     fn check_pattern_outer(input: &str, output: &str) {
