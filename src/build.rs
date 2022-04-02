@@ -178,23 +178,6 @@ impl<T> Case<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
-pub struct PackageSpec {
-    name: String,
-    managers: Option<BTreeSet<PackageManager>>,
-    aliases: Option<BTreeMap<PackageManager, String>>,
-}
-
-impl From<Package> for PackageSpec {
-    fn from(package: Package) -> PackageSpec {
-        PackageSpec {
-            name: package.name,
-            managers: Some(package.managers).filter(|set| !set.is_empty()),
-            aliases: Some(package.aliases).filter(|map| !map.is_empty()),
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 enum BuildUnit {
     Repo(Repo),
@@ -213,7 +196,7 @@ pub enum BuildSpec {
     Case(Vec<Case<Vec<BuildSpec>>>),
     Link(Vec<Link>),
     Run(String),
-    Install(Vec<PackageSpec>),
+    Install(Vec<Package>),
     Require(Vec<PackageManager>),
 }
 
@@ -268,14 +251,14 @@ resolve_unit!(Link, (self, context) => {
     ))
 });
 resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
-resolve_unit!(PackageSpec, (self, context) => {
+resolve_unit!(Package, (self, context) => {
     BuildUnit::Install(Package {
         name: context.replace_variables(&self.name)?,
-        managers: match &self.managers {
-            Some(m) => context.managers.intersection(m).cloned().collect(),
-            None => context.managers.clone()
+        managers: match self.managers.is_empty() {
+            false => context.managers.intersection(&self.managers).cloned().collect(),
+            true => context.managers.clone()
         },
-        aliases: self.aliases.unwrap_or_default(),
+        ..self
     })
 });
 resolve_unit!(PackageManager, (self, context) => {
@@ -449,7 +432,7 @@ impl ResolvedConfig {
                 BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
                 BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
                 BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
-                BuildUnit::Install(package) => BuildSpec::Install(vec![package.into()]),
+                BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
                 BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
             };
             if let Some(spec) = build.last_mut() {
@@ -659,7 +642,7 @@ mod tests {
 
     #[test]
     fn package_name_substitution() {
-        let spec: PackageSpec = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
+        let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
         let mut context = Context::default();
         context.set_variable("namespace", "key", "value");
         // No managers remain
@@ -670,7 +653,7 @@ mod tests {
 
     #[test]
     fn package_manager_prune_empty() {
-        let spec: PackageSpec = serde_yaml::from_str("name: some-package").unwrap();
+        let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
         let mut context = Context::default();
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
@@ -681,7 +664,7 @@ mod tests {
     #[test]
     fn package_manager_prune_some() {
         #[rustfmt::skip]
-        let spec: PackageSpec = serde_yaml::from_str("
+        let spec: Package = serde_yaml::from_str("
             name: some-package
             managers: [ apt, brew ]
         ").unwrap();

@@ -6,10 +6,14 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
     pub name: String,
+    #[serde(default = "BTreeSet::new")]
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub managers: BTreeSet<PackageManager>,
+    #[serde(default = "BTreeMap::new")]
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub aliases: BTreeMap<PackageManager, String>,
 }
 
