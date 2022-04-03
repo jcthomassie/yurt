@@ -1,0 +1,21 @@
+---
+version: 0.0 # becomes explicit string
+shell: zsh
+build:
+  - install:
+    - name: package_a
+    - name: package_b
+  # specify managers
+  - require: [ cargo, apt ]
+  - install:
+    - name: package_c
+      managers: [ cargo ]
+    - name: package_d
+      managers: [ apt ]
+    - name: package_e
+      managers: [ choco ] # gets dropped, not present
+  # specify aliases
+  - install:
+    - name: package_f
+      aliases:
+        cargo: pack-f

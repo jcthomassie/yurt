@@ -1,0 +1,14 @@
+---
+version: 0.2.0
+shell: bash
+build:
+  - namespace:
+      name: names
+      values:
+        alpha: package_2
+        beta: package_3
+        gamma: package_4
+  - install:
+    - name: ${{ names.alpha }}
+    - name: ${{ names.beta }}
+    - name: ${{ names.gamma }}

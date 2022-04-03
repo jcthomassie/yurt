@@ -1,8 +1,8 @@
 use anyhow::Result;
 use git2::Repository;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
     pub path: String,
     pub url: String,

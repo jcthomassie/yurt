@@ -1,12 +1,13 @@
 use super::files::Link;
+use super::package::{Package, PackageManager};
 use super::repo::Repo;
-use super::shell::{Package, PackageManager, Shell, ShellCmd};
-use anyhow::{anyhow, bail, ensure, Result};
+use super::shell::{Shell, ShellCmd};
+use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::crate_version;
 use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
@@ -26,7 +27,7 @@ lazy_static! {
 struct Context {
     variables: BTreeMap<String, String>,
     managers: BTreeSet<PackageManager>,
-    locale: Locale<String>,
+    locale: Locale,
     home_dir: PathBuf,
 }
 
@@ -87,15 +88,15 @@ impl Default for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-pub struct Locale<T> {
-    user: T,
-    platform: T,
-    distro: T,
+#[derive(Debug, PartialEq, Clone)]
+pub struct Locale {
+    user: String,
+    platform: String,
+    distro: String,
 }
 
-impl<T> Locale<T> {
-    fn new(user: T, platform: T, distro: T) -> Self {
+impl Locale {
+    fn new(user: String, platform: String, distro: String) -> Self {
         Self {
             user,
             platform,
@@ -104,8 +105,18 @@ impl<T> Locale<T> {
     }
 }
 
-impl Locale<Option<String>> {
-    fn is_local(&self, rubric: &Locale<String>) -> bool {
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct LocaleSpec {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    platform: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    distro: Option<String>,
+}
+
+impl LocaleSpec {
+    fn is_local(&self, rubric: &Locale) -> bool {
         let s_vals = vec![
             self.user.as_deref(),
             self.platform.as_deref(),
@@ -123,13 +134,13 @@ impl Locale<Option<String>> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
     values: BTreeMap<String, Vec<String>>,
     include: T,
@@ -148,24 +159,16 @@ impl<T> Matrix<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
 pub enum Case<T> {
-    Positive {
-        spec: Locale<Option<String>>,
-        include: T,
-    },
-    Negative {
-        spec: Locale<Option<String>>,
-        include: T,
-    },
-    Default {
-        include: T,
-    },
+    Positive { spec: LocaleSpec, include: T },
+    Negative { spec: LocaleSpec, include: T },
+    Default { include: T },
 }
 
 impl<T> Case<T> {
-    fn rule(self, default: bool, rubric: &Locale<String>) -> Option<T> {
+    fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
         match self {
             Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
             Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
@@ -173,13 +176,6 @@ impl<T> Case<T> {
             _ => None,
         }
     }
-}
-
-#[derive(Debug, PartialEq, Deserialize, Clone)]
-pub struct PackageSpec {
-    name: String,
-    managers: Option<BTreeSet<PackageManager>>,
-    aliases: Option<BTreeMap<PackageManager, String>>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -191,17 +187,37 @@ enum BuildUnit {
     Require(PackageManager),
 }
 
-#[derive(Debug, PartialEq, Deserialize, Clone)]
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum BuildSet {
+pub enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
-    Matrix(Matrix<Vec<BuildSet>>),
-    Case(Vec<Case<Vec<BuildSet>>>),
+    Matrix(Matrix<Vec<BuildSpec>>),
+    Case(Vec<Case<Vec<BuildSpec>>>),
     Link(Vec<Link>),
     Run(String),
-    Install(Vec<PackageSpec>),
+    Install(Vec<Package>),
     Require(Vec<PackageManager>),
+}
+
+impl BuildSpec {
+    fn absorb(self: &mut BuildSpec, unit: &BuildUnit) -> bool {
+        match (self, unit) {
+            (BuildSpec::Link(a), BuildUnit::Link(b)) => {
+                a.push(b.clone());
+                true
+            }
+            (BuildSpec::Install(a), BuildUnit::Install(b)) => {
+                a.push(b.clone());
+                true
+            }
+            (BuildSpec::Require(a), BuildUnit::Require(b)) => {
+                a.push(b.clone());
+                true
+            }
+            _ => false,
+        }
+    }
 }
 
 trait Resolve {
@@ -235,14 +251,14 @@ resolve_unit!(Link, (self, context) => {
     ))
 });
 resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
-resolve_unit!(PackageSpec, (self, context) => {
+resolve_unit!(Package, (self, context) => {
     BuildUnit::Install(Package {
         name: context.replace_variables(&self.name)?,
-        managers: match &self.managers {
-            Some(m) => context.managers.intersection(m).cloned().collect(),
-            None => context.managers.clone()
+        managers: match self.managers.is_empty() {
+            false => context.managers.intersection(&self.managers).cloned().collect(),
+            true => context.managers.clone()
         },
-        aliases: self.aliases.unwrap_or_default(),
+        ..self
     })
 });
 resolve_unit!(PackageManager, (self, context) => {
@@ -269,7 +285,7 @@ where
     }
 }
 
-impl Resolve for BuildSet {
+impl Resolve for BuildSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
             Self::Repo(r) => r.resolve_into(context, output)?,
@@ -334,7 +350,7 @@ where
 }
 
 #[allow(dead_code)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
@@ -344,26 +360,33 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    fn nontrivial(&self) -> Vec<&BuildUnit> {
-        self.build
-            .iter()
-            .filter(|&unit| match unit {
-                BuildUnit::Repo(repo) => !repo.is_available(),
-                BuildUnit::Link(link) => !link.is_valid(),
-                BuildUnit::Install(package) => !package.is_installed(),
-                BuildUnit::Require(manager) => !manager.is_available(),
-                BuildUnit::ShellCmd(_) => true,
-            })
-            .collect()
+    fn nontrivial(self) -> ResolvedConfig {
+        ResolvedConfig {
+            build: self
+                .build
+                .into_iter()
+                .filter(|unit| match unit {
+                    BuildUnit::Repo(repo) => !repo.is_available(),
+                    BuildUnit::Link(link) => !link.is_valid(),
+                    BuildUnit::Install(package) => !package.is_installed(),
+                    BuildUnit::Require(manager) => !manager.is_available(),
+                    BuildUnit::ShellCmd(_) => true,
+                })
+                .collect(),
+            ..self
+        }
     }
 
     // Pretty-print the complete build; optionally filter out trivial units
     pub fn show(&self, nontrivial: bool) -> Result<()> {
-        if nontrivial {
-            println!("{:#?}", self.nontrivial());
-        } else {
-            println!("{:#?}", self);
-        }
+        print!(
+            "{}",
+            match nontrivial {
+                true => self.clone().nontrivial(),
+                false => self.clone(),
+            }
+            .into_yaml()?
+        );
         Ok(())
     }
 
@@ -408,16 +431,43 @@ impl ResolvedConfig {
     pub fn update(&self) -> Result<()> {
         todo!()
     }
+
+    fn into_config(self) -> yaml::Config {
+        let mut build: Vec<BuildSpec> = Vec::new();
+        for unit in self.build.into_iter() {
+            if let Some(spec) = build.last_mut() {
+                if spec.absorb(&unit) {
+                    continue;
+                }
+            }
+            build.push(match unit {
+                BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
+                BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
+                BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
+                BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
+                BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
+            });
+        }
+        yaml::Config {
+            version: self.version,
+            shell: Some(self.shell),
+            build,
+        }
+    }
+
+    fn into_yaml(self) -> Result<String> {
+        serde_yaml::to_string(&self.into_config()).context("Failed to serialize config")
+    }
 }
 
 pub mod yaml {
     use super::*;
 
-    #[derive(Debug, PartialEq, Deserialize)]
+    #[derive(Debug, PartialEq, Deserialize, Serialize)]
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
-        pub build: Option<Vec<BuildSet>>,
+        pub build: Vec<BuildSpec>,
     }
 
     impl Config {
@@ -461,10 +511,7 @@ pub mod yaml {
                 );
             }
             // Resolve build
-            let build = match self.build {
-                Some(raw) => raw.resolve(&mut context)?,
-                None => Vec::new(),
-            };
+            let build = self.build.resolve(&mut context)?;
             Ok(ResolvedConfig {
                 context,
                 version: self.version,
@@ -477,9 +524,78 @@ pub mod yaml {
 
 #[cfg(test)]
 mod tests {
-    use super::{yaml::*, *};
+    use super::*;
 
-    static YAML: &str = include_str!("../test/build.yaml");
+    mod yaml {
+        use super::super::{yaml::*, *};
+
+        #[test]
+        fn version_check() {
+            let mut cfg = Config {
+                version: None,
+                shell: None,
+                build: Vec::new(),
+            };
+            assert!(!cfg.version_matches(true));
+            assert!(cfg.version_matches(false));
+            cfg.version = Some("9.9.9".to_string());
+            assert!(!cfg.version_matches(true));
+            assert!(!cfg.version_matches(false));
+            cfg.version = Some(crate_version!().to_string());
+            assert!(cfg.version_matches(true));
+            assert!(cfg.version_matches(false));
+        }
+
+        mod io {
+            use super::yaml::Config;
+            use pretty_assertions::assert_eq;
+
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let raw_input =
+                            include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
+                        let raw_output =
+                            include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
+                        let config =
+                            Config::from_str(raw_input).expect("failed to parse input case");
+                        let resolved = config.resolve().expect("failed to resolve input case");
+                        let yaml = resolved.into_yaml().unwrap();
+                        assert_eq!(yaml, raw_output)
+                    }
+                };
+            }
+
+            test_case!(packages);
+            test_case!(packages_expanded);
+            test_case!(matrix);
+            test_case!(namespace);
+            test_case!(case);
+            test_case!(repo);
+        }
+
+        mod invalid_parse {
+            use super::yaml::Config;
+
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let raw_input = include_str!(concat!(
+                            "../test/invalid/parse/",
+                            stringify!($name),
+                            ".yaml"
+                        ));
+                        assert!(Config::from_str(raw_input).is_err())
+                    }
+                };
+            }
+
+            test_case!(empty);
+            test_case!(no_build);
+        }
+    }
 
     fn check_pattern_outer(input: &str, output: &str) {
         let caps = RE_OUTER.captures(input).unwrap();
@@ -524,66 +640,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn empty_build_fails() {
-        assert!(Config::from_str("").is_err())
-    }
-
-    #[test]
-    fn build_parses() {
-        Config::from_str(YAML).unwrap();
-    }
-
-    #[test]
-    fn build_resolves() {
-        let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
-        let mut repos = 1;
-        let mut comms = 1;
-        let mut boots = 2;
-        let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
-            .into_iter()
-            .map(std::path::PathBuf::from);
-        let mut names = vec![
-            "package_0",
-            "package_1",
-            "package_2",
-            "package_3",
-            "package_4",
-        ]
-        .into_iter();
-        for unit in resolved.build.into_iter() {
-            match unit {
-                BuildUnit::Repo(_) => repos -= 1,
-                BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
-                BuildUnit::ShellCmd(_) => comms -= 1,
-                BuildUnit::Install(package) => assert_eq!(package.name, names.next().unwrap()),
-                BuildUnit::Require(_) => boots -= 1,
-            }
-        }
-        assert_eq!(repos, 0);
-        assert!(links.next().is_none());
-        assert_eq!(comms, 0);
-        assert_eq!(boots, 0);
-        assert!(names.next().is_none());
-    }
-
-    #[test]
-    fn build_version_check() {
-        let mut cfg = Config {
-            version: None,
-            shell: None,
-            build: None,
-        };
-        assert!(!cfg.version_matches(true));
-        assert!(cfg.version_matches(false));
-        cfg.version = Some("9.9.9".to_string());
-        assert!(!cfg.version_matches(true));
-        assert!(!cfg.version_matches(false));
-        cfg.version = Some(crate_version!().to_string());
-        assert!(cfg.version_matches(true));
-        assert!(cfg.version_matches(false));
-    }
-
     macro_rules! unpack {
         (@unit $value:expr, BuildUnit::$variant:ident) => {
             if let BuildUnit::$variant(ref unwrapped) = $value {
@@ -602,7 +658,7 @@ mod tests {
 
     #[test]
     fn package_name_substitution() {
-        let spec: PackageSpec = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
+        let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
         let mut context = Context::default();
         context.set_variable("namespace", "key", "value");
         // No managers remain
@@ -613,7 +669,7 @@ mod tests {
 
     #[test]
     fn package_manager_prune_empty() {
-        let spec: PackageSpec = serde_yaml::from_str("name: some-package").unwrap();
+        let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
         let mut context = Context::default();
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
@@ -624,7 +680,7 @@ mod tests {
     #[test]
     fn package_manager_prune_some() {
         #[rustfmt::skip]
-        let spec: PackageSpec = serde_yaml::from_str("
+        let spec: Package = serde_yaml::from_str("
             name: some-package
             managers: [ apt, brew ]
         ").unwrap();
@@ -710,40 +766,52 @@ mod tests {
 
     #[test]
     fn positive_match() {
-        let set = BuildSet::Case(vec![Case::Positive {
-            spec: Locale::new(
-                None,
-                Some(format!("{:?}", whoami::platform()).to_lowercase()),
-                None,
-            ),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        let set = BuildSpec::Case(vec![Case::Positive {
+            spec: LocaleSpec {
+                user: None,
+                platform: Some(format!("{:?}", whoami::platform()).to_lowercase()),
+                distro: None,
+            },
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn positive_non_match() {
-        let set = BuildSet::Case(vec![Case::Positive {
-            spec: Locale::new(None, None, Some("nothere".to_string())),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        let set = BuildSpec::Case(vec![Case::Positive {
+            spec: LocaleSpec {
+                user: None,
+                platform: None,
+                distro: Some("nothere".to_string()),
+            },
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_match() {
-        let set = BuildSet::Case(vec![Case::Negative {
-            spec: Locale::new(None, Some("nothere".to_string()), None),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        let set = BuildSpec::Case(vec![Case::Negative {
+            spec: LocaleSpec {
+                user: None,
+                platform: Some("nothere".to_string()),
+                distro: None,
+            },
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
     }
 
     #[test]
     fn negative_non_match() {
-        let set = BuildSet::Case(vec![Case::Negative {
-            spec: Locale::new(Some(whoami::username()), None, None),
-            include: vec![BuildSet::Link(vec![Link::new("a", "b")])],
+        let set = BuildSpec::Case(vec![Case::Negative {
+            spec: LocaleSpec {
+                user: Some(whoami::username()),
+                platform: None,
+                distro: None,
+            },
+            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
         assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
     }
