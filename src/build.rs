@@ -451,7 +451,7 @@ impl ResolvedConfig {
         yaml::Config {
             version: self.version,
             shell: Some(self.shell),
-            build: Some(build).filter(|spec| !spec.is_empty()),
+            build,
         }
     }
 
@@ -467,7 +467,7 @@ pub mod yaml {
     pub struct Config {
         pub version: Option<String>,
         pub shell: Option<Shell>,
-        pub build: Option<Vec<BuildSpec>>,
+        pub build: Vec<BuildSpec>,
     }
 
     impl Config {
@@ -511,10 +511,7 @@ pub mod yaml {
                 );
             }
             // Resolve build
-            let build = match self.build {
-                Some(raw) => raw.resolve(&mut context)?,
-                None => Vec::new(),
-            };
+            let build = self.build.resolve(&mut context)?;
             Ok(ResolvedConfig {
                 context,
                 version: self.version,
@@ -533,16 +530,11 @@ mod tests {
         use super::super::{yaml::*, *};
 
         #[test]
-        fn empty_build_fails() {
-            assert!(Config::from_str("").is_err())
-        }
-
-        #[test]
         fn version_check() {
             let mut cfg = Config {
                 version: None,
                 shell: None,
-                build: None,
+                build: Vec::new(),
             };
             assert!(!cfg.version_matches(true));
             assert!(cfg.version_matches(false));
@@ -581,6 +573,27 @@ mod tests {
             test_case!(namespace);
             test_case!(case);
             test_case!(repo);
+        }
+
+        mod invalid_parse {
+            use super::yaml::Config;
+
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let raw_input = include_str!(concat!(
+                            "../test/invalid/parse/",
+                            stringify!($name),
+                            ".yaml"
+                        ));
+                        assert!(Config::from_str(raw_input).is_err())
+                    }
+                };
+            }
+
+            test_case!(empty);
+            test_case!(no_build);
         }
     }
 
