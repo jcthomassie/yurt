@@ -125,7 +125,7 @@ impl PackageManager {
                 format!("cargo install --list | grep '^{} v'", package)
             }
             .as_str()
-            .run(&Shell::Cmd)
+            .run(&Shell::default())
             .map(|s| s.status.success()),
             _ => Ok(false),
         };
