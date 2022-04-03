@@ -531,7 +531,6 @@ mod tests {
 
     mod yaml {
         use super::super::{yaml::*, *};
-        use pretty_assertions::assert_eq;
 
         #[test]
         fn empty_build_fails() {
@@ -555,28 +554,34 @@ mod tests {
             assert!(cfg.version_matches(false));
         }
 
-        macro_rules! yaml_case {
-            ($name:ident) => {
-                #[test]
-                fn $name() {
-                    let raw_input =
-                        include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
-                    let raw_output =
-                        include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
-                    let config = Config::from_str(raw_input).expect("failed to parse input case");
-                    let resolved = config.resolve().expect("failed to resolve input case");
-                    let yaml = resolved.into_yaml().unwrap();
-                    assert_eq!(yaml, raw_output)
-                }
-            };
-        }
+        mod io {
+            use super::yaml::Config;
+            use pretty_assertions::assert_eq;
 
-        yaml_case!(packages);
-        yaml_case!(packages_expanded);
-        yaml_case!(matrix);
-        yaml_case!(namespace);
-        yaml_case!(case);
-        yaml_case!(repo);
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let raw_input =
+                            include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
+                        let raw_output =
+                            include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
+                        let config =
+                            Config::from_str(raw_input).expect("failed to parse input case");
+                        let resolved = config.resolve().expect("failed to resolve input case");
+                        let yaml = resolved.into_yaml().unwrap();
+                        assert_eq!(yaml, raw_output)
+                    }
+                };
+            }
+
+            test_case!(packages);
+            test_case!(packages_expanded);
+            test_case!(matrix);
+            test_case!(namespace);
+            test_case!(case);
+            test_case!(repo);
+        }
     }
 
     fn check_pattern_outer(input: &str, output: &str) {
