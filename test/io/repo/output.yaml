@@ -1,0 +1,10 @@
+---
+version: 0.2.0
+shell: zsh
+build:
+  - repo:
+      path: /home/dotfiles
+      url: "https://github.com/user/dotfiles.git"
+  - link:
+      - head: /dotfiles
+        tail: /home/dotfiles

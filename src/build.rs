@@ -533,53 +533,13 @@ mod tests {
         use super::super::{yaml::*, *};
         use pretty_assertions::assert_eq;
 
-        static YAML: &str = include_str!("../test/build.yaml");
-
         #[test]
         fn empty_build_fails() {
             assert!(Config::from_str("").is_err())
         }
 
         #[test]
-        fn build_parses() {
-            Config::from_str(YAML).unwrap();
-        }
-
-        #[test]
-        fn build_resolves() {
-            let resolved = Config::from_str(YAML).unwrap().resolve().unwrap();
-            let mut repos = 1;
-            let mut comms = 1;
-            let mut boots = 2;
-            let mut links = vec!["dir_a/tail_1", "dir_b/tail_2", "dir_c/tail_3"]
-                .into_iter()
-                .map(std::path::PathBuf::from);
-            let mut names = vec![
-                "package_0",
-                "package_1",
-                "package_2",
-                "package_3",
-                "package_4",
-            ]
-            .into_iter();
-            for unit in resolved.build.into_iter() {
-                match unit {
-                    BuildUnit::Repo(_) => repos -= 1,
-                    BuildUnit::Link(link) => assert_eq!(link.tail, links.next().unwrap()),
-                    BuildUnit::ShellCmd(_) => comms -= 1,
-                    BuildUnit::Install(package) => assert_eq!(package.name, names.next().unwrap()),
-                    BuildUnit::Require(_) => boots -= 1,
-                }
-            }
-            assert_eq!(repos, 0);
-            assert!(links.next().is_none());
-            assert_eq!(comms, 0);
-            assert_eq!(boots, 0);
-            assert!(names.next().is_none());
-        }
-
-        #[test]
-        fn build_version_check() {
+        fn version_check() {
             let mut cfg = Config {
                 version: None,
                 shell: None,
@@ -613,6 +573,10 @@ mod tests {
 
         yaml_case!(packages);
         yaml_case!(packages_expanded);
+        yaml_case!(matrix);
+        yaml_case!(namespace);
+        yaml_case!(case);
+        yaml_case!(repo);
     }
 
     fn check_pattern_outer(input: &str, output: &str) {

@@ -1,0 +1,9 @@
+---
+version: 0.2.0
+shell: zsh
+build:
+  - install:
+      - name: package_0
+      - name: package_1
+        aliases:
+          apt: package_1-alias

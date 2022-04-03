@@ -1,0 +1,31 @@
+---
+version: 0.2.0
+shell: zsh
+build:
+  - case:
+    - positive:
+        spec:
+          user: not_user
+        include:
+        - install:
+          - name: not_package
+    - default:
+        include:
+        # Nested conditional
+        - case:
+          - positive:
+              spec:
+                user: not_user
+              include:
+                - require:
+                  - choco
+          - negative:
+              spec:
+                user: not_user
+              include:
+                - install:
+                  - name: package_0
+        - install:
+          - name: package_1
+            managers: [ apt, apt-get ]
+            aliases: { apt: package_1-alias }

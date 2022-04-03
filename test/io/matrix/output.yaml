@@ -1,0 +1,11 @@
+---
+version: 0.1.0
+shell: zsh
+build:
+  - link:
+      - head: dir_a/head_1
+        tail: dir_a/tail_1
+      - head: dir_b/head_2
+        tail: dir_b/tail_2
+      - head: dir_c/head_3
+        tail: dir_c/tail_3

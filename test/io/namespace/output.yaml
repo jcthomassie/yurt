@@ -1,0 +1,8 @@
+---
+version: 0.2.0
+shell: bash
+build:
+  - install:
+      - name: package_2
+      - name: package_3
+      - name: package_4
