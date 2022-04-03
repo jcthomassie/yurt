@@ -6,7 +6,7 @@ mod shell;
 
 use anyhow::{Context, Result};
 use build::{yaml::Config, ResolvedConfig};
-use clap::{crate_authors, crate_version, App, AppSettings, Arg, ArgMatches};
+use clap::{crate_authors, crate_version, Arg, ArgMatches, Command};
 use log::debug;
 use std::{env, time::Instant};
 
@@ -64,13 +64,14 @@ fn update(matches: &ArgMatches) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let matches = App::new("yurt")
+    let matches = Command::new("yurt")
         .author(crate_authors!())
         .version(crate_version!())
         .about("Simple CLI tool for dotfile management.")
-        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .subcommand_required(true)
+        .arg_required_else_help(true)
         .subcommand(
-            App::new("install").about("Installs dotfiles").arg(
+            Command::new("install").about("Installs dotfiles").arg(
                 Arg::new("clean")
                     .help("Run `dots clean` before install")
                     .short('c')
@@ -79,7 +80,7 @@ fn main() -> Result<()> {
             ),
         )
         .subcommand(
-            App::new("uninstall").about("Uninstalls dotfiles").arg(
+            Command::new("uninstall").about("Uninstalls dotfiles").arg(
                 Arg::new("packages")
                     .help("Uninstall packages too")
                     .short('p')
@@ -87,10 +88,10 @@ fn main() -> Result<()> {
                     .takes_value(false),
             ),
         )
-        .subcommand(App::new("update").about("Updates dotfiles and/or system"))
-        .subcommand(App::new("clean").about("Cleans output destinations"))
+        .subcommand(Command::new("update").about("Updates dotfiles and/or system"))
+        .subcommand(Command::new("clean").about("Cleans output destinations"))
         .subcommand(
-            App::new("show").about("Shows the build config").arg(
+            Command::new("show").about("Shows the build config").arg(
                 Arg::new("non-trivial")
                     .help("Hide trivial build units")
                     .short('n')
