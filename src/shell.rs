@@ -70,7 +70,10 @@ pub trait ShellCmd {
 
 impl ShellCmd for &str {
     fn run(&self, shell: &Shell) -> Result<Output> {
-        shell.call_unchecked(&["-c", self])
+        match shell {
+            Shell::Cmd => shell.call_unchecked(&["/C", self]),
+            _ => shell.call_unchecked(&["-c", self]),
+        }
     }
 }
 
@@ -128,6 +131,7 @@ pub enum Shell {
     Bash,
     Zsh,
     Powershell,
+    Cmd,
     Other(String),
 }
 
@@ -138,6 +142,7 @@ impl Cmd for Shell {
             Self::Bash => "bash",
             Self::Zsh => "zsh",
             Self::Powershell => "pwsh",
+            Self::Cmd => "cmd",
             Self::Other(name) => name,
         }
     }
@@ -146,7 +151,7 @@ impl Cmd for Shell {
 impl Default for Shell {
     #[cfg(target_os = "windows")]
     fn default() -> Shell {
-        Shell::Powershell
+        Shell::Cmd
     }
 
     #[cfg(target_os = "macos")]
@@ -211,7 +216,7 @@ mod tests {
 
     #[test]
     fn shell_command_success() {
-        let out = "ls ~".run(&Shell::default()).unwrap();
+        let out = "echo 'hello world!'".run(&Shell::default()).unwrap();
         assert!(out.status.success());
     }
 
