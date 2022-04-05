@@ -6,9 +6,66 @@ mod shell;
 
 use anyhow::{Context, Result};
 use build::{yaml::Config, ResolvedConfig};
-use clap::{crate_authors, crate_version, Arg, ArgMatches, Command};
+use clap::{command, Arg, ArgMatches, Command};
 use log::debug;
 use std::{env, time::Instant};
+
+#[inline]
+pub fn yurt_command() -> Command<'static> {
+    command!()
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .subcommand(
+            Command::new("install").about("Installs dotfiles").arg(
+                Arg::new("clean")
+                    .help("Run `dots clean` before install")
+                    .short('c')
+                    .long("clean")
+                    .takes_value(false),
+            ),
+        )
+        .subcommand(
+            Command::new("uninstall").about("Uninstalls dotfiles").arg(
+                Arg::new("packages")
+                    .help("Uninstall packages too")
+                    .short('p')
+                    .long("packages")
+                    .takes_value(false),
+            ),
+        )
+        .subcommand(Command::new("update").about("Updates dotfiles and/or system"))
+        .subcommand(Command::new("clean").about("Cleans output destinations"))
+        .subcommand(
+            Command::new("show").about("Shows the build config").arg(
+                Arg::new("non-trivial")
+                    .help("Hide trivial build units")
+                    .short('n')
+                    .long("non-trivial")
+                    .takes_value(false),
+            ),
+        )
+        .arg(
+            Arg::new("yaml")
+                .help("YAML build file path")
+                .short('y')
+                .long("yaml")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("yaml-url")
+                .help("YAML build file URL")
+                .long("yaml-url")
+                .takes_value(true)
+                .conflicts_with("yaml"),
+        )
+        .arg(
+            Arg::new("log")
+                .help("Logging level")
+                .short('l')
+                .long("log")
+                .takes_value(true),
+        )
+}
 
 fn parse_config(matches: &ArgMatches) -> Result<Config> {
     if let Some(url) = matches.value_of("yaml-url") {
@@ -64,63 +121,7 @@ fn update(matches: &ArgMatches) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let matches = Command::new("yurt")
-        .author(crate_authors!())
-        .version(crate_version!())
-        .about("Simple CLI tool for dotfile management.")
-        .subcommand_required(true)
-        .arg_required_else_help(true)
-        .subcommand(
-            Command::new("install").about("Installs dotfiles").arg(
-                Arg::new("clean")
-                    .help("Run `dots clean` before install")
-                    .short('c')
-                    .long("clean")
-                    .takes_value(false),
-            ),
-        )
-        .subcommand(
-            Command::new("uninstall").about("Uninstalls dotfiles").arg(
-                Arg::new("packages")
-                    .help("Uninstall packages too")
-                    .short('p')
-                    .long("packages")
-                    .takes_value(false),
-            ),
-        )
-        .subcommand(Command::new("update").about("Updates dotfiles and/or system"))
-        .subcommand(Command::new("clean").about("Cleans output destinations"))
-        .subcommand(
-            Command::new("show").about("Shows the build config").arg(
-                Arg::new("non-trivial")
-                    .help("Hide trivial build units")
-                    .short('n')
-                    .long("non-trivial")
-                    .takes_value(false),
-            ),
-        )
-        .arg(
-            Arg::new("yaml")
-                .help("YAML build file path")
-                .short('y')
-                .long("yaml")
-                .takes_value(true),
-        )
-        .arg(
-            Arg::new("yaml-url")
-                .help("YAML build file URL")
-                .long("yaml-url")
-                .takes_value(true)
-                .conflicts_with("yaml"),
-        )
-        .arg(
-            Arg::new("log")
-                .help("Logging level")
-                .short('l')
-                .long("log")
-                .takes_value(true),
-        )
-        .get_matches();
+    let matches = yurt_command().get_matches();
 
     if let Some(level) = matches.value_of("log") {
         env::set_var("RUST_LOG", level);
