@@ -72,16 +72,7 @@ impl Default for Context {
     fn default() -> Self {
         Self {
             variables: BTreeMap::new(),
-            locale: Locale::new(
-                whoami::username(),
-                format!("{:?}", whoami::platform()).to_lowercase(),
-                whoami::distro()
-                    .split(' ')
-                    .next()
-                    .expect("Failed to determine distro")
-                    .to_owned()
-                    .to_lowercase(),
-            ),
+            locale: Locale::default(),
             managers: BTreeSet::new(),
             home_dir: dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")),
         }
@@ -95,17 +86,22 @@ pub struct Locale {
     distro: String,
 }
 
-impl Locale {
-    fn new(user: String, platform: String, distro: String) -> Self {
+impl Default for Locale {
+    fn default() -> Self {
         Self {
-            user,
-            platform,
-            distro,
+            user: whoami::username(),
+            platform: format!("{:?}", whoami::platform()).to_lowercase(),
+            distro: whoami::distro()
+                .split(' ')
+                .next()
+                .expect("Failed to determine distro")
+                .to_owned()
+                .to_lowercase(),
         }
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
 pub struct LocaleSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<String>,
@@ -117,20 +113,16 @@ pub struct LocaleSpec {
 
 impl LocaleSpec {
     fn is_local(&self, rubric: &Locale) -> bool {
-        let s_vals = vec![
-            self.user.as_deref(),
-            self.platform.as_deref(),
-            self.distro.as_deref(),
-        ];
-        let o_vals = vec![
-            rubric.user.as_str(),
-            rubric.platform.as_str(),
-            rubric.distro.as_str(),
-        ];
-        s_vals
-            .into_iter()
-            .zip(o_vals.into_iter())
-            .all(|(s, o)| !matches!(s, Some(val) if val != o))
+        match self {
+            LocaleSpec { user: Some(u), .. } if u != &rubric.user => false,
+            LocaleSpec {
+                platform: Some(p), ..
+            } if p != &rubric.platform => false,
+            LocaleSpec {
+                distro: Some(d), ..
+            } if d != &rubric.distro => false,
+            _ => true,
+        }
     }
 }
 
@@ -739,10 +731,12 @@ mod tests {
     #[test]
     fn matrix_expansion() {
         let mut context = Context {
-            locale: Locale::new(String::new(), String::new(), String::new()),
-            variables: BTreeMap::new(),
-            managers: BTreeSet::new(),
-            home_dir: PathBuf::new(),
+            locale: Locale {
+                user: String::new(),
+                platform: String::new(),
+                distro: String::new(),
+            },
+            ..Default::default()
         };
         context.set_variable("outer", "key", "value");
         let values = vec![
