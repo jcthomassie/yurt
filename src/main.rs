@@ -4,8 +4,8 @@ mod package;
 mod repo;
 mod shell;
 
-use anyhow::{Context, Result};
-use build::{yaml::Config, ResolvedConfig};
+use anyhow::{Context as AnyContext, Result};
+use build::{yaml::Config, Context, ResolvedConfig};
 use clap::{command, Arg, ArgMatches, Command};
 use log::debug;
 use std::{env, time::Instant};
@@ -13,8 +13,6 @@ use std::{env, time::Instant};
 #[inline]
 pub fn yurt_command() -> Command<'static> {
     command!()
-        .subcommand_required(true)
-        .arg_required_else_help(true)
         .subcommand(
             Command::new("install").about("Installs dotfiles").arg(
                 Arg::new("clean")
@@ -65,25 +63,30 @@ pub fn yurt_command() -> Command<'static> {
                 .long("log")
                 .takes_value(true),
         )
-}
-
-fn parse_config(matches: &ArgMatches) -> Result<Config> {
-    if let Some(url) = matches.value_of("yaml-url") {
-        Config::from_url(url).context("Failed to parse remote build file")
-    } else {
-        let path = match matches.value_of("yaml") {
-            Some(path) => Ok(path.to_string()),
-            None => env::var("YURT_BUILD_FILE"),
-        }
-        .context("Config file not specified")?;
-        Config::from_path(path).context("Failed to parse local build file")
-    }
+        .arg(
+            Arg::new("user")
+                .help("Override target user name")
+                .long("override-user")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("platform")
+                .help("Override target platform")
+                .long("override-platform")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::new("distro")
+                .help("Override target distro")
+                .long("override-distro")
+                .takes_value(true),
+        )
 }
 
 #[inline]
 fn parse_resolved(matches: &ArgMatches) -> Result<ResolvedConfig> {
-    parse_config(matches)?
-        .resolve()
+    Config::from_args(matches)?
+        .resolve(Context::from(matches))
         .context("Failed to resolve build")
 }
 
@@ -121,7 +124,10 @@ fn update(matches: &ArgMatches) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    let matches = yurt_command().get_matches();
+    let matches = yurt_command()
+        .subcommand_required(true)
+        .arg_required_else_help(true)
+        .get_matches();
 
     if let Some(level) = matches.value_of("log") {
         env::set_var("RUST_LOG", level);

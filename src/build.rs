@@ -3,7 +3,7 @@ use super::package::{Package, PackageManager};
 use super::repo::Repo;
 use super::shell::{Shell, ShellCmd};
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
-use clap::crate_version;
+use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
@@ -24,7 +24,7 @@ lazy_static! {
 }
 
 #[derive(Debug, Clone)]
-struct Context {
+pub struct Context {
     variables: BTreeMap<String, String>,
     managers: BTreeSet<PackageManager>,
     locale: Locale,
@@ -68,11 +68,11 @@ impl Context {
     }
 }
 
-impl Default for Context {
-    fn default() -> Self {
+impl From<&ArgMatches> for Context {
+    fn from(args: &ArgMatches) -> Self {
         Self {
             variables: BTreeMap::new(),
-            locale: Locale::default(),
+            locale: Locale::from(args),
             managers: BTreeSet::new(),
             home_dir: dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")),
         }
@@ -86,17 +86,43 @@ pub struct Locale {
     distro: String,
 }
 
-impl Default for Locale {
-    fn default() -> Self {
+impl Locale {
+    #[inline]
+    fn get_user() -> String {
+        whoami::username()
+    }
+
+    #[inline]
+    fn get_platform() -> String {
+        format!("{:?}", whoami::platform()).to_lowercase()
+    }
+
+    #[inline]
+    fn get_distro() -> String {
+        whoami::distro()
+            .split(' ')
+            .next()
+            .expect("Failed to determine distro")
+            .to_owned()
+            .to_lowercase()
+    }
+}
+
+impl From<&ArgMatches> for Locale {
+    fn from(args: &ArgMatches) -> Self {
         Self {
-            user: whoami::username(),
-            platform: format!("{:?}", whoami::platform()).to_lowercase(),
-            distro: whoami::distro()
-                .split(' ')
-                .next()
-                .expect("Failed to determine distro")
-                .to_owned()
-                .to_lowercase(),
+            user: args
+                .value_of("user")
+                .map(String::from)
+                .unwrap_or_else(Self::get_user),
+            platform: args
+                .value_of("platform")
+                .map(String::from)
+                .unwrap_or_else(Self::get_platform),
+            distro: args
+                .value_of("distro")
+                .map(String::from)
+                .unwrap_or_else(Self::get_distro),
         }
     }
 }
@@ -485,6 +511,19 @@ pub mod yaml {
             Self::from_str(body)
         }
 
+        pub fn from_args(args: &ArgMatches) -> Result<Self> {
+            if let Some(url) = args.value_of("yaml-url") {
+                Self::from_url(url).context("Failed to parse remote build file")
+            } else {
+                let path = match args.value_of("yaml") {
+                    Some(path) => Ok(path.to_string()),
+                    None => env::var("YURT_BUILD_FILE"),
+                }
+                .context("Config file not specified")?;
+                Self::from_path(path).context("Failed to parse local build file")
+            }
+        }
+
         pub fn version_matches(&self, strict: bool) -> bool {
             if let Some(ref v) = self.version {
                 return v == crate_version!();
@@ -492,8 +531,7 @@ pub mod yaml {
             !strict
         }
 
-        pub fn resolve(self) -> Result<ResolvedConfig> {
-            let mut context = Context::default();
+        pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
             // Check version
             if !self.version_matches(false) {
                 warn!(
@@ -516,7 +554,12 @@ pub mod yaml {
 
 #[cfg(test)]
 mod tests {
+    use super::super::yurt_command;
     use super::*;
+
+    fn get_context(args: &[&str]) -> Context {
+        Context::from(&yurt_command().get_matches_from(args))
+    }
 
     mod yaml {
         use super::super::{yaml::*, *};
@@ -539,6 +582,7 @@ mod tests {
         }
 
         mod io {
+            use super::super::get_context;
             use super::yaml::Config;
             use pretty_assertions::assert_eq;
 
@@ -552,7 +596,9 @@ mod tests {
                             include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
                         let config =
                             Config::from_str(raw_input).expect("failed to parse input case");
-                        let resolved = config.resolve().expect("failed to resolve input case");
+                        let resolved = config
+                            .resolve(get_context(&[]))
+                            .expect("failed to resolve input case");
                         let yaml = resolved.into_yaml().unwrap();
                         assert_eq!(yaml, raw_output)
                     }
@@ -616,7 +662,7 @@ mod tests {
 
     #[test]
     fn replace_from_context() {
-        let mut context = Context::default();
+        let mut context = get_context(&[]);
         context.set_variable("name", "var_1", "val_1");
         context.set_variable("name", "var_2", "val_2");
         assert!(!context.replace_variables("~").unwrap().is_empty());
@@ -630,6 +676,24 @@ mod tests {
                 .unwrap(),
             "val_1/val_2"
         );
+    }
+
+    #[test]
+    fn override_user() {
+        let context = get_context(&["yurt", "--override-user", "some-other-user"]);
+        assert_eq!(context.locale.user, "some-other-user")
+    }
+
+    #[test]
+    fn override_distro() {
+        let context = get_context(&["yurt", "--override-distro", "some-other-distro"]);
+        assert_eq!(context.locale.distro, "some-other-distro")
+    }
+
+    #[test]
+    fn override_platform() {
+        let context = get_context(&["yurt", "--override-platform", "some-other-platform"]);
+        assert_eq!(context.locale.platform, "some-other-platform")
     }
 
     macro_rules! unpack {
@@ -651,7 +715,7 @@ mod tests {
     #[test]
     fn package_name_substitution() {
         let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
-        let mut context = Context::default();
+        let mut context = get_context(&[]);
         context.set_variable("namespace", "key", "value");
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
@@ -662,7 +726,7 @@ mod tests {
     #[test]
     fn package_manager_prune_empty() {
         let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
-        let mut context = Context::default();
+        let mut context = get_context(&[]);
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
@@ -677,7 +741,7 @@ mod tests {
             managers: [ apt, brew ]
         ").unwrap();
         // Add partially overlapping managers
-        let mut context = Context::default();
+        let mut context = get_context(&[]);
         context.managers.insert(PackageManager::Cargo);
         context.managers.insert(PackageManager::Brew);
         // Overlap remains
@@ -698,7 +762,7 @@ mod tests {
               key_a: val_a
               key_b: val_b
         ").unwrap();
-        let mut context = Context::default();
+        let mut context = get_context(&[]);
         namespace.resolve(&mut context).unwrap();
         assert_eq!(context.get_variable("namespace", "key_a").unwrap(), "val_a");
         assert_eq!(context.get_variable("namespace", "key_b").unwrap(), "val_b");
@@ -718,6 +782,7 @@ mod tests {
 
     #[test]
     fn matrix_array_mismatch() {
+        let mut context = get_context(&[]);
         #[rustfmt::skip]
         let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
             values:
@@ -725,19 +790,12 @@ mod tests {
               b: [4, 5, 6, 7]
             include: [ ]
         ").unwrap();
-        assert!(matrix.resolve(&mut Context::default()).is_err());
+        assert!(matrix.resolve(&mut context).is_err());
     }
 
     #[test]
     fn matrix_expansion() {
-        let mut context = Context {
-            locale: Locale {
-                user: String::new(),
-                platform: String::new(),
-                distro: String::new(),
-            },
-            ..Default::default()
-        };
+        let mut context = get_context(&[]);
         context.set_variable("outer", "key", "value");
         let values = vec![
             "${{ outer.key }}_a".to_string(),
@@ -760,6 +818,7 @@ mod tests {
 
     #[test]
     fn positive_match() {
+        let mut context = get_context(&[]);
         let set = BuildSpec::Case(vec![Case::Positive {
             spec: LocaleSpec {
                 user: None,
@@ -768,11 +827,12 @@ mod tests {
             },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
+        assert!(!set.resolve(&mut context).unwrap().is_empty());
     }
 
     #[test]
     fn positive_non_match() {
+        let mut context = get_context(&[]);
         let set = BuildSpec::Case(vec![Case::Positive {
             spec: LocaleSpec {
                 user: None,
@@ -781,11 +841,12 @@ mod tests {
             },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
+        assert!(set.resolve(&mut context).unwrap().is_empty());
     }
 
     #[test]
     fn negative_match() {
+        let mut context = get_context(&[]);
         let set = BuildSpec::Case(vec![Case::Negative {
             spec: LocaleSpec {
                 user: None,
@@ -794,11 +855,12 @@ mod tests {
             },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(!set.resolve(&mut Context::default()).unwrap().is_empty());
+        assert!(!set.resolve(&mut context).unwrap().is_empty());
     }
 
     #[test]
     fn negative_non_match() {
+        let mut context = get_context(&[]);
         let set = BuildSpec::Case(vec![Case::Negative {
             spec: LocaleSpec {
                 user: Some(whoami::username()),
@@ -807,6 +869,6 @@ mod tests {
             },
             include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
         }]);
-        assert!(set.resolve(&mut Context::default()).unwrap().is_empty());
+        assert!(set.resolve(&mut context).unwrap().is_empty());
     }
 }
