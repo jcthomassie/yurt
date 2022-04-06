@@ -41,7 +41,8 @@ impl Context {
     fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
         match self.variables.get(&format!("{}.{}", namespace, variable)) {
             Some(value) => Ok(value.clone()),
-            None if namespace == "env" => Ok(env::var(variable)?),
+            None if namespace == "env" => env::var(variable)
+                .with_context(|| format!("Failed to get environment variable: {}", variable)),
             None => Err(anyhow!("Variable {}.{} is undefined", namespace, variable)),
         }
     }
