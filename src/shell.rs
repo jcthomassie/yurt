@@ -58,7 +58,7 @@ pub trait Cmd {
     }
 }
 
-impl Cmd for &str {
+impl Cmd for str {
     fn name(&self) -> &str {
         self
     }
@@ -68,7 +68,7 @@ pub trait ShellCmd {
     fn run(&self, shell: &Shell) -> Result<Output>;
 }
 
-impl ShellCmd for &str {
+impl ShellCmd for str {
     fn run(&self, shell: &Shell) -> Result<Output> {
         match shell {
             Shell::Cmd => shell.call_unchecked(&["/C", self]),
@@ -93,10 +93,10 @@ fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
     }
 }
 
-fn pipe<T, U>(cmd_a: T, args_a: &[&str], cmd_b: U, args_b: &[&str]) -> Result<Output>
+fn pipe<T, U>(cmd_a: &T, args_a: &[&str], cmd_b: &U, args_b: &[&str]) -> Result<Output>
 where
-    T: Cmd,
-    U: Cmd,
+    T: Cmd + ?Sized,
+    U: Cmd + ?Sized,
 {
     debug!(
         "Calling command: `{} | {}`",
@@ -184,7 +184,7 @@ impl Shell {
     }
 
     // Use curl to fetch remote script and pipe into shell
-    pub fn remote_script(self, curl_args: &[&str]) -> Result<()> {
+    pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
         info!("Running remote script");
         pipe("curl", curl_args, self, &[])?;
         Ok(())

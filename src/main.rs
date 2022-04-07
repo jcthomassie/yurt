@@ -1,3 +1,10 @@
+#![warn(clippy::all, clippy::pedantic)]
+#![allow(
+    clippy::match_bool,
+    clippy::module_name_repetitions,
+    clippy::must_use_candidate,
+    clippy::wildcard_imports
+)]
 mod build;
 mod files;
 mod package;

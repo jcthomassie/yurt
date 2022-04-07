@@ -61,7 +61,7 @@ impl Context {
         Ok(RE_OUTER
             .replace_all(input, |_: &Captures| values_iter.next().unwrap())
             .replace(
-                "~",
+                '~',
                 self.home_dir
                     .to_str()
                     .ok_or_else(|| anyhow!("Invalid home directory: {:?}", self.home_dir))?,
@@ -114,16 +114,13 @@ impl From<&ArgMatches> for Locale {
         Self {
             user: args
                 .value_of("user")
-                .map(String::from)
-                .unwrap_or_else(Self::get_user),
+                .map_or_else(Self::get_user, String::from),
             platform: args
                 .value_of("platform")
-                .map(String::from)
-                .unwrap_or_else(Self::get_platform),
+                .map_or_else(Self::get_platform, String::from),
             distro: args
                 .value_of("distro")
-                .map(String::from)
-                .unwrap_or_else(Self::get_distro),
+                .map_or_else(Self::get_distro, String::from),
         }
     }
 }
@@ -447,13 +444,14 @@ impl ResolvedConfig {
         Ok(())
     }
 
+    #[allow(clippy::unused_self)]
     pub fn update(&self) -> Result<()> {
         todo!()
     }
 
     fn into_config(self) -> yaml::Config {
         let mut build: Vec<BuildSpec> = Vec::new();
-        for unit in self.build.into_iter() {
+        for unit in self.build {
             if let Some(spec) = build.last_mut() {
                 if spec.absorb(&unit) {
                     continue;
@@ -682,19 +680,19 @@ mod tests {
     #[test]
     fn override_user() {
         let context = get_context(&["yurt", "--override-user", "some-other-user"]);
-        assert_eq!(context.locale.user, "some-other-user")
+        assert_eq!(context.locale.user, "some-other-user");
     }
 
     #[test]
     fn override_distro() {
         let context = get_context(&["yurt", "--override-distro", "some-other-distro"]);
-        assert_eq!(context.locale.distro, "some-other-distro")
+        assert_eq!(context.locale.distro, "some-other-distro");
     }
 
     #[test]
     fn override_platform() {
         let context = get_context(&["yurt", "--override-platform", "some-other-platform"]);
-        assert_eq!(context.locale.platform, "some-other-platform")
+        assert_eq!(context.locale.platform, "some-other-platform");
     }
 
     macro_rules! unpack {
