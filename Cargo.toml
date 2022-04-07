@@ -27,4 +27,4 @@ pretty_assertions = "1.2.1"
 tempfile = "3.3.0"
 
 [profile.release]
-debug = true
+strip = "symbols"
