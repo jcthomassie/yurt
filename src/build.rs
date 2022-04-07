@@ -228,7 +228,7 @@ impl BuildSpec {
                 true
             }
             (BuildSpec::Require(a), BuildUnit::Require(b)) => {
-                a.push(b.clone());
+                a.push(*b);
                 true
             }
             _ => false,
@@ -271,14 +271,14 @@ resolve_unit!(Package, (self, context) => {
     BuildUnit::Install(Package {
         name: context.replace_variables(&self.name)?,
         managers: match self.managers.is_empty() {
-            false => context.managers.intersection(&self.managers).cloned().collect(),
+            false => context.managers.intersection(&self.managers).copied().collect(),
             true => context.managers.clone()
         },
         ..self
     })
 });
 resolve_unit!(PackageManager, (self, context) => {
-    context.managers.insert(self.clone());
+    context.managers.insert(self);
     BuildUnit::Require(self)
 });
 resolve_unit!(Repo, (self, context) => {

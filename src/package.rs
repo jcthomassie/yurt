@@ -56,7 +56,7 @@ impl Package {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Hash, Clone, PartialOrd, Ord)]
+#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Hash, Copy, Clone, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,
@@ -81,12 +81,12 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
-    fn _install(&self, package: &str, args: &[&str]) -> Result<()> {
+    fn _install(self, package: &str, args: &[&str]) -> Result<()> {
         info!("Installing package ({} install {})", self.name(), package);
         self.call(&[&["install", package], args].concat())
     }
 
-    fn _sudo_install(&self, package: &str, args: &[&str]) -> Result<()> {
+    fn _sudo_install(self, package: &str, args: &[&str]) -> Result<()> {
         info!(
             "Installing package (sudo {} install {})",
             self.name(),
@@ -96,7 +96,7 @@ impl PackageManager {
     }
 
     // Install a package
-    pub fn install(&self, package: &str) -> Result<()> {
+    pub fn install(self, package: &str) -> Result<()> {
         match self {
             Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
             Self::Cargo => self._install(package, &[]),
@@ -105,7 +105,7 @@ impl PackageManager {
     }
 
     // Uninstall a package
-    pub fn uninstall(&self, package: &str) -> Result<()> {
+    pub fn uninstall(self, package: &str) -> Result<()> {
         info!(
             "Uninstalling package ({} uninstall {})",
             self.name(),
@@ -115,7 +115,7 @@ impl PackageManager {
     }
 
     // Check if a package is installed
-    pub fn has(&self, package: &str) -> bool {
+    pub fn has(self, package: &str) -> bool {
         let res = match self {
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
             Self::Brew => self.call_bool(&["list", package]),
@@ -139,7 +139,7 @@ impl PackageManager {
     }
 
     // Install the package manager and perform setup
-    pub fn bootstrap(&self) -> Result<()> {
+    pub fn bootstrap(self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
             Self::Brew => Shell::Bash.remote_script(&[
@@ -158,7 +158,7 @@ impl PackageManager {
     }
 
     // Install the package manager if not already installed
-    pub fn require(&self) -> Result<()> {
+    pub fn require(self) -> Result<()> {
         if self.is_available() {
             return Ok(());
         }
@@ -166,7 +166,7 @@ impl PackageManager {
     }
 
     // Check if package manager is installed
-    pub fn is_available(&self) -> bool {
+    pub fn is_available(self) -> bool {
         which_has(self.name())
     }
 }
@@ -246,7 +246,7 @@ mod tests {
             managers: all(),
             aliases: {
                 let mut map = BTreeMap::new();
-                map.insert(aliased.clone(), "alias".into());
+                map.insert(aliased, "alias".into());
                 map
             },
         };
