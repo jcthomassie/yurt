@@ -69,7 +69,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: 0.2.0
+version: 0.2.1
 shell: zsh
 build:
   # Require dotfile repo
