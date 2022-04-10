@@ -99,6 +99,25 @@ impl LocaleSpec {
     }
 }
 
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[serde(rename_all(deserialize = "snake_case"))]
+pub enum Case<T> {
+    Positive { spec: LocaleSpec, include: T },
+    Negative { spec: LocaleSpec, include: T },
+    Default { include: T },
+}
+
+impl<T> Case<T> {
+    pub fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
+        match self {
+            Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
+            Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
+            Case::Default { include } if default => Some(include),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,5 +143,49 @@ mod tests {
     fn override_platform() {
         let locale = get_locale(&["yurt", "--override-platform", "some-other-platform"]);
         assert_eq!(locale.platform, "some-other-platform");
+    }
+
+    fn locale_spec(s: &str) -> LocaleSpec {
+        serde_yaml::from_str::<LocaleSpec>(s).expect("Invalid yaml LocaleSpec")
+    }
+
+    #[test]
+    fn positive_match() {
+        let locale = get_locale(&[]);
+        let case = Case::Positive {
+            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
+            include: "something",
+        };
+        assert_eq!(case.rule(false, &locale).unwrap(), "something");
+    }
+
+    #[test]
+    fn positive_non_match() {
+        let locale = get_locale(&[]);
+        let case = Case::Positive {
+            spec: locale_spec("distro: something_else"),
+            include: "something",
+        };
+        assert!(case.rule(false, &locale).is_none());
+    }
+
+    #[test]
+    fn negative_match() {
+        let locale = get_locale(&[]);
+        let case = Case::Negative {
+            spec: locale_spec("platform: somewhere_else"),
+            include: "something",
+        };
+        assert_eq!(case.rule(false, &locale).unwrap(), "something");
+    }
+
+    #[test]
+    fn negative_non_match() {
+        let locale = get_locale(&[]);
+        let case = Case::Negative {
+            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
+            include: "something",
+        };
+        assert!(case.rule(false, &locale).is_none());
     }
 }

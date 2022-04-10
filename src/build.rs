@@ -1,4 +1,4 @@
-use crate::condition::{Locale, LocaleSpec};
+use crate::condition::{Case, Locale};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
@@ -102,25 +102,6 @@ impl<T> Matrix<T> {
                 Ok(len)
             }
             None => bail!("Matrix values must be non-empty"),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
-#[serde(rename_all(deserialize = "snake_case"))]
-pub enum Case<T> {
-    Positive { spec: LocaleSpec, include: T },
-    Negative { spec: LocaleSpec, include: T },
-    Default { include: T },
-}
-
-impl<T> Case<T> {
-    fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
-        match self {
-            Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
-            Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
-            Case::Default { include } if default => Some(include),
-            _ => None,
         }
     }
 }
@@ -728,49 +709,5 @@ mod tests {
             matrix.resolve(&mut context).unwrap(),
             values.resolve(&mut context).unwrap()
         );
-    }
-
-    fn locale_spec(s: &str) -> LocaleSpec {
-        serde_yaml::from_str::<LocaleSpec>(s).expect("Invalid yaml LocaleSpec")
-    }
-
-    #[test]
-    fn positive_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Positive {
-            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(!set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn positive_non_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Positive {
-            spec: locale_spec("distro: something_else"),
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn negative_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Negative {
-            spec: locale_spec("platform: somewhere_else"),
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(!set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn negative_non_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Negative {
-            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(set.resolve(&mut context).unwrap().is_empty());
     }
 }
