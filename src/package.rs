@@ -1,4 +1,4 @@
-use super::shell::{Cmd, Shell, ShellCmd};
+use crate::shell::{Cmd, Shell};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
@@ -119,14 +119,16 @@ impl PackageManager {
         let res = match self {
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
             Self::Brew => self.call_bool(&["list", package]),
-            Self::Cargo => if cfg!(windows) {
-                format!("cargo install --list | findstr /b /l /c:{}", package)
-            } else {
-                format!("cargo install --list | grep '^{} v'", package)
-            }
-            .as_str()
-            .run(&Shell::default())
-            .map(|s| s.status.success()),
+            Self::Cargo => Shell::default()
+                .run(
+                    if cfg!(windows) {
+                        format!("cargo install --list | findstr /b /l /c:{}", package)
+                    } else {
+                        format!("cargo install --list | grep '^{} v'", package)
+                    }
+                    .as_str(),
+                )
+                .map(|s| s.status.success()),
             _ => Ok(false),
         };
         match res {
@@ -142,11 +144,11 @@ impl PackageManager {
     pub fn bootstrap(self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
-            Self::Brew => Shell::Bash.remote_script(&[
+            Self::Brew => Shell::from("bash").remote_script(&[
                 "-fsSL",
                 "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
             ]),
-            Self::Cargo => Shell::Sh.remote_script(&[
+            Self::Cargo => Shell::from("sh").remote_script(&[
                 "--proto",
                 "'=https'",
                 "--tlsv1.2",

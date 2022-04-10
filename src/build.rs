@@ -1,7 +1,7 @@
-use super::files::Link;
-use super::package::{Package, PackageManager};
-use super::repo::Repo;
-use super::shell::{Shell, ShellCmd};
+use crate::files::Link;
+use crate::package::{Package, PackageManager};
+use crate::repo::Repo;
+use crate::shell::Shell;
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
@@ -198,7 +198,7 @@ impl<T> Case<T> {
 enum BuildUnit {
     Repo(Repo),
     Link(Link),
-    ShellCmd(String),
+    Run(String),
     Install(Package),
     Require(PackageManager),
 }
@@ -266,7 +266,7 @@ resolve_unit!(Link, (self, context) => {
         context.replace_variables(self.tail.to_str().unwrap())?,
     ))
 });
-resolve_unit!(String, (self, context) => BuildUnit::ShellCmd(context.replace_variables(&self)?));
+resolve_unit!(String, (self, context) => BuildUnit::Run(context.replace_variables(&self)?));
 resolve_unit!(Package, (self, context) => {
     BuildUnit::Install(Package {
         name: context.replace_variables(&self.name)?,
@@ -386,7 +386,7 @@ impl ResolvedConfig {
                     BuildUnit::Link(link) => !link.is_valid(),
                     BuildUnit::Install(package) => !package.is_installed(),
                     BuildUnit::Require(manager) => !manager.is_available(),
-                    BuildUnit::ShellCmd(_) => true,
+                    BuildUnit::Run(_) => true,
                 })
                 .collect(),
             ..self
@@ -424,7 +424,7 @@ impl ResolvedConfig {
             match unit {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
                 BuildUnit::Link(link) => link.link(clean)?,
-                BuildUnit::ShellCmd(cmd) => drop(cmd.as_str().run(&self.shell)?),
+                BuildUnit::Run(cmd) => drop(self.shell.run(cmd.as_str())?),
                 BuildUnit::Install(package) => package.install()?,
                 BuildUnit::Require(manager) => manager.require()?,
             }
@@ -460,14 +460,14 @@ impl ResolvedConfig {
             build.push(match unit {
                 BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
                 BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
-                BuildUnit::ShellCmd(cmd) => BuildSpec::Run(cmd),
+                BuildUnit::Run(cmd) => BuildSpec::Run(cmd),
                 BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
                 BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
             });
         }
         yaml::Config {
             version: self.version,
-            shell: Some(self.shell),
+            shell: Some(self.shell.into()),
             build,
         }
     }
@@ -478,12 +478,14 @@ impl ResolvedConfig {
 }
 
 pub mod yaml {
+    use crate::shell::ShellSpec;
+
     use super::*;
 
     #[derive(Debug, PartialEq, Deserialize, Serialize)]
     pub struct Config {
         pub version: Option<String>,
-        pub shell: Option<Shell>,
+        pub shell: Option<ShellSpec>,
         pub build: Vec<BuildSpec>,
     }
 
@@ -544,7 +546,7 @@ pub mod yaml {
             Ok(ResolvedConfig {
                 context,
                 version: self.version,
-                shell: self.shell.unwrap_or_else(Shell::from_env),
+                shell: self.shell.map_or_else(Shell::from_env, Shell::from),
                 build,
             })
         }
@@ -553,8 +555,8 @@ pub mod yaml {
 
 #[cfg(test)]
 mod tests {
-    use super::super::yurt_command;
     use super::*;
+    use crate::yurt_command;
 
     fn get_context(args: &[&str]) -> Context {
         Context::from(&yurt_command().get_matches_from(args))
