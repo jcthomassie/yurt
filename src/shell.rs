@@ -5,7 +5,7 @@ use std::{
     env,
     ffi::OsStr,
     io::{Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, Command, Output, Stdio},
 };
 
@@ -139,17 +139,17 @@ impl From<&Path> for ShellKind {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shell {
     kind: ShellKind,
-    command: PathBuf,
+    command: String,
 }
 
 impl<T> From<T> for Shell
 where
-    T: Into<PathBuf>,
+    T: Into<String>,
 {
     fn from(command: T) -> Self {
         let command = command.into();
         Self {
-            kind: ShellKind::from(command.as_path()),
+            kind: ShellKind::from(Path::new(&command)),
             command,
         }
     }
@@ -157,7 +157,7 @@ where
 
 impl Cmd for Shell {
     fn name(&self) -> &str {
-        self.command.to_str().expect("Invalid shell specification")
+        self.command.as_str()
     }
 }
 
@@ -213,7 +213,7 @@ impl From<ShellSpec> for Shell {
 
 impl From<Shell> for ShellSpec {
     fn from(shell: Shell) -> Self {
-        Self(shell.command.into_os_string().into_string().unwrap())
+        Self(shell.command)
     }
 }
 
@@ -224,7 +224,7 @@ mod tests {
     fn check_shell(input: &str, expected: ShellKind) {
         let shell = Shell::from(input);
         assert_eq!(shell.kind, expected);
-        assert_eq!(shell.command.to_str().expect("Empty command"), input);
+        assert_eq!(shell.command.as_str(), input);
     }
 
     #[test]
