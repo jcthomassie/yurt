@@ -1,5 +1,33 @@
+use crate::build::{BuildUnit, Context, Resolve};
+use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
+
+pub trait Condition {
+    fn evaluate(&self, context: &Context) -> bool;
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Conditional<C, I> {
+    condition: C,
+    include: I,
+    #[serde(default)]
+    negate: bool,
+}
+
+impl<C, I> Resolve for Conditional<C, I>
+where
+    C: Condition,
+    I: Resolve,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        if self.condition.evaluate(context) {
+            self.include.resolve_into(context, output)
+        } else {
+            Ok(())
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Locale {

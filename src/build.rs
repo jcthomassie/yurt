@@ -126,7 +126,7 @@ impl<T> Case<T> {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-enum BuildUnit {
+pub enum BuildUnit {
     Repo(Repo),
     Link(Link),
     Run(String),
@@ -167,7 +167,7 @@ impl BuildSpec {
     }
 }
 
-trait Resolve {
+pub trait Resolve {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
 
     fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>
