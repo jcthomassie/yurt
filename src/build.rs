@@ -1,7 +1,7 @@
-use super::files::Link;
-use super::package::{Package, PackageManager};
-use super::repo::Repo;
-use super::shell::Shell;
+use crate::files::Link;
+use crate::package::{Package, PackageManager};
+use crate::repo::Repo;
+use crate::shell::Shell;
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
@@ -555,8 +555,8 @@ pub mod yaml {
 
 #[cfg(test)]
 mod tests {
-    use super::super::yurt_command;
     use super::*;
+    use crate::yurt_command;
 
     fn get_context(args: &[&str]) -> Context {
         Context::from(&yurt_command().get_matches_from(args))

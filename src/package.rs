@@ -1,4 +1,4 @@
-use super::shell::{Cmd, Shell};
+use crate::shell::{Cmd, Shell};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
