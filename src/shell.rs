@@ -265,4 +265,17 @@ mod tests {
             .unwrap();
         assert!(!out.status.success());
     }
+
+    #[test]
+    fn pipe_success() {
+        assert!(pipe("echo", &["hello"], "echo", &["world"])
+            .expect("Pipe returned error")
+            .status
+            .success());
+    }
+
+    #[test]
+    fn pipe_failure() {
+        assert!(pipe("fuck", &["this"], "doesn't", &["work"]).is_err());
+    }
 }
