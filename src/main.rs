@@ -6,6 +6,7 @@
     clippy::wildcard_imports
 )]
 mod build;
+mod condition;
 mod files;
 mod package;
 mod repo;
