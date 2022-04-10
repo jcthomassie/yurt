@@ -3,11 +3,11 @@ use log::{debug, info};
 use serde::{Deserialize, Serialize};
 use std::{
     env,
+    ffi::OsStr,
     io::{Read, Write},
+    path::{Path, PathBuf},
     process::{Child, Command, Output, Stdio},
 };
-
-pub use Shell::{Bash, Powershell, Sh, Zsh};
 
 pub trait Cmd {
     fn name(&self) -> &str;
@@ -64,19 +64,6 @@ impl Cmd for str {
     }
 }
 
-pub trait ShellCmd {
-    fn run(&self, shell: &Shell) -> Result<Output>;
-}
-
-impl ShellCmd for str {
-    fn run(&self, shell: &Shell) -> Result<Output> {
-        match shell {
-            Shell::Cmd => shell.call_unchecked(&["/C", self]),
-            _ => shell.call_unchecked(&["-c", self]),
-        }
-    }
-}
-
 fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
     if let Some(ref mut stdout) = proc_a.stdout {
         if let Some(ref mut stdin) = proc_b.stdin {
@@ -124,62 +111,85 @@ where
     })
 }
 
-#[derive(PartialEq, Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Shell {
+#[derive(Copy, Clone, Debug, PartialEq)]
+enum ShellKind {
     Sh,
     Bash,
     Zsh,
     Powershell,
     Cmd,
-    Other(String),
+    Other,
+    Empty,
+}
+
+impl From<&Path> for ShellKind {
+    fn from(command: &Path) -> Self {
+        match command.file_stem().and_then(OsStr::to_str) {
+            Some("sh") => Self::Sh,
+            Some("bash") => Self::Bash,
+            Some("zsh") => Self::Zsh,
+            Some("pwsh") => Self::Powershell,
+            Some("cmd") => Self::Cmd,
+            Some("") | None => Self::Empty,
+            _ => Self::Other,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Shell {
+    kind: ShellKind,
+    command: PathBuf,
+}
+
+impl<T> From<T> for Shell
+where
+    T: Into<PathBuf>,
+{
+    fn from(command: T) -> Self {
+        let command = command.into();
+        Self {
+            kind: ShellKind::from(command.as_path()),
+            command,
+        }
+    }
 }
 
 impl Cmd for Shell {
     fn name(&self) -> &str {
-        match self {
-            Self::Sh => "sh",
-            Self::Bash => "bash",
-            Self::Zsh => "zsh",
-            Self::Powershell => "pwsh",
-            Self::Cmd => "cmd",
-            Self::Other(name) => name,
-        }
+        self.command.to_str().expect("Invalid shell specification")
     }
 }
 
 impl Default for Shell {
     #[cfg(target_os = "windows")]
-    fn default() -> Shell {
-        Shell::Cmd
+    fn default() -> Self {
+        Shell::from("cmd")
     }
 
     #[cfg(target_os = "macos")]
-    fn default() -> Shell {
-        Shell::Zsh
+    fn default() -> Self {
+        Shell::from("zsh")
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    fn default() -> Shell {
-        Shell::Sh
+    fn default() -> Self {
+        Shell::from("sh")
     }
 }
 
 impl Shell {
     pub fn from_env() -> Self {
         match env::var("SHELL") {
-            Ok(s) => Self::from_name(s.split('/').last().unwrap()),
+            Ok(s) => Self::from(s),
             Err(_) => Self::default(),
         }
     }
 
-    pub fn from_name(name: &str) -> Self {
-        match name {
-            "sh" => Self::Sh,
-            "bash" => Self::Bash,
-            "zsh" => Self::Zsh,
-            "pwsh" => Self::Powershell,
-            other => Self::Other(other.to_string()),
+    pub fn run(&self, command: &str) -> Result<Output> {
+        match self.kind {
+            ShellKind::Cmd => self.call_unchecked(&["/C", command]),
+            _ => self.call_unchecked(&["-c", command]),
         }
     }
 
@@ -191,17 +201,45 @@ impl Shell {
     }
 }
 
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[serde(rename = "shell")]
+pub struct ShellSpec(String);
+
+impl From<ShellSpec> for Shell {
+    fn from(spec: ShellSpec) -> Self {
+        Self::from(spec.0)
+    }
+}
+
+impl From<Shell> for ShellSpec {
+    fn from(shell: Shell) -> Self {
+        Self(shell.command.into_os_string().into_string().unwrap())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn check_shell(input: &str, expected: ShellKind) {
+        let shell = Shell::from(input);
+        assert_eq!(shell.kind, expected);
+        assert_eq!(shell.command.to_str().expect("Empty command"), input);
+    }
+
     #[test]
-    fn shell_from_name() {
-        assert_eq!(Shell::from_name("sh"), Shell::Sh);
-        assert_eq!(Shell::from_name("bash"), Shell::Bash);
-        assert_eq!(Shell::from_name("zsh"), Shell::Zsh);
-        assert_eq!(Shell::from_name("pwsh"), Shell::Powershell);
-        assert!(matches!(Shell::from_name("/home/crush"), Shell::Other(_)));
+    fn shell_kind_match() {
+        check_shell("zsh", ShellKind::Zsh);
+        check_shell("longer/path/bash", ShellKind::Bash);
+        check_shell("some/other/shell/nonsense", ShellKind::Other);
+        check_shell("", ShellKind::Empty);
+    }
+
+    #[test]
+    #[cfg(target_os = "windows")]
+    fn shell_kind_match_winpath() {
+        check_shell(r#"c:\windows\path\cmd"#, ShellKind::Cmd);
+        check_shell(r#"c:\windows\path\pwsh"#, ShellKind::Powershell);
     }
 
     #[test]
@@ -209,21 +247,21 @@ mod tests {
         let shell = Shell::from_env();
         match env::var("SHELL") {
             // Other shells should be added as needed
-            Ok(_) => assert!(!matches!(shell, Shell::Other(_))),
+            Ok(_) => assert_ne!(shell.kind, ShellKind::Empty),
             Err(_) => assert_eq!(shell, Shell::default()),
         }
     }
 
     #[test]
     fn shell_command_success() {
-        let out = "echo 'hello world!'".run(&Shell::default()).unwrap();
+        let out = Shell::default().run("echo 'hello world!'").unwrap();
         assert!(out.status.success());
     }
 
     #[test]
     fn shell_command_failure() {
-        let out = "made_up_command with parameters"
-            .run(&Shell::default())
+        let out = Shell::default()
+            .run("made_up_command with parameters")
             .unwrap();
         assert!(!out.status.success());
     }
