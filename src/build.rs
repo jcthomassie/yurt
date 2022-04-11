@@ -1,3 +1,4 @@
+use crate::condition::{Case, Locale, LocaleSpec};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
@@ -25,9 +26,9 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub locale: Locale,
     variables: BTreeMap<String, String>,
     managers: BTreeSet<PackageManager>,
-    locale: Locale,
     home_dir: PathBuf,
 }
 
@@ -80,76 +81,6 @@ impl From<&ArgMatches> for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Locale {
-    user: String,
-    platform: String,
-    distro: String,
-}
-
-impl Locale {
-    #[inline]
-    fn get_user() -> String {
-        whoami::username()
-    }
-
-    #[inline]
-    fn get_platform() -> String {
-        format!("{:?}", whoami::platform()).to_lowercase()
-    }
-
-    #[inline]
-    fn get_distro() -> String {
-        whoami::distro()
-            .split(' ')
-            .next()
-            .expect("Failed to determine distro")
-            .to_owned()
-            .to_lowercase()
-    }
-}
-
-impl From<&ArgMatches> for Locale {
-    fn from(args: &ArgMatches) -> Self {
-        Self {
-            user: args
-                .value_of("user")
-                .map_or_else(Self::get_user, String::from),
-            platform: args
-                .value_of("platform")
-                .map_or_else(Self::get_platform, String::from),
-            distro: args
-                .value_of("distro")
-                .map_or_else(Self::get_distro, String::from),
-        }
-    }
-}
-
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
-pub struct LocaleSpec {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    user: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    platform: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    distro: Option<String>,
-}
-
-impl LocaleSpec {
-    fn is_local(&self, rubric: &Locale) -> bool {
-        match self {
-            LocaleSpec { user: Some(u), .. } if u != &rubric.user => false,
-            LocaleSpec {
-                platform: Some(p), ..
-            } if p != &rubric.platform => false,
-            LocaleSpec {
-                distro: Some(d), ..
-            } if d != &rubric.distro => false,
-            _ => true,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Namespace {
     name: String,
@@ -175,27 +106,8 @@ impl<T> Matrix<T> {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
-#[serde(rename_all(deserialize = "snake_case"))]
-pub enum Case<T> {
-    Positive { spec: LocaleSpec, include: T },
-    Negative { spec: LocaleSpec, include: T },
-    Default { include: T },
-}
-
-impl<T> Case<T> {
-    fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
-        match self {
-            Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
-            Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
-            Case::Default { include } if default => Some(include),
-            _ => None,
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
-enum BuildUnit {
+pub enum BuildUnit {
     Repo(Repo),
     Link(Link),
     Run(String),
@@ -209,7 +121,7 @@ pub enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSpec>>),
-    Case(Vec<Case<Vec<BuildSpec>>>),
+    Case(Vec<Case<LocaleSpec, Vec<BuildSpec>>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<Package>),
@@ -236,7 +148,7 @@ impl BuildSpec {
     }
 }
 
-trait Resolve {
+pub trait Resolve {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
 
     fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>
@@ -341,25 +253,6 @@ where
                 context.set_variable("matrix", variable, value);
             }
             self.include.clone().resolve_into(&mut context, output)?;
-        }
-        Ok(())
-    }
-}
-
-impl<T> Resolve for Vec<Case<T>>
-where
-    T: Resolve,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let mut default = true;
-        for case in self {
-            match case.rule(default, &context.locale) {
-                Some(build) => {
-                    default = false;
-                    build.resolve_into(context, output)?;
-                }
-                None => continue,
-            };
         }
         Ok(())
     }
@@ -679,24 +572,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn override_user() {
-        let context = get_context(&["yurt", "--override-user", "some-other-user"]);
-        assert_eq!(context.locale.user, "some-other-user");
-    }
-
-    #[test]
-    fn override_distro() {
-        let context = get_context(&["yurt", "--override-distro", "some-other-distro"]);
-        assert_eq!(context.locale.distro, "some-other-distro");
-    }
-
-    #[test]
-    fn override_platform() {
-        let context = get_context(&["yurt", "--override-platform", "some-other-platform"]);
-        assert_eq!(context.locale.platform, "some-other-platform");
-    }
-
     macro_rules! unpack {
         (@unit $value:expr, BuildUnit::$variant:ident) => {
             if let BuildUnit::$variant(ref unwrapped) = $value {
@@ -815,61 +690,5 @@ mod tests {
             matrix.resolve(&mut context).unwrap(),
             values.resolve(&mut context).unwrap()
         );
-    }
-
-    #[test]
-    fn positive_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Positive {
-            spec: LocaleSpec {
-                user: None,
-                platform: Some(format!("{:?}", whoami::platform()).to_lowercase()),
-                distro: None,
-            },
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(!set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn positive_non_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Positive {
-            spec: LocaleSpec {
-                user: None,
-                platform: None,
-                distro: Some("nothere".to_string()),
-            },
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn negative_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Negative {
-            spec: LocaleSpec {
-                user: None,
-                platform: Some("nothere".to_string()),
-                distro: None,
-            },
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(!set.resolve(&mut context).unwrap().is_empty());
-    }
-
-    #[test]
-    fn negative_non_match() {
-        let mut context = get_context(&[]);
-        let set = BuildSpec::Case(vec![Case::Negative {
-            spec: LocaleSpec {
-                user: Some(whoami::username()),
-                platform: None,
-                distro: None,
-            },
-            include: vec![BuildSpec::Link(vec![Link::new("a", "b")])],
-        }]);
-        assert!(set.resolve(&mut context).unwrap().is_empty());
     }
 }
