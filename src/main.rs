@@ -13,8 +13,8 @@ mod repo;
 mod shell;
 
 use anyhow::{Context as AnyContext, Result};
-use build::{yaml::Config, Context, ResolvedConfig};
-use clap::{command, Arg, ArgMatches, Command};
+use build::{yaml::Config, Context};
+use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
 
@@ -91,46 +91,6 @@ pub fn yurt_command() -> Command<'static> {
         )
 }
 
-#[inline]
-fn parse_resolved(matches: &ArgMatches) -> Result<ResolvedConfig> {
-    Config::from_args(matches)?
-        .resolve(Context::from(matches))
-        .context("Failed to resolve build")
-}
-
-fn show(matches: &ArgMatches) -> Result<()> {
-    let sub = matches.subcommand_matches("show").unwrap();
-    parse_resolved(matches)?
-        .show(sub.is_present("non-trivial"))
-        .context("Failed to show resolved build")
-}
-
-fn install(matches: &ArgMatches) -> Result<()> {
-    let sub = matches.subcommand_matches("install").unwrap();
-    parse_resolved(matches)?
-        .install(sub.is_present("clean"))
-        .context("Failed to complete install steps")
-}
-
-fn uninstall(matches: &ArgMatches) -> Result<()> {
-    let sub = matches.subcommand_matches("uninstall").unwrap();
-    parse_resolved(matches)?
-        .uninstall(sub.is_present("packages"))
-        .context("Failed to complete uninstall steps")
-}
-
-fn clean(matches: &ArgMatches) -> Result<()> {
-    parse_resolved(matches)?
-        .clean()
-        .context("Failed to clean link heads")
-}
-
-fn update(matches: &ArgMatches) -> Result<()> {
-    parse_resolved(matches)?
-        .update()
-        .context("Failed to complete update")
-}
-
 fn main() -> Result<()> {
     let matches = yurt_command()
         .subcommand_required(true)
@@ -143,14 +103,18 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let timer = Instant::now();
-    let result = match matches.subcommand_name() {
-        Some("show") => show(&matches),
-        Some("install") => install(&matches),
-        Some("uninstall") => uninstall(&matches),
-        Some("clean") => clean(&matches),
-        Some("update") => update(&matches),
-        _ => unreachable!(),
-    };
+    let result = Config::from_args(&matches)?
+        .resolve(Context::from(&matches))
+        .context("Failed to resolve build")
+        .and_then(|r| match matches.subcommand() {
+            Some(("show", s)) => r.show(s.is_present("non-trivial")),
+            Some(("install", s)) => r.install(s.is_present("clean")),
+            Some(("uninstall", s)) => r.uninstall(s.is_present("packages")),
+            Some(("clean", _)) => r.clean(),
+            Some(("update", _)) => r.update(),
+            _ => unreachable!(),
+        })
+        .with_context(|| format!("Subcommand failed: {:?}", matches.subcommand_name()));
     debug!("Runtime: {:?}", timer.elapsed());
     result
 }
