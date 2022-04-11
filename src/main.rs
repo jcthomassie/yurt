@@ -13,7 +13,7 @@ mod repo;
 mod shell;
 
 use anyhow::{Context as AnyContext, Result};
-use build::{yaml::Config, Context};
+use build::{Config, Context};
 use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};

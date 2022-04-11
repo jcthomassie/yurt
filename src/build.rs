@@ -2,7 +2,7 @@ use crate::condition::{Case, Locale, LocaleSpec};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
-use crate::shell::Shell;
+use crate::shell::{Shell, ShellSpec};
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
@@ -342,7 +342,7 @@ impl ResolvedConfig {
         todo!()
     }
 
-    fn into_config(self) -> yaml::Config {
+    fn into_config(self) -> Config {
         let mut build: Vec<BuildSpec> = Vec::new();
         for unit in self.build {
             if let Some(spec) = build.last_mut() {
@@ -358,7 +358,7 @@ impl ResolvedConfig {
                 BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
             });
         }
-        yaml::Config {
+        Config {
             version: self.version,
             shell: Some(self.shell.into()),
             build,
@@ -370,79 +370,73 @@ impl ResolvedConfig {
     }
 }
 
-pub mod yaml {
-    use crate::shell::ShellSpec;
+#[derive(Debug, PartialEq, Deserialize, Serialize)]
+pub struct Config {
+    pub version: Option<String>,
+    pub shell: Option<ShellSpec>,
+    pub build: Vec<BuildSpec>,
+}
 
-    use super::*;
-
-    #[derive(Debug, PartialEq, Deserialize, Serialize)]
-    pub struct Config {
-        pub version: Option<String>,
-        pub shell: Option<ShellSpec>,
-        pub build: Vec<BuildSpec>,
+impl Config {
+    pub fn from_str<S>(string: S) -> Result<Self>
+    where
+        S: AsRef<str>,
+    {
+        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
     }
 
-    impl Config {
-        pub fn from_str<S>(string: S) -> Result<Self>
-        where
-            S: AsRef<str>,
-        {
-            Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
-        }
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let file = File::open(path)?;
+        Self::from_file(file)
+    }
 
-        pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
-            let file = File::open(path)?;
-            Self::from_file(file)
-        }
+    pub fn from_file(file: File) -> Result<Self> {
+        let reader = BufReader::new(file);
+        Ok(serde_yaml::from_reader::<_, Self>(reader)?)
+    }
 
-        pub fn from_file(file: File) -> Result<Self> {
-            let reader = BufReader::new(file);
-            Ok(serde_yaml::from_reader::<_, Self>(reader)?)
-        }
+    pub fn from_url(url: &str) -> Result<Self> {
+        let body = reqwest::blocking::get(url)?.text()?;
+        Self::from_str(body)
+    }
 
-        pub fn from_url(url: &str) -> Result<Self> {
-            let body = reqwest::blocking::get(url)?.text()?;
-            Self::from_str(body)
-        }
-
-        pub fn from_args(args: &ArgMatches) -> Result<Self> {
-            if let Some(url) = args.value_of("yaml-url") {
-                Self::from_url(url).context("Failed to parse remote build file")
-            } else {
-                let path = match args.value_of("yaml") {
-                    Some(path) => Ok(path.to_string()),
-                    None => env::var("YURT_BUILD_FILE"),
-                }
-                .context("Config file not specified")?;
-                Self::from_path(path).context("Failed to parse local build file")
+    pub fn from_args(args: &ArgMatches) -> Result<Self> {
+        if let Some(url) = args.value_of("yaml-url") {
+            Self::from_url(url).context("Failed to parse remote build file")
+        } else {
+            let path = match args.value_of("yaml") {
+                Some(path) => Ok(path.to_string()),
+                None => env::var("YURT_BUILD_FILE"),
             }
+            .context("Config file not specified")?;
+            Self::from_path(path).context("Failed to parse local build file")
         }
+    }
 
-        pub fn version_matches(&self, strict: bool) -> bool {
-            if let Some(ref v) = self.version {
-                return v == crate_version!();
-            }
-            !strict
+    pub fn version_matches(&self, strict: bool) -> bool {
+        if let Some(ref v) = self.version {
+            return v == crate_version!();
         }
+        !strict
+    }
 
-        pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
-            // Check version
-            if !self.version_matches(false) {
-                warn!(
-                    "Config version mismatch: {} | {}",
-                    self.version.as_deref().unwrap_or("None"),
-                    crate_version!()
-                );
-            }
-            // Resolve build
-            let build = self.build.resolve(&mut context)?;
-            Ok(ResolvedConfig {
-                context,
-                version: self.version,
-                shell: self.shell.map_or_else(Shell::from_env, Shell::from),
-                build,
-            })
+    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+        // Check version
+        if !self.version_matches(false) {
+            warn!(
+                "Config version mismatch: {} | {}",
+                self.version.as_deref().unwrap_or("None"),
+                crate_version!()
+            );
         }
+        // Resolve build
+        let build = self.build.resolve(&mut context)?;
+        Ok(ResolvedConfig {
+            context,
+            version: self.version,
+            shell: self.shell.map_or_else(Shell::from_env, Shell::from),
+            build,
+        })
     }
 }
 
@@ -456,7 +450,7 @@ mod tests {
     }
 
     mod yaml {
-        use super::super::{yaml::*, *};
+        use super::super::*;
 
         #[test]
         fn version_check() {
@@ -477,7 +471,7 @@ mod tests {
 
         mod io {
             use super::super::get_context;
-            use super::yaml::Config;
+            use super::Config;
             use pretty_assertions::assert_eq;
 
             macro_rules! test_case {
@@ -508,7 +502,7 @@ mod tests {
         }
 
         mod invalid_parse {
-            use super::yaml::Config;
+            use super::Config;
 
             macro_rules! test_case {
                 ($name:ident) => {
