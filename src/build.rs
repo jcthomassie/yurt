@@ -1,4 +1,4 @@
-use crate::condition::{Case, Locale};
+use crate::condition::{Case, Locale, LocaleSpec};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
@@ -26,9 +26,9 @@ lazy_static! {
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub locale: Locale,
     variables: BTreeMap<String, String>,
     managers: BTreeSet<PackageManager>,
-    locale: Locale,
     home_dir: PathBuf,
 }
 
@@ -121,7 +121,7 @@ pub enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSpec>>),
-    Case(Vec<Case<Vec<BuildSpec>>>),
+    Case(Vec<Case<LocaleSpec, Vec<BuildSpec>>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<Package>),
@@ -253,25 +253,6 @@ where
                 context.set_variable("matrix", variable, value);
             }
             self.include.clone().resolve_into(&mut context, output)?;
-        }
-        Ok(())
-    }
-}
-
-impl<T> Resolve for Vec<Case<T>>
-where
-    T: Resolve,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let mut default = true;
-        for case in self {
-            match case.rule(default, &context.locale) {
-                Some(build) => {
-                    default = false;
-                    build.resolve_into(context, output)?;
-                }
-                None => continue,
-            };
         }
         Ok(())
     }

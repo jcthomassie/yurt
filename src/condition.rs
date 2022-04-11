@@ -7,28 +7,6 @@ pub trait Condition {
     fn evaluate(&self, context: &Context) -> bool;
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct Conditional<C, I> {
-    condition: C,
-    include: I,
-    #[serde(default)]
-    negate: bool,
-}
-
-impl<C, I> Resolve for Conditional<C, I>
-where
-    C: Condition,
-    I: Resolve,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        if self.condition.evaluate(context) {
-            self.include.resolve_into(context, output)
-        } else {
-            Ok(())
-        }
-    }
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Locale {
     user: String,
@@ -84,16 +62,16 @@ pub struct LocaleSpec {
     distro: Option<String>,
 }
 
-impl LocaleSpec {
-    pub fn is_local(&self, rubric: &Locale) -> bool {
+impl Condition for LocaleSpec {
+    fn evaluate(&self, context: &Context) -> bool {
         match self {
-            LocaleSpec { user: Some(u), .. } if u != &rubric.user => false,
+            LocaleSpec { user: Some(u), .. } if u != &context.locale.user => false,
             LocaleSpec {
                 platform: Some(p), ..
-            } if p != &rubric.platform => false,
+            } if p != &context.locale.platform => false,
             LocaleSpec {
                 distro: Some(d), ..
-            } if d != &rubric.distro => false,
+            } if d != &context.locale.distro => false,
             _ => true,
         }
     }
@@ -101,20 +79,43 @@ impl LocaleSpec {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
-pub enum Case<T> {
-    Positive { spec: LocaleSpec, include: T },
-    Negative { spec: LocaleSpec, include: T },
+pub enum Case<C, T> {
+    Positive { spec: C, include: T },
+    Negative { spec: C, include: T },
     Default { include: T },
 }
 
-impl<T> Case<T> {
-    pub fn rule(self, default: bool, rubric: &Locale) -> Option<T> {
+impl<C, T> Case<C, T>
+where
+    C: Condition,
+{
+    pub fn evaluate(self, default: bool, context: &Context) -> Option<T> {
         match self {
-            Case::Positive { spec, include } if spec.is_local(rubric) => Some(include),
-            Case::Negative { spec, include } if !spec.is_local(rubric) => Some(include),
+            Case::Positive { spec, include } if spec.evaluate(context) => Some(include),
+            Case::Negative { spec, include } if !spec.evaluate(context) => Some(include),
             Case::Default { include } if default => Some(include),
             _ => None,
         }
+    }
+}
+
+impl<C, T> Resolve for Vec<Case<C, T>>
+where
+    C: Condition,
+    T: Resolve,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        let mut default = true;
+        for case in self {
+            match case.evaluate(default, context) {
+                Some(build) => {
+                    default = false;
+                    build.resolve_into(context, output)?;
+                }
+                None => continue,
+            };
+        }
+        Ok(())
     }
 }
 
@@ -123,25 +124,25 @@ mod tests {
     use super::*;
     use crate::yurt_command;
 
-    fn get_locale(args: &[&str]) -> Locale {
-        Locale::from(&yurt_command().get_matches_from(args))
+    fn get_context(args: &[&str]) -> Context {
+        Context::from(&yurt_command().get_matches_from(args))
     }
 
     #[test]
     fn override_user() {
-        let locale = get_locale(&["yurt", "--override-user", "some-other-user"]);
+        let locale = get_context(&["yurt", "--override-user", "some-other-user"]).locale;
         assert_eq!(locale.user, "some-other-user");
     }
 
     #[test]
     fn override_distro() {
-        let locale = get_locale(&["yurt", "--override-distro", "some-other-distro"]);
+        let locale = get_context(&["yurt", "--override-distro", "some-other-distro"]).locale;
         assert_eq!(locale.distro, "some-other-distro");
     }
 
     #[test]
     fn override_platform() {
-        let locale = get_locale(&["yurt", "--override-platform", "some-other-platform"]);
+        let locale = get_context(&["yurt", "--override-platform", "some-other-platform"]).locale;
         assert_eq!(locale.platform, "some-other-platform");
     }
 
@@ -151,41 +152,41 @@ mod tests {
 
     #[test]
     fn positive_match() {
-        let locale = get_locale(&[]);
+        let context = get_context(&[]);
         let case = Case::Positive {
             spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
             include: "something",
         };
-        assert_eq!(case.rule(false, &locale).unwrap(), "something");
+        assert_eq!(case.evaluate(false, &context).unwrap(), "something");
     }
 
     #[test]
     fn positive_non_match() {
-        let locale = get_locale(&[]);
+        let context = get_context(&[]);
         let case = Case::Positive {
             spec: locale_spec("distro: something_else"),
             include: "something",
         };
-        assert!(case.rule(false, &locale).is_none());
+        assert!(case.evaluate(false, &context).is_none());
     }
 
     #[test]
     fn negative_match() {
-        let locale = get_locale(&[]);
+        let context = get_context(&[]);
         let case = Case::Negative {
             spec: locale_spec("platform: somewhere_else"),
             include: "something",
         };
-        assert_eq!(case.rule(false, &locale).unwrap(), "something");
+        assert_eq!(case.evaluate(false, &context).unwrap(), "something");
     }
 
     #[test]
     fn negative_non_match() {
-        let locale = get_locale(&[]);
+        let context = get_context(&[]);
         let case = Case::Negative {
             spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
             include: "something",
         };
-        assert!(case.rule(false, &locale).is_none());
+        assert!(case.evaluate(false, &context).is_none());
     }
 }
