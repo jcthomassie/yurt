@@ -4,9 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::{
     env,
     ffi::OsStr,
-    io::{Read, Write},
     path::Path,
-    process::{Child, Command, Output, Stdio},
+    process::{Command, Output, Stdio},
 };
 
 pub trait Cmd {
@@ -54,22 +53,6 @@ impl Cmd for str {
     }
 }
 
-fn pipe_existing(mut proc_a: Child, mut proc_b: Child) -> Result<Output> {
-    if let Some(ref mut stdout) = proc_a.stdout {
-        if let Some(ref mut stdin) = proc_b.stdin {
-            let mut buf: Vec<u8> = Vec::new();
-            stdout.read_to_end(&mut buf).unwrap();
-            stdin.write_all(&buf).unwrap();
-        }
-    }
-    let output = proc_b.wait_with_output()?;
-    if output.status.success() {
-        Ok(output)
-    } else {
-        Err(anyhow!("Piped command returned error"))
-    }
-}
-
 fn pipe<T, U>(cmd_a: &T, args_a: &[&str], cmd_b: &U, args_b: &[&str]) -> Result<Output>
 where
     T: Cmd + ?Sized,
@@ -80,21 +63,29 @@ where
         cmd_a.format(args_a),
         cmd_b.format(args_b)
     );
-    let proc_a = cmd_a
+    let mut proc_a = cmd_a
         .command()
         .args(args_a)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
         .context("Failed to spawn primary pipe command")?;
+    let pipe = proc_a.stdout.take().context("Failed to create pipe")?;
     let proc_b = cmd_b
         .command() //
         .args(args_b)
-        .stdin(Stdio::piped())
+        .stdin(pipe)
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .context("Failed to spawn secondary pipe command")?;
-    pipe_existing(proc_a, proc_b).with_context(|| {
+    match proc_b.wait_with_output() {
+        Ok(out) if out.status.success() => Ok(out),
+        Ok(out) => Err(anyhow!("{}", String::from_utf8_lossy(&out.stderr))),
+        Err(e) => Err(anyhow!(e)),
+    }
+    .with_context(|| {
         format!(
             "Failed command: `{} | {}`",
             cmd_a.format(args_a),
@@ -264,12 +255,15 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
     fn pipe_success() {
-        assert!(pipe("echo", &["hello"], "echo", &["world"])
-            .expect("Pipe returned error")
-            .status
-            .success());
+        assert!(if cfg!(windows) {
+            pipe("cmd", &["/c"], "cmd", &["/c"])
+        } else {
+            pipe("echo", &["hello"], "echo", &["world"])
+        }
+        .expect("Pipe returned error")
+        .status
+        .success());
     }
 
     #[test]
@@ -293,7 +287,6 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn str_command_bool_success() {
-        Command::new("echo").output().unwrap();
         assert!("echo".call_bool(&["hello world!"]).unwrap());
     }
 
