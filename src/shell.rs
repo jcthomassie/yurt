@@ -93,6 +93,7 @@ where
     let proc_a = cmd_a
         .command()
         .args(args_a)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .context("Failed to spawn primary pipe command")?;
@@ -100,6 +101,7 @@ where
         .command() //
         .args(args_b)
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .context("Failed to spawn secondary pipe command")?;
     pipe_existing(proc_a, proc_b).with_context(|| {
