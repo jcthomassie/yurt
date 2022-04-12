@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     fn shell_kind_match_windows() {
         check_shell(r#"c:\windows\path\cmd.exe"#, ShellKind::Cmd);
         check_shell(r#"c:\windows\path\pwsh"#, ShellKind::Powershell);
@@ -248,7 +248,10 @@ mod tests {
     fn shell_command_success() {
         let out = Shell::default().run("echo 'hello world!'").unwrap();
         assert!(out.status.success());
+        #[cfg(unix)]
         assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
+        #[cfg(windows)]
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\r\n");
     }
 
     #[test]
@@ -276,7 +279,10 @@ mod tests {
     fn str_command_success() {
         let out = "echo".call_unchecked(&["hello world!"]).unwrap();
         assert!(out.status.success());
+        #[cfg(unix)]
         assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
+        #[cfg(windows)]
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\r\n");
     }
 
     #[test]
