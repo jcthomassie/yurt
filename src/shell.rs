@@ -68,6 +68,7 @@ where
         .args(args_a)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
+        .stderr(Stdio::null())
         .spawn()
         .context("Failed to spawn primary pipe command")?;
     let pipe = proc_a.stdout.take().context("Failed to create pipe")?;
@@ -76,6 +77,7 @@ where
         .args(args_b)
         .stdin(pipe)
         .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
         .context("Failed to spawn secondary pipe command")?;
     match proc_b.wait_with_output() {
@@ -255,7 +257,7 @@ mod tests {
     #[test]
     fn pipe_success() {
         assert!(if cfg!(windows) {
-            pipe("cmd", &["/c", "echo"], "cmd", &[])
+            pipe("cmd", &["/c"], "cmd", &["/c"])
         } else {
             pipe("echo", &["hello"], "echo", &["world"])
         }
