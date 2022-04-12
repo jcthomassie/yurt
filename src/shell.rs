@@ -251,7 +251,8 @@ mod tests {
         #[cfg(unix)]
         assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
         #[cfg(windows)]
-        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\r\n");
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "'hello world!'\r\n");
+        // Windows escapes shell commands over-eagerly
     }
 
     #[test]
