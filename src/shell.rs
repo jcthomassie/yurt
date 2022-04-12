@@ -253,12 +253,15 @@ mod tests {
     }
 
     #[test]
-    #[cfg(unix)]
     fn pipe_success() {
-        assert!(pipe("echo", &["hello"], "echo", &["world"])
-            .expect("Pipe returned error")
-            .status
-            .success());
+        assert!(if cfg!(windows) {
+            pipe("cmd", &["/c", "echo"], "cmd", &[])
+        } else {
+            pipe("echo", &["hello"], "echo", &["world"])
+        }
+        .expect("Pipe returned error")
+        .status
+        .success());
     }
 
     #[test]
@@ -282,7 +285,6 @@ mod tests {
     #[test]
     #[cfg(unix)]
     fn str_command_bool_success() {
-        Command::new("echo").output().unwrap();
         assert!("echo".call_bool(&["hello world!"]).unwrap());
     }
 
