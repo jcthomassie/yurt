@@ -46,16 +46,6 @@ pub trait Cmd {
     fn call_bool(&self, args: &[&str]) -> Result<bool> {
         Ok(self.call_unchecked(args)?.status.success())
     }
-
-    #[inline]
-    fn child(&self, args: &[&str]) -> Result<Child> {
-        Ok(self
-            .command()
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?)
-    }
 }
 
 impl Cmd for str {
@@ -93,6 +83,7 @@ where
     let proc_a = cmd_a
         .command()
         .args(args_a)
+        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .spawn()
         .context("Failed to spawn primary pipe command")?;
@@ -100,6 +91,7 @@ where
         .command() //
         .args(args_b)
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
         .spawn()
         .context("Failed to spawn secondary pipe command")?;
     pipe_existing(proc_a, proc_b).with_context(|| {
@@ -236,9 +228,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_os = "windows")]
-    fn shell_kind_match_winpath() {
-        check_shell(r#"c:\windows\path\cmd"#, ShellKind::Cmd);
+    #[cfg(windows)]
+    fn shell_kind_match_windows() {
+        check_shell(r#"c:\windows\path\cmd.exe"#, ShellKind::Cmd);
         check_shell(r#"c:\windows\path\pwsh"#, ShellKind::Powershell);
     }
 
@@ -256,6 +248,11 @@ mod tests {
     fn shell_command_success() {
         let out = Shell::default().run("echo 'hello world!'").unwrap();
         assert!(out.status.success());
+        #[cfg(unix)]
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
+        #[cfg(windows)]
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "'hello world!'\r\n");
+        // Windows escapes shell commands over-eagerly
     }
 
     #[test]
@@ -267,6 +264,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn pipe_success() {
         assert!(pipe("echo", &["hello"], "echo", &["world"])
             .expect("Pipe returned error")
@@ -277,5 +275,30 @@ mod tests {
     #[test]
     fn pipe_failure() {
         assert!(pipe("fuck", &["this"], "doesn't", &["work"]).is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn str_command_success() {
+        let out = "echo".call_unchecked(&["hello world!"]).unwrap();
+        assert!(out.status.success());
+        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
+    }
+
+    #[test]
+    fn str_command_failure() {
+        assert!("made_up_command".call_unchecked(&[]).is_err());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn str_command_bool_success() {
+        Command::new("echo").output().unwrap();
+        assert!("echo".call_bool(&["hello world!"]).unwrap());
+    }
+
+    #[test]
+    fn str_command_bool_failure() {
+        assert!("made_up_command".call_bool(&[]).is_err());
     }
 }
