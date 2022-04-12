@@ -264,6 +264,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn pipe_success() {
         assert!(pipe("echo", &["hello"], "echo", &["world"])
             .expect("Pipe returned error")
@@ -277,13 +278,11 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn str_command_success() {
         let out = "echo".call_unchecked(&["hello world!"]).unwrap();
         assert!(out.status.success());
-        #[cfg(unix)]
         assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
-        #[cfg(windows)]
-        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\r\n");
     }
 
     #[test]
@@ -292,7 +291,9 @@ mod tests {
     }
 
     #[test]
+    #[cfg(unix)]
     fn str_command_bool_success() {
+        Command::new("echo").output().unwrap();
         assert!("echo".call_bool(&["hello world!"]).unwrap());
     }
 
