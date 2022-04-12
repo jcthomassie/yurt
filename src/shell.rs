@@ -46,16 +46,6 @@ pub trait Cmd {
     fn call_bool(&self, args: &[&str]) -> Result<bool> {
         Ok(self.call_unchecked(args)?.status.success())
     }
-
-    #[inline]
-    fn child(&self, args: &[&str]) -> Result<Child> {
-        Ok(self
-            .command()
-            .args(args)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()?)
-    }
 }
 
 impl Cmd for str {
