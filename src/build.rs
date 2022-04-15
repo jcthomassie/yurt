@@ -423,26 +423,17 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_str<S>(string: S) -> Result<Self>
-    where
-        S: AsRef<str>,
-    {
-        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
-    }
-
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        Self::from_file(file)
-    }
-
-    pub fn from_file(file: File) -> Result<Self> {
-        let reader = BufReader::new(file);
-        Ok(serde_yaml::from_reader::<_, Self>(reader)?)
+        File::open(path)
+            .context("Failed to open build file")
+            .and_then(Self::try_from)
     }
 
     pub fn from_url(url: &str) -> Result<Self> {
-        let body = reqwest::blocking::get(url)?.text()?;
-        Self::from_str(body)
+        reqwest::blocking::get(url)
+            .and_then(reqwest::blocking::Response::text)
+            .context("Failed to fetch remote build file")
+            .and_then(|s| Self::try_from(s.as_str()))
     }
 
     pub fn version_matches(&self, strict: bool) -> bool {
@@ -485,6 +476,23 @@ impl TryFrom<&ArgMatches> for Config {
             .context("Config file not specified")?;
             Self::from_path(path).context("Failed to parse local build file")
         }
+    }
+}
+
+impl TryFrom<&str> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(string: &str) -> Result<Self> {
+        serde_yaml::from_str(string).context("Failed to deserialize config from string")
+    }
+}
+
+impl TryFrom<File> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(file: File) -> Result<Self> {
+        serde_yaml::from_reader(BufReader::new(file))
+            .context("Failed to deserialize config from file")
     }
 }
 
@@ -586,7 +594,7 @@ mod tests {
                             stringify!($name),
                             ".yaml"
                         ));
-                        assert!(Config::from_str(raw_input).is_err())
+                        assert!(Config::try_from(raw_input).is_err())
                     }
                 };
             }
