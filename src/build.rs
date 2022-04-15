@@ -621,12 +621,21 @@ mod tests {
         check_pattern_outer("${{}}", "");
         check_pattern_outer("${{ var }}", " var ");
         check_pattern_outer("${{ env.var }}", " env.var ");
+        check_pattern_outer("${{ __maybe_invalid__ }}", " __maybe_invalid__ ");
     }
 
     #[test]
     fn substitution_pattern_inner() {
         check_pattern_inner("   a.b\t ", "a", "b");
         check_pattern_inner("mod_1.var_1", "mod_1", "var_1");
+    }
+
+    #[test]
+    fn invalid_pattern_inner() {
+        assert!(RE_INNER.captures("a.b.c").is_none());
+        assert!(RE_INNER.captures(".").is_none());
+        assert!(RE_INNER.captures("a.").is_none());
+        assert!(RE_INNER.captures(".b").is_none());
     }
 
     #[test]
