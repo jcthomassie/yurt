@@ -12,8 +12,8 @@ mod package;
 mod repo;
 mod shell;
 
-use anyhow::{Context as AnyContext, Result};
-use build::{Config, Context};
+use anyhow::{Context, Result};
+use build::{BuildUnit, ResolvedConfig};
 use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
@@ -72,6 +72,29 @@ pub fn yurt_command() -> Command<'static> {
                 .takes_value(true),
         )
         .arg(
+            Arg::new("exclude")
+                .help("Exclude build types")
+                .short('E')
+                .long("exclude")
+                .takes_value(true)
+                .use_value_delimiter(true)
+                .require_value_delimiter(true)
+                .multiple_values(true)
+                .possible_values(BuildUnit::ALL_NAMES),
+        )
+        .arg(
+            Arg::new("include")
+                .help("Include build types")
+                .short('I')
+                .long("include")
+                .takes_value(true)
+                .use_value_delimiter(true)
+                .require_value_delimiter(true)
+                .multiple_values(true)
+                .possible_values(BuildUnit::ALL_NAMES)
+                .conflicts_with("exclude"),
+        )
+        .arg(
             Arg::new("user")
                 .help("Override target user name")
                 .long("override-user")
@@ -103,8 +126,7 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let timer = Instant::now();
-    let result = Config::from_args(&matches)?
-        .resolve(Context::from(&matches))
+    let result = ResolvedConfig::try_from(&matches)
         .context("Failed to resolve build")
         .and_then(|r| match matches.subcommand() {
             Some(("show", s)) => r.show(s.is_present("non-trivial")),

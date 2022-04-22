@@ -1,0 +1,10 @@
+---
+version: 0.2.1
+shell: zsh
+build:
+  - run: ""
+  - link:
+    - head: a
+      tail: b
+  - install:
+    - name: p

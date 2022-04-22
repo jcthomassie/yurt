@@ -10,7 +10,7 @@ use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     env,
     fs::File,
     io::BufReader,
@@ -113,6 +113,10 @@ pub enum BuildUnit {
     Run(String),
     Install(Package),
     Require(PackageManager),
+}
+
+impl BuildUnit {
+    pub const ALL_NAMES: &'static [&'static str] = &["repo", "link", "run", "install", "require"];
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
@@ -269,21 +273,44 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    fn nontrivial(self) -> ResolvedConfig {
-        ResolvedConfig {
-            build: self
-                .build
-                .into_iter()
-                .filter(|unit| match unit {
-                    BuildUnit::Repo(repo) => !repo.is_available(),
-                    BuildUnit::Link(link) => !link.is_valid(),
-                    BuildUnit::Install(package) => !package.is_installed(),
-                    BuildUnit::Require(manager) => !manager.is_available(),
-                    BuildUnit::Run(_) => true,
-                })
-                .collect(),
+    #[inline]
+    fn filter<P>(self, predicate: P) -> Self
+    where
+        P: FnMut(&BuildUnit) -> bool,
+    {
+        Self {
+            build: self.build.into_iter().filter(predicate).collect(),
             ..self
         }
+    }
+
+    fn nontrivial(self) -> Self {
+        self.filter(|unit| match unit {
+            BuildUnit::Repo(repo) => !repo.is_available(),
+            BuildUnit::Link(link) => !link.is_valid(),
+            BuildUnit::Install(package) => !package.is_installed(),
+            BuildUnit::Require(manager) => !manager.is_available(),
+            BuildUnit::Run(_) => true,
+        })
+    }
+
+    #[inline]
+    fn _include(unit: &BuildUnit, units: &HashSet<String>) -> bool {
+        match unit {
+            BuildUnit::Repo(_) => units.contains("repo"),
+            BuildUnit::Link(_) => units.contains("link"),
+            BuildUnit::Install(_) => units.contains("install"),
+            BuildUnit::Require(_) => units.contains("require"),
+            BuildUnit::Run(_) => units.contains("run"),
+        }
+    }
+
+    fn include(self, units: &HashSet<String>) -> Self {
+        self.filter(|unit| Self::_include(unit, units))
+    }
+
+    fn exclude(self, units: &HashSet<String>) -> Self {
+        self.filter(|unit| !Self::_include(unit, units))
     }
 
     // Pretty-print the complete build; optionally filter out trivial units
@@ -370,6 +397,24 @@ impl ResolvedConfig {
     }
 }
 
+impl TryFrom<&ArgMatches> for ResolvedConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &ArgMatches) -> Result<Self> {
+        Config::try_from(args)
+            .and_then(|c| c.resolve(Context::from(args)))
+            .map(|r| {
+                if let Some(units) = args.values_of("include") {
+                    r.include(&units.map(String::from).collect())
+                } else if let Some(units) = args.values_of("exclude") {
+                    r.exclude(&units.map(String::from).collect())
+                } else {
+                    r
+                }
+            })
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Config {
     pub version: Option<String>,
@@ -400,19 +445,6 @@ impl Config {
         Self::from_str(body)
     }
 
-    pub fn from_args(args: &ArgMatches) -> Result<Self> {
-        if let Some(url) = args.value_of("yaml-url") {
-            Self::from_url(url).context("Failed to parse remote build file")
-        } else {
-            let path = match args.value_of("yaml") {
-                Some(path) => Ok(path.to_string()),
-                None => env::var("YURT_BUILD_FILE"),
-            }
-            .context("Config file not specified")?;
-            Self::from_path(path).context("Failed to parse local build file")
-        }
-    }
-
     pub fn version_matches(&self, strict: bool) -> bool {
         if let Some(ref v) = self.version {
             return v == crate_version!();
@@ -430,13 +462,29 @@ impl Config {
             );
         }
         // Resolve build
-        let build = self.build.resolve(&mut context)?;
         Ok(ResolvedConfig {
-            context,
             version: self.version,
             shell: self.shell.map_or_else(Shell::from_env, Shell::from),
-            build,
+            build: self.build.resolve(&mut context)?,
+            context,
         })
+    }
+}
+
+impl TryFrom<&ArgMatches> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &ArgMatches) -> Result<Self> {
+        if let Some(url) = args.value_of("yaml-url") {
+            Self::from_url(url).context("Failed to parse remote build file")
+        } else {
+            let path = match args.value_of("yaml") {
+                Some(path) => Ok(path.to_string()),
+                None => env::var("YURT_BUILD_FILE"),
+            }
+            .context("Config file not specified")?;
+            Self::from_path(path).context("Failed to parse local build file")
+        }
     }
 }
 
@@ -450,7 +498,7 @@ mod tests {
     }
 
     mod yaml {
-        use super::super::*;
+        use super::*;
 
         #[test]
         fn version_check() {
@@ -470,23 +518,46 @@ mod tests {
         }
 
         mod io {
-            use super::super::get_context;
-            use super::Config;
+            use super::*;
             use pretty_assertions::assert_eq;
+            use std::fs::read_to_string;
+            use std::path::{Path, PathBuf};
+
+            fn get_test_path(parts: &[&str]) -> PathBuf {
+                [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
+                    .concat()
+                    .iter()
+                    .collect()
+            }
+
+            fn get_resolved(dir: &Path) -> ResolvedConfig {
+                let input = dir
+                    .join("input.yaml")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap();
+                let mut args = vec!["yurt".to_string(), "--yaml".to_string(), input];
+                let arg_path = dir.join("args");
+                if arg_path.is_file() {
+                    args.extend(
+                        read_to_string(dir.join("args"))
+                            .unwrap()
+                            .split(' ')
+                            .map(String::from),
+                    );
+                }
+                ResolvedConfig::try_from(&yurt_command().get_matches_from(args))
+                    .expect("Failed to resolve input build")
+            }
 
             macro_rules! test_case {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let raw_input =
-                            include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
-                        let raw_output =
-                            include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
-                        let config =
-                            Config::from_str(raw_input).expect("failed to parse input case");
-                        let resolved = config
-                            .resolve(get_context(&[]))
-                            .expect("failed to resolve input case");
+                        let dir = get_test_path(&["io", stringify!($name)]);
+                        let resolved = get_resolved(&dir);
+                        let raw_output = read_to_string(&dir.join("output.yaml"))
+                            .expect("Failed to read output");
                         let yaml = resolved.into_yaml().unwrap();
                         assert_eq!(yaml, raw_output)
                     }
@@ -499,6 +570,8 @@ mod tests {
             test_case!(namespace);
             test_case!(case);
             test_case!(repo);
+            test_case!(exclude);
+            test_case!(include);
         }
 
         mod invalid_parse {
