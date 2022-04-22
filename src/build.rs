@@ -370,6 +370,14 @@ impl ResolvedConfig {
     }
 }
 
+impl TryFrom<&ArgMatches> for ResolvedConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &ArgMatches) -> Result<Self> {
+        Config::try_from(args).and_then(|c| c.resolve(Context::from(args)))
+    }
+}
+
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
 pub struct Config {
     pub version: Option<String>,
@@ -400,19 +408,6 @@ impl Config {
         Self::from_str(body)
     }
 
-    pub fn from_args(args: &ArgMatches) -> Result<Self> {
-        if let Some(url) = args.value_of("yaml-url") {
-            Self::from_url(url).context("Failed to parse remote build file")
-        } else {
-            let path = match args.value_of("yaml") {
-                Some(path) => Ok(path.to_string()),
-                None => env::var("YURT_BUILD_FILE"),
-            }
-            .context("Config file not specified")?;
-            Self::from_path(path).context("Failed to parse local build file")
-        }
-    }
-
     pub fn version_matches(&self, strict: bool) -> bool {
         if let Some(ref v) = self.version {
             return v == crate_version!();
@@ -430,13 +425,29 @@ impl Config {
             );
         }
         // Resolve build
-        let build = self.build.resolve(&mut context)?;
         Ok(ResolvedConfig {
-            context,
             version: self.version,
             shell: self.shell.map_or_else(Shell::from_env, Shell::from),
-            build,
+            build: self.build.resolve(&mut context)?,
+            context,
         })
+    }
+}
+
+impl TryFrom<&ArgMatches> for Config {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &ArgMatches) -> Result<Self> {
+        if let Some(url) = args.value_of("yaml-url") {
+            Self::from_url(url).context("Failed to parse remote build file")
+        } else {
+            let path = match args.value_of("yaml") {
+                Some(path) => Ok(path.to_string()),
+                None => env::var("YURT_BUILD_FILE"),
+            }
+            .context("Config file not specified")?;
+            Self::from_path(path).context("Failed to parse local build file")
+        }
     }
 }
 

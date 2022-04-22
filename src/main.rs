@@ -12,8 +12,8 @@ mod package;
 mod repo;
 mod shell;
 
-use anyhow::{Context as AnyContext, Result};
-use build::{Config, Context};
+use anyhow::{Context, Result};
+use build::ResolvedConfig;
 use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
@@ -103,8 +103,7 @@ fn main() -> Result<()> {
     env_logger::init();
 
     let timer = Instant::now();
-    let result = Config::from_args(&matches)?
-        .resolve(Context::from(&matches))
+    let result = ResolvedConfig::try_from(&matches)
         .context("Failed to resolve build")
         .and_then(|r| match matches.subcommand() {
             Some(("show", s)) => r.show(s.is_present("non-trivial")),
