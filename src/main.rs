@@ -13,7 +13,7 @@ mod repo;
 mod shell;
 
 use anyhow::{Context, Result};
-use build::ResolvedConfig;
+use build::{BuildUnit, ResolvedConfig};
 use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
@@ -70,6 +70,29 @@ pub fn yurt_command() -> Command<'static> {
                 .short('l')
                 .long("log")
                 .takes_value(true),
+        )
+        .arg(
+            Arg::new("exclude")
+                .help("Exclude build types")
+                .short('E')
+                .long("exclude")
+                .takes_value(true)
+                .use_value_delimiter(true)
+                .require_value_delimiter(true)
+                .multiple_values(true)
+                .possible_values(BuildUnit::ALL_NAMES),
+        )
+        .arg(
+            Arg::new("include")
+                .help("Include build types")
+                .short('I')
+                .long("include")
+                .takes_value(true)
+                .use_value_delimiter(true)
+                .require_value_delimiter(true)
+                .multiple_values(true)
+                .possible_values(BuildUnit::ALL_NAMES)
+                .conflicts_with("exclude"),
         )
         .arg(
             Arg::new("user")

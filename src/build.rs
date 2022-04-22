@@ -10,7 +10,7 @@ use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     env,
     fs::File,
     io::BufReader,
@@ -113,6 +113,10 @@ pub enum BuildUnit {
     Run(String),
     Install(Package),
     Require(PackageManager),
+}
+
+impl BuildUnit {
+    pub const ALL_NAMES: &'static [&'static str] = &["repo", "link", "run", "install", "require"];
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
@@ -269,21 +273,44 @@ pub struct ResolvedConfig {
 }
 
 impl ResolvedConfig {
-    fn nontrivial(self) -> ResolvedConfig {
-        ResolvedConfig {
-            build: self
-                .build
-                .into_iter()
-                .filter(|unit| match unit {
-                    BuildUnit::Repo(repo) => !repo.is_available(),
-                    BuildUnit::Link(link) => !link.is_valid(),
-                    BuildUnit::Install(package) => !package.is_installed(),
-                    BuildUnit::Require(manager) => !manager.is_available(),
-                    BuildUnit::Run(_) => true,
-                })
-                .collect(),
+    #[inline]
+    fn filter<P>(self, predicate: P) -> Self
+    where
+        P: FnMut(&BuildUnit) -> bool,
+    {
+        Self {
+            build: self.build.into_iter().filter(predicate).collect(),
             ..self
         }
+    }
+
+    fn nontrivial(self) -> Self {
+        self.filter(|unit| match unit {
+            BuildUnit::Repo(repo) => !repo.is_available(),
+            BuildUnit::Link(link) => !link.is_valid(),
+            BuildUnit::Install(package) => !package.is_installed(),
+            BuildUnit::Require(manager) => !manager.is_available(),
+            BuildUnit::Run(_) => true,
+        })
+    }
+
+    #[inline]
+    fn _include(unit: &BuildUnit, units: &HashSet<String>) -> bool {
+        match unit {
+            BuildUnit::Repo(_) => units.contains("repo"),
+            BuildUnit::Link(_) => units.contains("link"),
+            BuildUnit::Install(_) => units.contains("install"),
+            BuildUnit::Require(_) => units.contains("require"),
+            BuildUnit::Run(_) => units.contains("run"),
+        }
+    }
+
+    fn include(self, units: &HashSet<String>) -> Self {
+        self.filter(|unit| Self::_include(unit, units))
+    }
+
+    fn exclude(self, units: &HashSet<String>) -> Self {
+        self.filter(|unit| !Self::_include(unit, units))
     }
 
     // Pretty-print the complete build; optionally filter out trivial units
@@ -374,7 +401,17 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
     type Error = anyhow::Error;
 
     fn try_from(args: &ArgMatches) -> Result<Self> {
-        Config::try_from(args).and_then(|c| c.resolve(Context::from(args)))
+        Config::try_from(args)
+            .and_then(|c| c.resolve(Context::from(args)))
+            .map(|r| {
+                if let Some(units) = args.values_of("include") {
+                    r.include(&units.map(String::from).collect())
+                } else if let Some(units) = args.values_of("exclude") {
+                    r.exclude(&units.map(String::from).collect())
+                } else {
+                    r
+                }
+            })
     }
 }
 
@@ -461,7 +498,7 @@ mod tests {
     }
 
     mod yaml {
-        use super::super::*;
+        use super::*;
 
         #[test]
         fn version_check() {
@@ -478,6 +515,50 @@ mod tests {
             cfg.version = Some(crate_version!().to_string());
             assert!(cfg.version_matches(true));
             assert!(cfg.version_matches(false));
+        }
+
+        mod args {
+            use super::*;
+            use pretty_assertions::assert_eq;
+            use std::fs::read_to_string;
+            use std::path::{Path, PathBuf};
+
+            fn get_test_path(parts: &[&str]) -> PathBuf {
+                [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
+                    .concat()
+                    .iter()
+                    .collect()
+            }
+
+            fn get_resolved(dir: &Path) -> ResolvedConfig {
+                let input = dir
+                    .join("input.yaml")
+                    .into_os_string()
+                    .into_string()
+                    .unwrap();
+                let extra = read_to_string(dir.join("args")).expect("Failed to read args");
+                let mut args = vec!["yurt", "--yaml", &input];
+                args.extend(extra.split(' '));
+                ResolvedConfig::try_from(&yurt_command().get_matches_from(args))
+                    .expect("Failed to resolve input build")
+            }
+
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let dir = get_test_path(&["args", stringify!($name)]);
+                        let resolved = get_resolved(&dir);
+                        let raw_output = read_to_string(&dir.join("output.yaml"))
+                            .expect("Failed to read output");
+                        let yaml = resolved.into_yaml().unwrap();
+                        assert_eq!(yaml, raw_output)
+                    }
+                };
+            }
+
+            test_case!(exclude);
+            test_case!(include);
         }
 
         mod io {
