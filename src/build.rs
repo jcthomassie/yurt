@@ -517,7 +517,7 @@ mod tests {
             assert!(cfg.version_matches(false));
         }
 
-        mod args {
+        mod io {
             use super::*;
             use pretty_assertions::assert_eq;
             use std::fs::read_to_string;
@@ -536,9 +536,16 @@ mod tests {
                     .into_os_string()
                     .into_string()
                     .unwrap();
-                let extra = read_to_string(dir.join("args")).expect("Failed to read args");
-                let mut args = vec!["yurt", "--yaml", &input];
-                args.extend(extra.split(' '));
+                let mut args = vec!["yurt".to_string(), "--yaml".to_string(), input];
+                let arg_path = dir.join("args");
+                if arg_path.is_file() {
+                    args.extend(
+                        read_to_string(dir.join("args"))
+                            .unwrap()
+                            .split(' ')
+                            .map(String::from),
+                    );
+                }
                 ResolvedConfig::try_from(&yurt_command().get_matches_from(args))
                     .expect("Failed to resolve input build")
             }
@@ -547,38 +554,10 @@ mod tests {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let dir = get_test_path(&["args", stringify!($name)]);
+                        let dir = get_test_path(&["io", stringify!($name)]);
                         let resolved = get_resolved(&dir);
                         let raw_output = read_to_string(&dir.join("output.yaml"))
                             .expect("Failed to read output");
-                        let yaml = resolved.into_yaml().unwrap();
-                        assert_eq!(yaml, raw_output)
-                    }
-                };
-            }
-
-            test_case!(exclude);
-            test_case!(include);
-        }
-
-        mod io {
-            use super::super::get_context;
-            use super::Config;
-            use pretty_assertions::assert_eq;
-
-            macro_rules! test_case {
-                ($name:ident) => {
-                    #[test]
-                    fn $name() {
-                        let raw_input =
-                            include_str!(concat!("../test/io/", stringify!($name), "/input.yaml"));
-                        let raw_output =
-                            include_str!(concat!("../test/io/", stringify!($name), "/output.yaml"));
-                        let config =
-                            Config::from_str(raw_input).expect("failed to parse input case");
-                        let resolved = config
-                            .resolve(get_context(&[]))
-                            .expect("failed to resolve input case");
                         let yaml = resolved.into_yaml().unwrap();
                         assert_eq!(yaml, raw_output)
                     }
@@ -591,6 +570,8 @@ mod tests {
             test_case!(namespace);
             test_case!(case);
             test_case!(repo);
+            test_case!(exclude);
+            test_case!(include);
         }
 
         mod invalid_parse {
