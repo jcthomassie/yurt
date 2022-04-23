@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
@@ -61,7 +61,7 @@ impl Link {
                 if let Some(dir) = self.head.parent() {
                     fs::create_dir_all(dir)?;
                 }
-                Ok(symlink::symlink_file(&self.tail, &self.head)?)
+                symlink::symlink_file(&self.tail, &self.head).context("Failed to create symlink")
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
             Status::InvalidHead(e) => Err(e.context("Invalid link head")),
@@ -74,7 +74,7 @@ impl Link {
         match self.status() {
             Status::Valid => {
                 info!("Unlinking {:?} -> {:?}", &self.head, &self.tail);
-                Ok(symlink::remove_symlink_file(&self.head)?)
+                symlink::remove_symlink_file(&self.head).context("Failed to remove symlink")
             }
             _ => Ok(()),
         }
@@ -85,7 +85,7 @@ impl Link {
         match self.status() {
             Status::InvalidHead(_) | Status::InvalidTail(_) => {
                 info!("Removing {:?}", &self.head);
-                Ok(fs::remove_file(&self.head)?)
+                fs::remove_file(&self.head).context("Failed to delete link head")
             }
             _ => Ok(()),
         }
