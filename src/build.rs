@@ -423,17 +423,26 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn from_yaml<S: AsRef<str>>(yaml: S) -> Result<Self> {
+        serde_yaml::from_str(yaml.as_ref()).context("Failed to deserialize config from string")
+    }
+
+    pub fn from_file(file: File) -> Result<Self> {
+        serde_yaml::from_reader(BufReader::new(file))
+            .context("Failed to deserialize config from file")
+    }
+
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         File::open(path)
             .context("Failed to open build file")
-            .and_then(Self::try_from)
+            .and_then(Self::from_file)
     }
 
     pub fn from_url(url: &str) -> Result<Self> {
         reqwest::blocking::get(url)
             .and_then(reqwest::blocking::Response::text)
             .context("Failed to fetch remote build file")
-            .and_then(|s| Self::try_from(s.as_str()))
+            .and_then(Self::from_yaml)
     }
 
     pub fn version_matches(&self, strict: bool) -> bool {
@@ -476,23 +485,6 @@ impl TryFrom<&ArgMatches> for Config {
             .context("Config file not specified")?;
             Self::from_path(path).context("Failed to parse local build file")
         }
-    }
-}
-
-impl TryFrom<&str> for Config {
-    type Error = anyhow::Error;
-
-    fn try_from(string: &str) -> Result<Self> {
-        serde_yaml::from_str(string).context("Failed to deserialize config from string")
-    }
-}
-
-impl TryFrom<File> for Config {
-    type Error = anyhow::Error;
-
-    fn try_from(file: File) -> Result<Self> {
-        serde_yaml::from_reader(BufReader::new(file))
-            .context("Failed to deserialize config from file")
     }
 }
 
@@ -594,7 +586,7 @@ mod tests {
                             stringify!($name),
                             ".yaml"
                         ));
-                        assert!(Config::try_from(raw_input).is_err())
+                        assert!(Config::from_yaml(raw_input).is_err())
                     }
                 };
             }
