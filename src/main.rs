@@ -32,17 +32,7 @@ pub fn yurt_command() -> Command<'static> {
                         .takes_value(false),
                 ),
         )
-        .subcommand(
-            Command::new("uninstall")
-                .about("Uninstall the resolved build")
-                .arg(
-                    Arg::new("packages")
-                        .help("Uninstall packages too")
-                        .short('p')
-                        .long("packages")
-                        .takes_value(false),
-                ),
-        )
+        .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
         .subcommand(Command::new("clean").about("Clean link target conflicts"))
         .subcommand(
             Command::new("show").about("Show the resolved build").arg(
@@ -136,7 +126,7 @@ fn main() -> Result<()> {
         .and_then(|r| match matches.subcommand() {
             Some(("show", s)) => r.show(s.is_present("non-trivial")),
             Some(("install", s)) => r.install(s.is_present("clean")),
-            Some(("uninstall", s)) => r.uninstall(s.is_present("packages")),
+            Some(("uninstall", _)) => r.uninstall(),
             Some(("clean", _)) => r.clean(),
             Some(("update", _)) => r.update(),
             _ => unreachable!(),

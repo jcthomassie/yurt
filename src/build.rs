@@ -352,12 +352,12 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    pub fn uninstall(&self, packages: bool) -> Result<()> {
+    pub fn uninstall(&self) -> Result<()> {
         info!("Uninstalling...");
         for unit in &self.build {
             match unit {
                 BuildUnit::Link(link) => link.unlink()?,
-                BuildUnit::Install(package) if packages => package.uninstall()?,
+                BuildUnit::Install(package) => package.uninstall()?,
                 _ => continue,
             }
         }
