@@ -352,12 +352,12 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    pub fn uninstall(&self, packages: bool) -> Result<()> {
+    pub fn uninstall(&self) -> Result<()> {
         info!("Uninstalling...");
         for unit in &self.build {
             match unit {
                 BuildUnit::Link(link) => link.unlink()?,
-                BuildUnit::Install(package) if packages => package.uninstall()?,
+                BuildUnit::Install(package) => package.uninstall()?,
                 _ => continue,
             }
         }
@@ -423,26 +423,26 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_str<S>(string: S) -> Result<Self>
-    where
-        S: AsRef<str>,
-    {
-        Ok(serde_yaml::from_str::<Self>(string.as_ref())?)
-    }
-
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file = File::open(path)?;
-        Self::from_file(file)
+    pub fn from_yaml<S: AsRef<str>>(yaml: S) -> Result<Self> {
+        serde_yaml::from_str(yaml.as_ref()).context("Failed to deserialize config from string")
     }
 
     pub fn from_file(file: File) -> Result<Self> {
-        let reader = BufReader::new(file);
-        Ok(serde_yaml::from_reader::<_, Self>(reader)?)
+        serde_yaml::from_reader(BufReader::new(file))
+            .context("Failed to deserialize config from file")
+    }
+
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        File::open(path)
+            .context("Failed to open build file")
+            .and_then(Self::from_file)
     }
 
     pub fn from_url(url: &str) -> Result<Self> {
-        let body = reqwest::blocking::get(url)?.text()?;
-        Self::from_str(body)
+        reqwest::blocking::get(url)
+            .and_then(reqwest::blocking::Response::text)
+            .context("Failed to fetch remote build file")
+            .and_then(Self::from_yaml)
     }
 
     pub fn version_matches(&self, strict: bool) -> bool {
@@ -586,7 +586,7 @@ mod tests {
                             stringify!($name),
                             ".yaml"
                         ));
-                        assert!(Config::from_str(raw_input).is_err())
+                        assert!(Config::from_yaml(raw_input).is_err())
                     }
                 };
             }
@@ -613,12 +613,21 @@ mod tests {
         check_pattern_outer("${{}}", "");
         check_pattern_outer("${{ var }}", " var ");
         check_pattern_outer("${{ env.var }}", " env.var ");
+        check_pattern_outer("${{ __maybe_invalid__ }}", " __maybe_invalid__ ");
     }
 
     #[test]
     fn substitution_pattern_inner() {
         check_pattern_inner("   a.b\t ", "a", "b");
         check_pattern_inner("mod_1.var_1", "mod_1", "var_1");
+    }
+
+    #[test]
+    fn invalid_pattern_inner() {
+        assert!(RE_INNER.captures("a.b.c").is_none());
+        assert!(RE_INNER.captures(".").is_none());
+        assert!(RE_INNER.captures("a.").is_none());
+        assert!(RE_INNER.captures(".b").is_none());
     }
 
     #[test]
