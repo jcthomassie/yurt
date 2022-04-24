@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
@@ -10,11 +10,13 @@ pub struct Repo {
 
 impl Repo {
     pub fn open(&self) -> Result<Repository> {
-        Ok(Repository::open(&self.path)?)
+        Repository::open(&self.path)
+            .with_context(|| format!("Failed to open git repository: {:?}", self))
     }
 
     pub fn clone(&self) -> Result<Repository> {
-        Ok(Repository::clone_recurse(&self.url, &self.path)?)
+        Repository::clone_recurse(&self.url, &self.path)
+            .with_context(|| format!("Failed to clone git repository: {:?}", self))
     }
 
     pub fn require(&self) -> Result<Repository> {
