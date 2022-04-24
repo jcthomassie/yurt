@@ -22,27 +22,30 @@ use std::{env, time::Instant};
 pub fn yurt_command() -> Command<'static> {
     command!()
         .subcommand(
-            Command::new("install").about("Installs dotfiles").arg(
-                Arg::new("clean")
-                    .help("Run `dots clean` before install")
-                    .short('c')
-                    .long("clean")
-                    .takes_value(false),
-            ),
+            Command::new("install")
+                .about("Install the resolved build")
+                .arg(
+                    Arg::new("clean")
+                        .help("Clean link target conflicts")
+                        .short('c')
+                        .long("clean")
+                        .takes_value(false),
+                ),
         )
         .subcommand(
-            Command::new("uninstall").about("Uninstalls dotfiles").arg(
-                Arg::new("packages")
-                    .help("Uninstall packages too")
-                    .short('p')
-                    .long("packages")
-                    .takes_value(false),
-            ),
+            Command::new("uninstall")
+                .about("Uninstall the resolved build")
+                .arg(
+                    Arg::new("packages")
+                        .help("Uninstall packages too")
+                        .short('p')
+                        .long("packages")
+                        .takes_value(false),
+                ),
         )
-        .subcommand(Command::new("update").about("Updates dotfiles and/or system"))
-        .subcommand(Command::new("clean").about("Cleans output destinations"))
+        .subcommand(Command::new("clean").about("Clean link target conflicts"))
         .subcommand(
-            Command::new("show").about("Shows the build config").arg(
+            Command::new("show").about("Show the resolved build").arg(
                 Arg::new("non-trivial")
                     .help("Hide trivial build units")
                     .short('n')
@@ -80,7 +83,8 @@ pub fn yurt_command() -> Command<'static> {
                 .use_value_delimiter(true)
                 .require_value_delimiter(true)
                 .multiple_values(true)
-                .possible_values(BuildUnit::ALL_NAMES),
+                .possible_values(BuildUnit::ALL_NAMES)
+                .hide_possible_values(true),
         )
         .arg(
             Arg::new("include")
@@ -92,6 +96,7 @@ pub fn yurt_command() -> Command<'static> {
                 .require_value_delimiter(true)
                 .multiple_values(true)
                 .possible_values(BuildUnit::ALL_NAMES)
+                .hide_possible_values(true)
                 .conflicts_with("exclude"),
         )
         .arg(
