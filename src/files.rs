@@ -1,7 +1,7 @@
 use anyhow::{anyhow, Context, Error, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
-use std::{fs, path::PathBuf};
+use std::{fmt, fs, path::PathBuf};
 
 #[derive(Debug)]
 enum Status {
@@ -35,9 +35,8 @@ impl Link {
         match self.head.read_link() {
             Ok(target) if target == self.tail => Status::Valid,
             Ok(target) => Status::InvalidTail(anyhow!(
-                "Link source points to wrong target: {:?} -> {:?}",
-                self.head,
-                target
+                "Link source points to wrong target: {}",
+                Self::new(self.head.clone(), target)
             )),
             Err(e) if self.head.exists() => Status::InvalidHead(anyhow!(e)),
             Err(_) => Status::NullHead,
@@ -57,11 +56,12 @@ impl Link {
         match self.status() {
             Status::Valid => Ok(()),
             Status::NullHead => {
-                info!("Linking {:?} -> {:?}", &self.head, &self.tail);
+                info!("Linking {}", self);
                 if let Some(dir) = self.head.parent() {
                     fs::create_dir_all(dir)?;
                 }
-                symlink::symlink_file(&self.tail, &self.head).context("Failed to create symlink")
+                symlink::symlink_file(&self.tail, &self.head)
+                    .with_context(|| format!("Failed to apply symlink: {}", self))
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
             Status::InvalidHead(e) => Err(e.context("Invalid link head")),
@@ -73,8 +73,9 @@ impl Link {
     pub fn unlink(&self) -> Result<()> {
         match self.status() {
             Status::Valid => {
-                info!("Unlinking {:?} -> {:?}", &self.head, &self.tail);
-                symlink::remove_symlink_file(&self.head).context("Failed to remove symlink")
+                info!("Unlinking {}", self);
+                symlink::remove_symlink_file(&self.head)
+                    .with_context(|| format!("Failed to remove symlink: {}", self))
             }
             _ => Ok(()),
         }
@@ -85,10 +86,17 @@ impl Link {
         match self.status() {
             Status::InvalidHead(_) | Status::InvalidTail(_) => {
                 info!("Removing {:?}", &self.head);
-                fs::remove_file(&self.head).context("Failed to delete link head")
+                fs::remove_file(&self.head)
+                    .with_context(|| format!("Failed to clean link head: {}", self))
             }
             _ => Ok(()),
         }
+    }
+}
+
+impl fmt::Display for Link {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} -> {:?}", &self.head, &self.tail)
     }
 }
 
