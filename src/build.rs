@@ -650,7 +650,7 @@ pub mod tests {
     }
 
     #[test]
-    fn matrix_array_mismatch() {
+    fn matrix_length_mismatch() {
         let mut context = get_context(&[]);
         #[rustfmt::skip]
         let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
@@ -666,19 +666,22 @@ pub mod tests {
     fn matrix_expansion() {
         let mut context = get_context(&[]);
         context.set_variable("outer", "key", "value");
-        let values = vec![
-            "${{ outer.key }}_a".to_string(),
-            "${{ outer.key }}_b".to_string(),
-            "${{ outer.key }}_c".to_string(),
-        ];
-        let matrix = Matrix {
-            values: {
-                let mut map = BTreeMap::new();
-                map.insert("key".to_string(), values.clone());
-                map
-            },
-            include: vec!["${{ matrix.key }}".to_string()],
-        };
+        #[rustfmt::skip]
+        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
+            values:
+              inner:
+                - "${{ outer.key }}_a"
+                - "${{ outer.key }}_b"
+                - "${{ outer.key }}_c"
+            include:
+              - run: "${{ matrix.inner }}"
+        "#).unwrap();
+        #[rustfmt::skip]
+        let values: Vec<BuildSpec> = serde_yaml::from_str(r#"
+            - run: value_a
+            - run: value_b
+            - run: value_c
+        "#).unwrap();
         assert_eq!(
             matrix.resolve_into_new(&mut context).unwrap(),
             values.resolve_into_new(&mut context).unwrap()
