@@ -423,26 +423,21 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn from_yaml<S: AsRef<str>>(yaml: S) -> Result<Self> {
-        serde_yaml::from_str(yaml.as_ref()).context("Failed to deserialize config from string")
-    }
-
-    pub fn from_file(file: File) -> Result<Self> {
-        serde_yaml::from_reader(BufReader::new(file))
-            .context("Failed to deserialize config from file")
-    }
-
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         File::open(path)
+            .map(BufReader::new)
             .context("Failed to open build file")
-            .and_then(Self::from_file)
+            .and_then(|reader| {
+                serde_yaml::from_reader(reader).context("Failed to deserialize build file")
+            })
     }
 
-    pub fn from_url(url: &str) -> Result<Self> {
+    pub fn from_url<U: reqwest::IntoUrl>(url: U) -> Result<Self> {
         reqwest::blocking::get(url)
-            .and_then(reqwest::blocking::Response::text)
-            .context("Failed to fetch remote build file")
-            .and_then(Self::from_yaml)
+            .context("Failed to reach remote build file")
+            .and_then(|response| {
+                serde_yaml::from_reader(response).context("Failed to deserialize remote build file")
+            })
     }
 
     pub fn version_matches(&self, strict: bool) -> bool {
@@ -476,14 +471,12 @@ impl TryFrom<&ArgMatches> for Config {
 
     fn try_from(args: &ArgMatches) -> Result<Self> {
         if let Some(url) = args.value_of("yaml-url") {
-            Self::from_url(url).context("Failed to parse remote build file")
+            Self::from_url(url)
         } else {
-            let path = match args.value_of("yaml") {
-                Some(path) => Ok(path.to_string()),
-                None => env::var("YURT_BUILD_FILE"),
-            }
-            .context("Config file not specified")?;
-            Self::from_path(path).context("Failed to parse local build file")
+            Self::from_path(match args.value_of("yaml") {
+                Some(path) => path.to_string(),
+                None => env::var("YURT_BUILD_FILE").context("Build file not specified")?,
+            })
         }
     }
 }
@@ -581,12 +574,8 @@ mod tests {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let raw_input = include_str!(concat!(
-                            "../test/invalid/parse/",
-                            stringify!($name),
-                            ".yaml"
-                        ));
-                        assert!(Config::from_yaml(raw_input).is_err())
+                        let path = concat!("../test/invalid/parse/", stringify!($name), ".yaml");
+                        assert!(Config::from_path(path).is_err());
                     }
                 };
             }
