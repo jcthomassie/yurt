@@ -397,6 +397,7 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
 }
 
 #[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub version: Option<String>,
     pub shell: Option<ShellSpec>,
@@ -565,6 +566,7 @@ pub mod tests {
 
             test_case!(empty);
             test_case!(no_build);
+            test_case!(unknown_key);
         }
     }
 

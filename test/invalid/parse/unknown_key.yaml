@@ -1,0 +1,9 @@
+---
+version: 0.2.1
+shell: zsh
+something: invalid
+build:
+  include:
+  - link:
+    - tail: t
+      head: h
