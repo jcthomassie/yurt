@@ -4,9 +4,9 @@
 [![build](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/build.yaml)
 [![release](https://img.shields.io/github/v/release/jcthomassie/yurt?include_prereleases&label=release)](https://github.com/jcthomassie/yurt/releases/latest)
 
-Experimental cross-platform dotfile and package manager wrapper.
+Experimental cross-platform dotfile and package manager.
 
-Build instructions are specified via YAML. Features include symlink application, installation of packages (and package managers), execution of remote shell scripts via curl, and system specific build steps.
+Build instructions are specified via YAML. Features include symlink application, installation of packages (and package managers), execution of shell commands, and system specific build steps.
 
 ## Usage
 
@@ -56,6 +56,7 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `negative` if the spec does not match the local spec
   - `default` if none of the preceeding conditions are met
 - `link` list of symlinks to be applied
+- `run` shell command to run on install
 - `install` list of packages to install
   - `name` package name
   - `managers` (optional) list of package managers that provide the package
@@ -95,6 +96,7 @@ build:
         include:
           - require:
             - brew
+          - run: brew bundle --file ${{ dotfiles.path }}/.brewfile
 
   # Install packages
   - install:
