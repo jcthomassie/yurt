@@ -1,4 +1,4 @@
-use crate::build::{BuildUnit, Context, Resolve};
+use crate::build::{BuildUnit, Context, ResolveInto};
 use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
@@ -99,10 +99,10 @@ where
     }
 }
 
-impl<C, T> Resolve for Vec<Case<C, T>>
+impl<C, T> ResolveInto for Vec<Case<C, T>>
 where
     C: Condition,
-    T: Resolve,
+    T: ResolveInto,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;

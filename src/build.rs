@@ -153,24 +153,14 @@ impl BuildSpec {
 }
 
 pub trait Resolve {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
-
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>
-    where
-        Self: Sized,
-    {
-        let mut output = Vec::new();
-        self.resolve_into(context, &mut output)?;
-        Ok(output)
-    }
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
 }
 
 macro_rules! resolve_unit {
     ($type:ty, ($self:ident, $context:ident) => $mapped:expr) => {
         impl Resolve for $type {
-            fn resolve_into($self, $context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-                output.push($mapped);
-                Ok(())
+            fn resolve($self, $context: &mut Context) -> Result<BuildUnit> {
+                Ok($mapped)
             }
         }
     };
@@ -205,35 +195,30 @@ resolve_unit!(Repo, (self, context) => {
     BuildUnit::Repo(new)
 });
 
-impl<T> Resolve for Vec<T>
+pub trait ResolveInto {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
+
+    fn resolve_into_new(self, context: &mut Context) -> Result<Vec<BuildUnit>>
+    where
+        Self: Sized,
+    {
+        let mut output = Vec::new();
+        self.resolve_into(context, &mut output)?;
+        Ok(output)
+    }
+}
+
+impl<T> ResolveInto for T
 where
     T: Resolve,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        for raw in self {
-            raw.resolve_into(context, output)?;
-        }
+        output.push(self.resolve(context)?);
         Ok(())
     }
 }
 
-impl Resolve for BuildSpec {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        match self {
-            Self::Repo(r) => r.resolve_into(context, output)?,
-            Self::Namespace(n) => n.resolve_into(context, output)?,
-            Self::Matrix(m) => m.resolve_into(context, output)?,
-            Self::Case(v) => v.resolve_into(context, output)?,
-            Self::Link(v) => v.resolve_into(context, output)?,
-            Self::Run(s) => s.resolve_into(context, output)?,
-            Self::Install(v) => v.resolve_into(context, output)?,
-            Self::Require(v) => v.resolve_into(context, output)?,
-        }
-        Ok(())
-    }
-}
-
-impl Resolve for Namespace {
+impl ResolveInto for Namespace {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
         for (variable, value) in &self.values {
             context.set_variable(&self.name, variable, value);
@@ -242,9 +227,9 @@ impl Resolve for Namespace {
     }
 }
 
-impl<T> Resolve for Matrix<T>
+impl<T> ResolveInto for Matrix<T>
 where
-    T: Resolve + Clone,
+    T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let len = self.length()?;
@@ -257,6 +242,34 @@ where
                 context.set_variable("matrix", variable, value);
             }
             self.include.clone().resolve_into(&mut context, output)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T> ResolveInto for Vec<T>
+where
+    T: ResolveInto,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        for inner in self {
+            inner.resolve_into(context, output)?;
+        }
+        Ok(())
+    }
+}
+
+impl ResolveInto for BuildSpec {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        match self {
+            Self::Repo(r) => r.resolve_into(context, output)?,
+            Self::Namespace(n) => n.resolve_into(context, output)?,
+            Self::Matrix(m) => m.resolve_into(context, output)?,
+            Self::Case(v) => v.resolve_into(context, output)?,
+            Self::Link(v) => v.resolve_into(context, output)?,
+            Self::Run(s) => s.resolve_into(context, output)?,
+            Self::Install(v) => v.resolve_into(context, output)?,
+            Self::Require(v) => v.resolve_into(context, output)?,
         }
         Ok(())
     }
@@ -462,7 +475,7 @@ impl Config {
         Ok(ResolvedConfig {
             version: self.version,
             shell: self.shell.map_or_else(Shell::from_env, Shell::from),
-            build: self.build.resolve(&mut context)?,
+            build: self.build.resolve_into_new(&mut context)?,
             context,
         })
     }
@@ -649,8 +662,7 @@ mod tests {
         };
         (@unit_vec $value:expr, BuildUnit::$variant:ident) => {
             {
-                assert_eq!($value.len(), 1);
-                unpack!(@unit ($value)[0], BuildUnit::$variant)
+                unpack!(@unit ($value), BuildUnit::$variant)
             }
         };
     }
@@ -706,7 +718,7 @@ mod tests {
               key_b: val_b
         ").unwrap();
         let mut context = get_context(&[]);
-        namespace.resolve(&mut context).unwrap();
+        namespace.resolve_into_new(&mut context).unwrap();
         assert_eq!(context.get_variable("namespace", "key_a").unwrap(), "val_a");
         assert_eq!(context.get_variable("namespace", "key_b").unwrap(), "val_b");
     }
@@ -733,7 +745,7 @@ mod tests {
               b: [4, 5, 6, 7]
             include: [ ]
         ").unwrap();
-        assert!(matrix.resolve(&mut context).is_err());
+        assert!(matrix.resolve_into_new(&mut context).is_err());
     }
 
     #[test]
@@ -754,8 +766,8 @@ mod tests {
             include: vec!["${{ matrix.key }}".to_string()],
         };
         assert_eq!(
-            matrix.resolve(&mut context).unwrap(),
-            values.resolve(&mut context).unwrap()
+            matrix.resolve_into_new(&mut context).unwrap(),
+            values.resolve_into_new(&mut context).unwrap()
         );
     }
 }
