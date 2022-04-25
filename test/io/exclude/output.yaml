@@ -2,4 +2,6 @@
 version: 0.2.1
 shell: zsh
 build:
-  - run: ""
+  - run:
+      shell: usr/bin/my-shell
+      command: something

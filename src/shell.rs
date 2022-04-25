@@ -1,3 +1,4 @@
+use crate::build::{self, BuildUnit, Resolve};
 use anyhow::{anyhow, Context, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
@@ -119,22 +120,31 @@ impl From<&Path> for ShellKind {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(from = "String", into = "String")]
 pub struct Shell {
     kind: ShellKind,
     command: String,
 }
 
-impl<T> From<T> for Shell
-where
-    T: Into<String>,
-{
-    fn from(command: T) -> Self {
-        let command = command.into();
+impl From<String> for Shell {
+    fn from(command: String) -> Self {
         Self {
             kind: ShellKind::from(Path::new(&command)),
             command,
         }
+    }
+}
+
+impl From<&str> for Shell {
+    fn from(command: &str) -> Self {
+        Self::from(command.to_string())
+    }
+}
+
+impl From<Shell> for String {
+    fn from(shell: Shell) -> Self {
+        shell.command
     }
 }
 
@@ -183,20 +193,51 @@ impl Shell {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename = "shell")]
-pub struct ShellSpec(String);
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde(from = "ShellCommandSpec")]
+pub struct ShellCommand {
+    shell: Shell,
+    command: String,
+}
 
-impl From<ShellSpec> for Shell {
-    fn from(spec: ShellSpec) -> Self {
-        Self::from(spec.0)
+impl ShellCommand {
+    pub fn run(&self) -> Result<()> {
+        self.shell.run(&self.command).map(drop)
     }
 }
 
-impl From<Shell> for ShellSpec {
-    fn from(shell: Shell) -> Self {
-        Self(shell.command)
+impl Resolve for ShellCommand {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Run(Self {
+            command: context.replace_variables(&self.command)?,
+            ..self
+        }))
     }
+}
+
+impl From<String> for ShellCommand {
+    fn from(command: String) -> Self {
+        Self {
+            shell: Shell::from_env(),
+            command,
+        }
+    }
+}
+
+impl From<ShellCommandSpec> for ShellCommand {
+    fn from(spec: ShellCommandSpec) -> Self {
+        match spec {
+            ShellCommandSpec::String(command) => Self::from(command),
+            ShellCommandSpec::Struct { shell, command } => Self { shell, command },
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ShellCommandSpec {
+    String(String),
+    Struct { shell: Shell, command: String },
 }
 
 #[cfg(test)]
@@ -232,6 +273,13 @@ mod tests {
             Ok(_) => assert_ne!(shell.kind, ShellKind::Empty),
             Err(_) => assert_eq!(shell, Shell::default()),
         }
+    }
+
+    #[test]
+    fn shell_command_from_str() {
+        let cmd = ShellCommand::from("echo 'hello world!'".to_string());
+        assert_eq!(cmd.shell, Shell::from_env());
+        assert_eq!(cmd.command, "echo 'hello world!'");
     }
 
     #[test]
