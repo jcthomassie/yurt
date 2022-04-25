@@ -294,7 +294,6 @@ impl ResolvedConfig {
         })
     }
 
-    #[inline]
     fn _include(unit: &BuildUnit, units: &HashSet<String>) -> bool {
         match unit {
             BuildUnit::Repo(_) => units.contains("repo"),
@@ -305,10 +304,12 @@ impl ResolvedConfig {
         }
     }
 
+    #[inline]
     fn include(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| Self::_include(unit, units))
     }
 
+    #[inline]
     fn exclude(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
     }
@@ -440,11 +441,12 @@ impl Config {
             })
     }
 
+    #[inline]
     pub fn version_matches(&self, strict: bool) -> bool {
-        if let Some(ref v) = self.version {
-            return v == crate_version!();
+        match self.version {
+            Some(ref v) => v == crate_version!(),
+            None => !strict,
         }
-        !strict
     }
 
     pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
