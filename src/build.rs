@@ -2,7 +2,7 @@ use crate::condition::{Case, Locale, LocaleSpec};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
-use crate::shell::{Shell, ShellCommand};
+use crate::shell::ShellCommand;
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
@@ -241,7 +241,6 @@ pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
     version: Option<String>,
-    shell: Shell,
     build: Vec<BuildUnit>,
 }
 
@@ -361,7 +360,6 @@ impl ResolvedConfig {
         }
         Config {
             version: self.version,
-            shell: Some(self.shell),
             build,
         }
     }
@@ -393,7 +391,6 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
 #[serde(deny_unknown_fields)]
 pub struct Config {
     version: Option<String>,
-    shell: Option<Shell>,
     build: Vec<BuildSpec>,
 }
 
@@ -435,7 +432,6 @@ impl Config {
         // Resolve build
         Ok(ResolvedConfig {
             version: self.version,
-            shell: self.shell.map_or_else(Shell::from_env, Shell::from),
             build: self.build.resolve_into_new(&mut context)?,
             context,
         })
@@ -474,7 +470,6 @@ pub mod tests {
         fn version_check() {
             let mut cfg = Config {
                 version: None,
-                shell: None,
                 build: Vec::new(),
             };
             assert!(!cfg.version_matches(true));
