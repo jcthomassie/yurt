@@ -1,3 +1,4 @@
+use crate::build::{self, BuildUnit, Resolve};
 use anyhow::{anyhow, Context, Error, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -15,12 +16,12 @@ enum Status {
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {
     // head@ -> tail
-    pub head: PathBuf,
-    pub tail: PathBuf,
+    head: PathBuf,
+    tail: PathBuf,
 }
 
 impl Link {
-    pub fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
+    fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
         Self {
             head: head.into(),
             tail: tail.into(),
@@ -97,6 +98,15 @@ impl Link {
 impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?} -> {:?}", &self.head, &self.tail)
+    }
+}
+
+impl Resolve for Link {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Link(Self::new(
+            context.replace_variables(self.head.to_str().unwrap_or(""))?,
+            context.replace_variables(self.tail.to_str().unwrap_or(""))?,
+        )))
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::build::{BuildUnit, Context, Resolve};
+use crate::build::{BuildUnit, Context, ResolveInto};
 use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
@@ -89,7 +89,7 @@ impl<C, T> Case<C, T>
 where
     C: Condition,
 {
-    pub fn evaluate(self, default: bool, context: &Context) -> Option<T> {
+    fn evaluate(self, default: bool, context: &Context) -> Option<T> {
         match self {
             Case::Positive { spec, include } if spec.evaluate(context) => Some(include),
             Case::Negative { spec, include } if !spec.evaluate(context) => Some(include),
@@ -99,10 +99,10 @@ where
     }
 }
 
-impl<C, T> Resolve for Vec<Case<C, T>>
+impl<C, T> ResolveInto for Vec<Case<C, T>>
 where
     C: Condition,
-    T: Resolve,
+    T: ResolveInto,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;
@@ -122,11 +122,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::yurt_command;
-
-    fn get_context(args: &[&str]) -> Context {
-        Context::from(&yurt_command().get_matches_from(args))
-    }
+    use crate::build::tests::get_context;
 
     #[test]
     fn override_user() {

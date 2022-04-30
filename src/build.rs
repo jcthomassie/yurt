@@ -27,14 +27,14 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct Context {
     pub locale: Locale,
+    pub managers: BTreeSet<PackageManager>,
     variables: BTreeMap<String, String>,
-    managers: BTreeSet<PackageManager>,
     home_dir: PathBuf,
 }
 
 impl Context {
     #[inline]
-    fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+    pub fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
         self.variables
             .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
@@ -48,7 +48,7 @@ impl Context {
         }
     }
 
-    fn replace_variables(&self, input: &str) -> Result<String> {
+    pub fn replace_variables(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -153,9 +153,19 @@ impl BuildSpec {
 }
 
 pub trait Resolve {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
+}
+
+impl Resolve for String {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Run(context.replace_variables(&self)?))
+    }
+}
+
+pub trait ResolveInto {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
 
-    fn resolve(self, context: &mut Context) -> Result<Vec<BuildUnit>>
+    fn resolve_into_new(self, context: &mut Context) -> Result<Vec<BuildUnit>>
     where
         Self: Sized,
     {
@@ -165,75 +175,17 @@ pub trait Resolve {
     }
 }
 
-macro_rules! resolve_unit {
-    ($type:ty, ($self:ident, $context:ident) => $mapped:expr) => {
-        impl Resolve for $type {
-            fn resolve_into($self, $context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-                output.push($mapped);
-                Ok(())
-            }
-        }
-    };
-}
-
-resolve_unit!(Link, (self, context) => {
-    BuildUnit::Link(Link::new(
-        context.replace_variables(self.head.to_str().unwrap())?,
-        context.replace_variables(self.tail.to_str().unwrap())?,
-    ))
-});
-resolve_unit!(String, (self, context) => BuildUnit::Run(context.replace_variables(&self)?));
-resolve_unit!(Package, (self, context) => {
-    BuildUnit::Install(Package {
-        name: context.replace_variables(&self.name)?,
-        managers: match self.managers.is_empty() {
-            false => context.managers.intersection(&self.managers).copied().collect(),
-            true => context.managers.clone()
-        },
-        ..self
-    })
-});
-resolve_unit!(PackageManager, (self, context) => {
-    context.managers.insert(self);
-    BuildUnit::Require(self)
-});
-resolve_unit!(Repo, (self, context) => {
-    let path = context.replace_variables(&self.path)?;
-    let new = Repo { path, ..self };
-    let name = new.path.split('/').last().ok_or_else(|| anyhow!("Repo local path is empty"))?;
-    context.set_variable(name, "path", &new.path);
-    BuildUnit::Repo(new)
-});
-
-impl<T> Resolve for Vec<T>
+impl<T> ResolveInto for T
 where
     T: Resolve,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        for raw in self {
-            raw.resolve_into(context, output)?;
-        }
+        output.push(self.resolve(context)?);
         Ok(())
     }
 }
 
-impl Resolve for BuildSpec {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        match self {
-            Self::Repo(r) => r.resolve_into(context, output)?,
-            Self::Namespace(n) => n.resolve_into(context, output)?,
-            Self::Matrix(m) => m.resolve_into(context, output)?,
-            Self::Case(v) => v.resolve_into(context, output)?,
-            Self::Link(v) => v.resolve_into(context, output)?,
-            Self::Run(s) => s.resolve_into(context, output)?,
-            Self::Install(v) => v.resolve_into(context, output)?,
-            Self::Require(v) => v.resolve_into(context, output)?,
-        }
-        Ok(())
-    }
-}
-
-impl Resolve for Namespace {
+impl ResolveInto for Namespace {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
         for (variable, value) in &self.values {
             context.set_variable(&self.name, variable, value);
@@ -242,9 +194,9 @@ impl Resolve for Namespace {
     }
 }
 
-impl<T> Resolve for Matrix<T>
+impl<T> ResolveInto for Matrix<T>
 where
-    T: Resolve + Clone,
+    T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let len = self.length()?;
@@ -257,6 +209,34 @@ where
                 context.set_variable("matrix", variable, value);
             }
             self.include.clone().resolve_into(&mut context, output)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T> ResolveInto for Vec<T>
+where
+    T: ResolveInto,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        for inner in self {
+            inner.resolve_into(context, output)?;
+        }
+        Ok(())
+    }
+}
+
+impl ResolveInto for BuildSpec {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        match self {
+            Self::Repo(r) => r.resolve_into(context, output)?,
+            Self::Namespace(n) => n.resolve_into(context, output)?,
+            Self::Matrix(m) => m.resolve_into(context, output)?,
+            Self::Case(v) => v.resolve_into(context, output)?,
+            Self::Link(v) => v.resolve_into(context, output)?,
+            Self::Run(s) => s.resolve_into(context, output)?,
+            Self::Install(v) => v.resolve_into(context, output)?,
+            Self::Require(v) => v.resolve_into(context, output)?,
         }
         Ok(())
     }
@@ -462,7 +442,7 @@ impl Config {
         Ok(ResolvedConfig {
             version: self.version,
             shell: self.shell.map_or_else(Shell::from_env, Shell::from),
-            build: self.build.resolve(&mut context)?,
+            build: self.build.resolve_into_new(&mut context)?,
             context,
         })
     }
@@ -484,11 +464,12 @@ impl TryFrom<&ArgMatches> for Config {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
     use super::*;
     use crate::yurt_command;
 
-    fn get_context(args: &[&str]) -> Context {
+    #[inline]
+    pub fn get_context(args: &[&str]) -> Context {
         Context::from(&yurt_command().get_matches_from(args))
     }
 
@@ -639,63 +620,6 @@ mod tests {
         );
     }
 
-    macro_rules! unpack {
-        (@unit $value:expr, BuildUnit::$variant:ident) => {
-            if let BuildUnit::$variant(ref unwrapped) = $value {
-                unwrapped
-            } else {
-                panic!("Failed to unpack build unit");
-            }
-        };
-        (@unit_vec $value:expr, BuildUnit::$variant:ident) => {
-            {
-                assert_eq!($value.len(), 1);
-                unpack!(@unit ($value)[0], BuildUnit::$variant)
-            }
-        };
-    }
-
-    #[test]
-    fn package_name_substitution() {
-        let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
-        let mut context = get_context(&[]);
-        context.set_variable("namespace", "key", "value");
-        // No managers remain
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
-        assert_eq!(package.name, "value");
-    }
-
-    #[test]
-    fn package_manager_prune_empty() {
-        let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
-        let mut context = get_context(&[]);
-        // No managers remain
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
-        assert!(package.managers.is_empty());
-    }
-
-    #[test]
-    fn package_manager_prune_some() {
-        #[rustfmt::skip]
-        let spec: Package = serde_yaml::from_str("
-            name: some-package
-            managers: [ apt, brew ]
-        ").unwrap();
-        // Add partially overlapping managers
-        let mut context = get_context(&[]);
-        context.managers.insert(PackageManager::Cargo);
-        context.managers.insert(PackageManager::Brew);
-        // Overlap remains
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
-        assert_eq!(
-            package.managers,
-            vec![PackageManager::Brew].into_iter().collect()
-        );
-    }
-
     #[test]
     fn namespace_resolves() {
         #[rustfmt::skip]
@@ -706,7 +630,7 @@ mod tests {
               key_b: val_b
         ").unwrap();
         let mut context = get_context(&[]);
-        namespace.resolve(&mut context).unwrap();
+        namespace.resolve_into_new(&mut context).unwrap();
         assert_eq!(context.get_variable("namespace", "key_a").unwrap(), "val_a");
         assert_eq!(context.get_variable("namespace", "key_b").unwrap(), "val_b");
     }
@@ -733,7 +657,7 @@ mod tests {
               b: [4, 5, 6, 7]
             include: [ ]
         ").unwrap();
-        assert!(matrix.resolve(&mut context).is_err());
+        assert!(matrix.resolve_into_new(&mut context).is_err());
     }
 
     #[test]
@@ -754,8 +678,8 @@ mod tests {
             include: vec!["${{ matrix.key }}".to_string()],
         };
         assert_eq!(
-            matrix.resolve(&mut context).unwrap(),
-            values.resolve(&mut context).unwrap()
+            matrix.resolve_into_new(&mut context).unwrap(),
+            values.resolve_into_new(&mut context).unwrap()
         );
     }
 }
