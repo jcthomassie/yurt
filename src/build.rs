@@ -156,17 +156,11 @@ pub trait Resolve {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
 }
 
-macro_rules! resolve_unit {
-    ($type:ty, ($self:ident, $context:ident) => $mapped:expr) => {
-        impl Resolve for $type {
-            fn resolve($self, $context: &mut Context) -> Result<BuildUnit> {
-                Ok($mapped)
-            }
-        }
-    };
+impl Resolve for String {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Run(context.replace_variables(&self)?))
+    }
 }
-
-resolve_unit!(String, (self, context) => BuildUnit::Run(context.replace_variables(&self)?));
 
 pub trait ResolveInto {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
