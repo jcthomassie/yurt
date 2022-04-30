@@ -9,13 +9,13 @@ pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
-    pub name: String,
+    name: String,
     #[serde(default = "BTreeSet::new")]
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    pub managers: BTreeSet<PackageManager>,
+    managers: BTreeSet<PackageManager>,
     #[serde(default = "BTreeMap::new")]
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub aliases: BTreeMap<PackageManager, String>,
+    aliases: BTreeMap<PackageManager, String>,
 }
 
 impl Package {

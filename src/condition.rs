@@ -89,7 +89,7 @@ impl<C, T> Case<C, T>
 where
     C: Condition,
 {
-    pub fn evaluate(self, default: bool, context: &Context) -> Option<T> {
+    fn evaluate(self, default: bool, context: &Context) -> Option<T> {
         match self {
             Case::Positive { spec, include } if spec.evaluate(context) => Some(include),
             Case::Negative { spec, include } if !spec.evaluate(context) => Some(include),

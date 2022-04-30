@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
-    pub path: String,
-    pub url: String,
+    path: String,
+    url: String,
 }
 
 impl Repo {

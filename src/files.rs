@@ -16,12 +16,12 @@ enum Status {
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {
     // head@ -> tail
-    pub head: PathBuf,
-    pub tail: PathBuf,
+    head: PathBuf,
+    tail: PathBuf,
 }
 
 impl Link {
-    pub fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
+    fn new<P: Into<PathBuf>>(head: P, tail: P) -> Self {
         Self {
             head: head.into(),
             tail: tail.into(),
@@ -103,7 +103,7 @@ impl fmt::Display for Link {
 
 impl Resolve for Link {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
-        Ok(BuildUnit::Link(Link::new(
+        Ok(BuildUnit::Link(Self::new(
             context.replace_variables(self.head.to_str().unwrap_or(""))?,
             context.replace_variables(self.tail.to_str().unwrap_or(""))?,
         )))
