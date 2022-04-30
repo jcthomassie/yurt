@@ -1,4 +1,5 @@
-use anyhow::{Context, Result};
+use crate::build::{self, BuildUnit, Resolve};
+use anyhow::{anyhow, Context, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
@@ -25,5 +26,21 @@ impl Repo {
 
     pub fn is_available(&self) -> bool {
         self.open().is_ok()
+    }
+}
+
+impl Resolve for Repo {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        let new = Self {
+            path: context.replace_variables(&self.path)?,
+            ..self
+        };
+        let name = new
+            .path
+            .split('/')
+            .last()
+            .ok_or_else(|| anyhow!("Repo local path is empty"))?;
+        context.set_variable(name, "path", &new.path);
+        Ok(BuildUnit::Repo(new))
     }
 }

@@ -27,14 +27,14 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct Context {
     pub locale: Locale,
+    pub managers: BTreeSet<PackageManager>,
     variables: BTreeMap<String, String>,
-    managers: BTreeSet<PackageManager>,
     home_dir: PathBuf,
 }
 
 impl Context {
     #[inline]
-    fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+    pub fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
         self.variables
             .insert(format!("{}.{}", namespace, variable), value.to_string())
     }
@@ -48,7 +48,7 @@ impl Context {
         }
     }
 
-    fn replace_variables(&self, input: &str) -> Result<String> {
+    pub fn replace_variables(&self, input: &str) -> Result<String> {
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -166,34 +166,7 @@ macro_rules! resolve_unit {
     };
 }
 
-resolve_unit!(Link, (self, context) => {
-    BuildUnit::Link(Link::new(
-        context.replace_variables(self.head.to_str().unwrap())?,
-        context.replace_variables(self.tail.to_str().unwrap())?,
-    ))
-});
 resolve_unit!(String, (self, context) => BuildUnit::Run(context.replace_variables(&self)?));
-resolve_unit!(Package, (self, context) => {
-    BuildUnit::Install(Package {
-        name: context.replace_variables(&self.name)?,
-        managers: match self.managers.is_empty() {
-            false => context.managers.intersection(&self.managers).copied().collect(),
-            true => context.managers.clone()
-        },
-        ..self
-    })
-});
-resolve_unit!(PackageManager, (self, context) => {
-    context.managers.insert(self);
-    BuildUnit::Require(self)
-});
-resolve_unit!(Repo, (self, context) => {
-    let path = context.replace_variables(&self.path)?;
-    let new = Repo { path, ..self };
-    let name = new.path.split('/').last().ok_or_else(|| anyhow!("Repo local path is empty"))?;
-    context.set_variable(name, "path", &new.path);
-    BuildUnit::Repo(new)
-});
 
 pub trait ResolveInto {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;

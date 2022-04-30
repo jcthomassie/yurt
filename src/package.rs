@@ -1,3 +1,4 @@
+use crate::build::{self, BuildUnit, Resolve};
 use crate::shell::{Cmd, Shell};
 use anyhow::{anyhow, bail, Result};
 use log::{info, warn};
@@ -53,6 +54,23 @@ impl Package {
             }
         }
         Ok(())
+    }
+}
+
+impl Resolve for Package {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Install(Package {
+            name: context.replace_variables(&self.name)?,
+            managers: match self.managers.is_empty() {
+                false => context
+                    .managers
+                    .intersection(&self.managers)
+                    .copied()
+                    .collect(),
+                true => context.managers.clone(),
+            },
+            ..self
+        }))
     }
 }
 
@@ -170,6 +188,13 @@ impl PackageManager {
     // Check if package manager is installed
     pub fn is_available(self) -> bool {
         which_has(self.name())
+    }
+}
+
+impl Resolve for PackageManager {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        context.managers.insert(self);
+        Ok(BuildUnit::Require(self))
     }
 }
 

@@ -1,3 +1,4 @@
+use crate::build::{self, BuildUnit, Resolve};
 use anyhow::{anyhow, Context, Error, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
@@ -97,6 +98,15 @@ impl Link {
 impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?} -> {:?}", &self.head, &self.tail)
+    }
+}
+
+impl Resolve for Link {
+    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Link(Link::new(
+            context.replace_variables(self.head.to_str().unwrap_or(""))?,
+            context.replace_variables(self.tail.to_str().unwrap_or(""))?,
+        )))
     }
 }
 
