@@ -122,11 +122,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::yurt_command;
-
-    fn get_context(args: &[&str]) -> Context {
-        Context::from(&yurt_command().get_matches_from(args))
-    }
+    use crate::build::tests::get_context;
 
     #[test]
     fn override_user() {

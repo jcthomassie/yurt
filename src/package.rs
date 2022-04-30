@@ -217,6 +217,7 @@ pub fn which_has(cmd: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::build::tests::get_context;
 
     macro_rules! check_missing {
         ($manager:ident, $mod_name:ident) => {
@@ -301,5 +302,61 @@ mod tests {
             aliases: BTreeMap::new()
         }
         .is_installed());
+    }
+
+    macro_rules! unpack {
+        (@unit $value:expr, BuildUnit::$variant:ident) => {
+            if let BuildUnit::$variant(ref unwrapped) = $value {
+                unwrapped
+            } else {
+                panic!("Failed to unpack build unit");
+            }
+        };
+        (@unit_vec $value:expr, BuildUnit::$variant:ident) => {
+            {
+                unpack!(@unit ($value), BuildUnit::$variant)
+            }
+        };
+    }
+
+    #[test]
+    fn package_name_substitution() {
+        let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
+        let mut context = get_context(&[]);
+        context.set_variable("namespace", "key", "value");
+        // No managers remain
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert_eq!(package.name, "value");
+    }
+
+    #[test]
+    fn package_manager_prune_empty() {
+        let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
+        let mut context = get_context(&[]);
+        // No managers remain
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert!(package.managers.is_empty());
+    }
+
+    #[test]
+    fn package_manager_prune_some() {
+        #[rustfmt::skip]
+        let spec: Package = serde_yaml::from_str("
+            name: some-package
+            managers: [ apt, brew ]
+        ").unwrap();
+        // Add partially overlapping managers
+        let mut context = get_context(&[]);
+        context.managers.insert(PackageManager::Cargo);
+        context.managers.insert(PackageManager::Brew);
+        // Overlap remains
+        let resolved = spec.resolve(&mut context).unwrap();
+        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        assert_eq!(
+            package.managers,
+            vec![PackageManager::Brew].into_iter().collect()
+        );
     }
 }
