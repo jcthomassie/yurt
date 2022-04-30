@@ -59,7 +59,7 @@ impl Package {
 
 impl Resolve for Package {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
-        Ok(BuildUnit::Install(Package {
+        Ok(BuildUnit::Install(Self {
             name: context.replace_variables(&self.name)?,
             managers: match self.managers.is_empty() {
                 false => context
