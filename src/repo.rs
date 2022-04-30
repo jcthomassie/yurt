@@ -1,5 +1,5 @@
 use crate::build::{self, BuildUnit, Resolve};
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
@@ -27,6 +27,14 @@ impl Repo {
     pub fn is_available(&self) -> bool {
         self.open().is_ok()
     }
+
+    fn name(&self) -> Result<&str> {
+        self.path
+            .split(&['/', '\\'])
+            .last()
+            .filter(|name| !name.is_empty())
+            .context("Repo name is empty")
+    }
 }
 
 impl Resolve for Repo {
@@ -35,12 +43,34 @@ impl Resolve for Repo {
             path: context.replace_variables(&self.path)?,
             ..self
         };
-        let name = new
-            .path
-            .split('/')
-            .last()
-            .ok_or_else(|| anyhow!("Repo local path is empty"))?;
-        context.set_variable(name, "path", &new.path);
+        context.set_variable(new.name()?, "path", &new.path);
         Ok(BuildUnit::Repo(new))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Repo;
+
+    fn repo(path: &str) -> Repo {
+        Repo {
+            path: path.to_string(),
+            url: "repo-url".to_string(),
+        }
+    }
+
+    #[test]
+    fn empty_path() {
+        assert!(repo("").name().is_err());
+    }
+
+    #[test]
+    fn unix_path() {
+        assert_eq!(repo("path/to/my-repo").name().unwrap(), "my-repo");
+    }
+
+    #[test]
+    fn windows_path() {
+        assert_eq!(repo("path\\to\\my-repo").name().unwrap(), "my-repo");
     }
 }
