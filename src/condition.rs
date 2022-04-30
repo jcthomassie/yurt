@@ -3,7 +3,7 @@ use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
 
-pub trait Condition {
+trait Condition {
     fn evaluate(&self, context: &Context) -> bool;
 }
 
@@ -79,40 +79,47 @@ impl Condition for LocaleSpec {
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
-pub enum Case<C, T> {
+enum CaseUnit<C, T> {
     Positive { spec: C, include: T },
     Negative { spec: C, include: T },
     Default { include: T },
 }
 
-impl<C, T> Case<C, T>
+impl<C, T> CaseUnit<C, T>
 where
     C: Condition,
 {
-    fn evaluate(self, default: bool, context: &Context) -> Option<T> {
+    fn evaluate(&self, default: bool, context: &Context) -> bool {
         match self {
-            Case::Positive { spec, include } if spec.evaluate(context) => Some(include),
-            Case::Negative { spec, include } if !spec.evaluate(context) => Some(include),
-            Case::Default { include } if default => Some(include),
-            _ => None,
+            Self::Positive { spec, .. } => spec.evaluate(context),
+            Self::Negative { spec, .. } => !spec.evaluate(context),
+            Self::Default { .. } => default,
+        }
+    }
+
+    fn unpack(self) -> T {
+        match self {
+            Self::Positive { include, .. }
+            | Self::Negative { include, .. }
+            | Self::Default { include } => include,
         }
     }
 }
 
-impl<C, T> ResolveInto for Vec<Case<C, T>>
+#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+pub struct Case<C, T>(Vec<CaseUnit<C, T>>);
+
+impl<C, T> ResolveInto for Case<C, T>
 where
     C: Condition,
     T: ResolveInto,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;
-        for case in self {
-            match case.evaluate(default, context) {
-                Some(build) => {
-                    default = false;
-                    build.resolve_into(context, output)?;
-                }
-                None => continue,
+        for case in self.0 {
+            if case.evaluate(default, context) {
+                default = false;
+                case.unpack().resolve_into(context, output)?;
             };
         }
         Ok(())
@@ -149,40 +156,40 @@ mod tests {
     #[test]
     fn positive_match() {
         let context = get_context(&[]);
-        let case = Case::Positive {
+        let case = CaseUnit::Positive {
             spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
             include: "something",
         };
-        assert_eq!(case.evaluate(false, &context).unwrap(), "something");
+        assert!(case.evaluate(false, &context));
     }
 
     #[test]
     fn positive_non_match() {
         let context = get_context(&[]);
-        let case = Case::Positive {
+        let case = CaseUnit::Positive {
             spec: locale_spec("distro: something_else"),
             include: "something",
         };
-        assert!(case.evaluate(false, &context).is_none());
+        assert!(!case.evaluate(false, &context));
     }
 
     #[test]
     fn negative_match() {
         let context = get_context(&[]);
-        let case = Case::Negative {
+        let case = CaseUnit::Negative {
             spec: locale_spec("platform: somewhere_else"),
             include: "something",
         };
-        assert_eq!(case.evaluate(false, &context).unwrap(), "something");
+        assert!(case.evaluate(false, &context));
     }
 
     #[test]
     fn negative_non_match() {
         let context = get_context(&[]);
-        let case = Case::Negative {
+        let case = CaseUnit::Negative {
             spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
             include: "something",
         };
-        assert!(case.evaluate(false, &context).is_none());
+        assert!(!case.evaluate(false, &context));
     }
 }

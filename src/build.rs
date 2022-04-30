@@ -125,7 +125,7 @@ pub enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSpec>>),
-    Case(Vec<Case<LocaleSpec, Vec<BuildSpec>>>),
+    Case(Case<LocaleSpec, Vec<BuildSpec>>),
     Link(Vec<Link>),
     Run(String),
     Install(Vec<Package>),
