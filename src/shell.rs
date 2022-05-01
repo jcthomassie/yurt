@@ -127,24 +127,25 @@ pub struct Shell {
     command: String,
 }
 
-impl From<String> for Shell {
-    fn from(command: String) -> Self {
-        Self {
-            kind: ShellKind::from(Path::new(&command)),
-            command,
+impl Shell {
+    pub fn from_env() -> Self {
+        match env::var("SHELL") {
+            Ok(s) => Self::from(s),
+            Err(_) => Self::default(),
         }
     }
-}
 
-impl From<&str> for Shell {
-    fn from(command: &str) -> Self {
-        Self::from(command.to_string())
+    pub fn run(&self, command: &str) -> Result<Output> {
+        match self.kind {
+            ShellKind::Cmd => self.call_unchecked(&["/C", command]),
+            _ => self.call_unchecked(&["-c", command]),
+        }
     }
-}
 
-impl From<Shell> for String {
-    fn from(shell: Shell) -> Self {
-        shell.command
+    /// Use curl to fetch remote script and pipe into shell
+    #[inline]
+    pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
+        pipe("curl", curl_args, self, &[]).map(drop)
     }
 }
 
@@ -171,25 +172,24 @@ impl Default for Shell {
     }
 }
 
-impl Shell {
-    pub fn from_env() -> Self {
-        match env::var("SHELL") {
-            Ok(s) => Self::from(s),
-            Err(_) => Self::default(),
+impl From<String> for Shell {
+    fn from(command: String) -> Self {
+        Self {
+            kind: ShellKind::from(Path::new(&command)),
+            command,
         }
     }
+}
 
-    pub fn run(&self, command: &str) -> Result<Output> {
-        match self.kind {
-            ShellKind::Cmd => self.call_unchecked(&["/C", command]),
-            _ => self.call_unchecked(&["-c", command]),
-        }
+impl From<&str> for Shell {
+    fn from(command: &str) -> Self {
+        Self::from(command.to_string())
     }
+}
 
-    /// Use curl to fetch remote script and pipe into shell
-    #[inline]
-    pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
-        pipe("curl", curl_args, self, &[]).map(drop)
+impl From<Shell> for String {
+    fn from(shell: Shell) -> Self {
+        shell.command
     }
 }
 
