@@ -80,18 +80,18 @@ build:
   # Specify package managers
   - case:
     - positive:
-        spec: { distro: ubuntu }
+        condition: { distro: ubuntu }
         include:
           - require:
             - apt
             - apt-get
     - positive:
-        spec: { platform: windows }
+        condition: { platform: windows }
         include:
           - require:
             - choco
     - negative:
-        spec: { platform: windows }
+        condition: { platform: windows }
         include:
           - require:
             - brew
