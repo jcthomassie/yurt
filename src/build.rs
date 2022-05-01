@@ -1,8 +1,10 @@
-use crate::condition::{Case, Locale, LocaleSpec};
-use crate::link::Link;
-use crate::package::{Package, PackageManager};
-use crate::repo::Repo;
-use crate::shell::ShellCommand;
+use crate::{
+    condition::{Case, Locale, LocaleSpec},
+    link::Link,
+    package::{Package, PackageManager},
+    repo::Repo,
+    shell::ShellCommand,
+};
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
