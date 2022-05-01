@@ -27,3 +27,9 @@ build:
           - name: package_1
             managers: [ apt, apt-get ]
             aliases: { apt: package_1-alias }
+  - case:
+    - negative:
+        condition: bad-command
+        include:
+          - install:
+            - name: package_2

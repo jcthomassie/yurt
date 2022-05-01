@@ -162,26 +162,31 @@ mod tests {
         assert_eq!(locale.platform, "some-other-platform");
     }
 
+    macro_rules! yaml_condition {
+        ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
+            let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
+            assert!(matches!(cond, $enum_pattern));
+            assert_eq!(cond.evaluate(&get_context(&[])), $evaluation);
+        };
+    }
+
     #[test]
     fn locale_condition() {
-        let condition = Condition::Locale(LocaleSpec {
-            user: Some(whoami::username()),
-            platform: None,
-            distro: None,
-        });
-        assert!(condition.evaluate(&get_context(&[])));
+        let user_locale = format!("{{ user: {} }}", whoami::username());
+        yaml_condition!(user_locale.as_str(), Condition::Locale(_), true);
+        yaml_condition!("{ platform: fake }", Condition::Locale(_), false);
     }
 
     #[test]
     fn command_condition() {
-        let condition = Condition::Command(ShellCommand::from("echo 'test'".to_string()));
-        assert!(condition.evaluate(&get_context(&[])));
+        yaml_condition!(r#""echo 'hello'""#, Condition::Command(_), true);
+        yaml_condition!("bad-command -a -b", Condition::Command(_), false);
     }
 
     #[test]
     fn bool_condition() {
-        let condition = Condition::Bool(true);
-        assert!(condition.evaluate(&get_context(&[])));
+        yaml_condition!("true", Condition::Bool(true), true);
+        yaml_condition!("false", Condition::Bool(false), false);
     }
 
     #[test]

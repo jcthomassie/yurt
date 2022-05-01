@@ -201,8 +201,8 @@ pub struct ShellCommand {
 }
 
 impl ShellCommand {
-    pub fn run(&self) -> Result<()> {
-        self.shell.run(&self.command).map(drop)
+    pub fn run(&self) -> Result<Output> {
+        self.shell.run(&self.command)
     }
 }
 
@@ -276,14 +276,7 @@ mod tests {
     }
 
     #[test]
-    fn shell_command_from_str() {
-        let cmd = ShellCommand::from("echo 'hello world!'".to_string());
-        assert_eq!(cmd.shell, Shell::from_env());
-        assert_eq!(cmd.command, "echo 'hello world!'");
-    }
-
-    #[test]
-    fn shell_command_success() {
+    fn shell_run_success() {
         let out = Shell::default().run("echo 'hello world!'").unwrap();
         assert!(out.status.success());
         #[cfg(unix)]
@@ -294,9 +287,32 @@ mod tests {
     }
 
     #[test]
-    fn shell_command_failure() {
+    fn shell_run_failure() {
         let out = Shell::default()
             .run("made_up_command with parameters")
+            .unwrap();
+        assert!(!out.status.success());
+    }
+
+    #[test]
+    fn shell_command_from_str() {
+        let cmd = ShellCommand::from("echo 'hello world!'".to_string());
+        assert_eq!(cmd.shell, Shell::from_env());
+        assert_eq!(cmd.command, "echo 'hello world!'");
+    }
+
+    #[test]
+    fn shell_command_success() {
+        let out = ShellCommand::from("echo 'hello world!'".to_string())
+            .run()
+            .unwrap();
+        assert!(out.status.success());
+    }
+
+    #[test]
+    fn shell_command_failure() {
+        let out = ShellCommand::from("made_up_command -a -b".to_string())
+            .run()
             .unwrap();
         assert!(!out.status.success());
     }
