@@ -200,7 +200,7 @@ impl Resolve for PackageManager {
 
 /// Check if a command is available locally
 #[inline]
-pub fn which_has(cmd: &str) -> bool {
+fn which_has(cmd: &str) -> bool {
     #[cfg(unix)]
     let name = "which";
     #[cfg(windows)]

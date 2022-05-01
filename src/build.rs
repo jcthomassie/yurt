@@ -82,13 +82,13 @@ impl From<&ArgMatches> for Context {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Namespace {
+struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Matrix<T> {
+struct Matrix<T> {
     values: BTreeMap<String, Vec<String>>,
     include: T,
 }
@@ -121,7 +121,7 @@ impl BuildUnit {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
-pub enum BuildSpec {
+enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSpec>>),
@@ -397,14 +397,14 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct Config {
-    pub version: Option<String>,
-    pub shell: Option<ShellSpec>,
-    pub build: Vec<BuildSpec>,
+struct Config {
+    version: Option<String>,
+    shell: Option<ShellSpec>,
+    build: Vec<BuildSpec>,
 }
 
 impl Config {
-    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+    fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         File::open(path)
             .map(BufReader::new)
             .context("Failed to open build file")
@@ -413,7 +413,7 @@ impl Config {
             })
     }
 
-    pub fn from_url<U: reqwest::IntoUrl>(url: U) -> Result<Self> {
+    fn from_url<U: reqwest::IntoUrl>(url: U) -> Result<Self> {
         reqwest::blocking::get(url)
             .context("Failed to reach remote build file")
             .and_then(|response| {
@@ -422,14 +422,14 @@ impl Config {
     }
 
     #[inline]
-    pub fn version_matches(&self, strict: bool) -> bool {
+    fn version_matches(&self, strict: bool) -> bool {
         match self.version {
             Some(ref v) => v == crate_version!(),
             None => !strict,
         }
     }
 
-    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+    fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
         if !self.version_matches(false) {
             warn!(
