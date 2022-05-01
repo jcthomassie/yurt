@@ -38,8 +38,6 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 
 `version` yurt version for compatibility check
 
-`shell` set the shell for POSIX systems
-
 `build`
 
 - `repo`
@@ -57,6 +55,8 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `default` if none of the preceeding conditions are met
 - `link` list of symlinks to be applied
 - `run` shell command to run on install
+  - `shell` shell to run the command with
+  - `command` command to run
 - `install` list of packages to install
   - `name` package name
   - `managers` (optional) list of package managers that provide the package
@@ -70,8 +70,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: 0.2.1
-shell: zsh
+version: 0.3.0
 build:
   # Require dotfile repo
   - repo:
@@ -96,7 +95,14 @@ build:
         include:
           - require:
             - brew
-          - run: brew bundle --file ${{ dotfiles.path }}/.brewfile
+          # Run a command with a specific shell
+          - run:
+              shell: /usr/bin/bash
+              command: brew bundle --file ${{ dotfiles.path }}/.brewfile
+
+  # Run a command with the system default shell
+  - run: |
+      echo "hello world"
 
   # Install packages
   - install:

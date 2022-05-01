@@ -1,6 +1,6 @@
 [package]
 name = "yurt"
-version = "0.2.1"
+version = "0.3.0"
 authors = ["Julian Thomassie <julianthomassie@gmail.com>"]
 repository = "https://github.com/jcthomassie/yurt"
 description = "Simple CLI tool for dotfile management."

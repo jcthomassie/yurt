@@ -1,6 +1,5 @@
 ---
 version: 0.1.0
-shell: zsh
 build:
   - link:
       - head: dir_a/head_1

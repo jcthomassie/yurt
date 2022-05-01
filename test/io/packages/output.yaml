@@ -1,6 +1,5 @@
 ---
 version: "0.0"
-shell: zsh
 build:
   - install:
       - name: package_a

@@ -2,7 +2,7 @@ use crate::condition::{Case, Locale, LocaleSpec};
 use crate::files::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
-use crate::shell::{Shell, ShellSpec};
+use crate::shell::ShellCommand;
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
@@ -110,7 +110,7 @@ impl<T> Matrix<T> {
 pub enum BuildUnit {
     Repo(Repo),
     Link(Link),
-    Run(String),
+    Run(ShellCommand),
     Install(Package),
     Require(PackageManager),
 }
@@ -127,7 +127,7 @@ enum BuildSpec {
     Matrix(Matrix<Vec<BuildSpec>>),
     Case(Case<LocaleSpec, Vec<BuildSpec>>),
     Link(Vec<Link>),
-    Run(String),
+    Run(ShellCommand),
     Install(Vec<Package>),
     Require(Vec<PackageManager>),
 }
@@ -154,12 +154,6 @@ impl BuildSpec {
 
 pub trait Resolve {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
-}
-
-impl Resolve for String {
-    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
-        Ok(BuildUnit::Run(context.replace_variables(&self)?))
-    }
 }
 
 pub trait ResolveInto {
@@ -247,7 +241,6 @@ pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
     version: Option<String>,
-    shell: Shell,
     build: Vec<BuildUnit>,
 }
 
@@ -324,7 +317,7 @@ impl ResolvedConfig {
             match unit {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
                 BuildUnit::Link(link) => link.link(clean)?,
-                BuildUnit::Run(cmd) => drop(self.shell.run(cmd.as_str())?),
+                BuildUnit::Run(cmd) => cmd.run()?,
                 BuildUnit::Install(package) => package.install()?,
                 BuildUnit::Require(manager) => manager.require()?,
             }
@@ -367,7 +360,6 @@ impl ResolvedConfig {
         }
         Config {
             version: self.version,
-            shell: Some(self.shell.into()),
             build,
         }
     }
@@ -397,9 +389,8 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Config {
+pub struct Config {
     version: Option<String>,
-    shell: Option<ShellSpec>,
     build: Vec<BuildSpec>,
 }
 
@@ -441,7 +432,6 @@ impl Config {
         // Resolve build
         Ok(ResolvedConfig {
             version: self.version,
-            shell: self.shell.map_or_else(Shell::from_env, Shell::from),
             build: self.build.resolve_into_new(&mut context)?,
             context,
         })
@@ -480,7 +470,6 @@ pub mod tests {
         fn version_check() {
             let mut cfg = Config {
                 version: None,
-                shell: None,
                 build: Vec::new(),
             };
             assert!(!cfg.version_matches(true));
@@ -639,7 +628,7 @@ pub mod tests {
     #[test]
     fn matrix_length() {
         #[rustfmt::skip]
-        let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
+        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str("
             values:
               a: [1, 2, 3]
               b: [4, 5, 6]
@@ -652,7 +641,7 @@ pub mod tests {
     fn matrix_length_mismatch() {
         let mut context = get_context(&[]);
         #[rustfmt::skip]
-        let matrix: Matrix<Vec<String>> = serde_yaml::from_str("
+        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str("
             values:
               a: [1, 2, 3]
               b: [4, 5, 6, 7]
