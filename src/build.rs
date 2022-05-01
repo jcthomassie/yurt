@@ -14,41 +14,39 @@ use std::{
     env,
     fs::File,
     io::BufReader,
-    path::{Path, PathBuf},
+    path::Path,
 };
-
-lazy_static! {
-    // Matches: "${{ anything here }}"
-    static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
-    // Matches: "namespace.variable_name"
-    static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
-}
 
 #[derive(Debug, Clone)]
 pub struct Context {
     pub locale: Locale,
     pub managers: BTreeSet<PackageManager>,
     variables: BTreeMap<String, String>,
-    home_dir: PathBuf,
+    home_dir: String,
 }
 
 impl Context {
     #[inline]
-    pub fn set_variable(&mut self, namespace: &str, variable: &str, value: &str) -> Option<String> {
+    pub fn set_variable(&mut self, namespace: &str, key: &str, value: &str) -> Option<String> {
         self.variables
-            .insert(format!("{}.{}", namespace, variable), value.to_string())
+            .insert(format!("{}.{}", namespace, key), value.to_string())
     }
 
-    fn get_variable(&self, namespace: &str, variable: &str) -> Result<String> {
-        match self.variables.get(&format!("{}.{}", namespace, variable)) {
+    pub fn get_variable(&self, namespace: &str, key: &str) -> Result<String> {
+        match self.variables.get(&format!("{}.{}", namespace, key)) {
             Some(value) => Ok(value.clone()),
-            None if namespace == "env" => env::var(variable)
-                .with_context(|| format!("Failed to get environment variable: {}", variable)),
-            None => Err(anyhow!("Variable {}.{} is undefined", namespace, variable)),
+            None if namespace == "env" => env::var(key)
+                .with_context(|| format!("Failed to get environment variable: {}", key)),
+            None => Err(anyhow!("Variable {}.{} is undefined", namespace, key)),
         }
     }
 
+    /// Replaces patterns of the form "${{ namespace.key }}"
     pub fn replace_variables(&self, input: &str) -> Result<String> {
+        lazy_static! {
+            static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
+            static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
+        }
         // Build iterator of replaced values
         let values: Result<Vec<String>> = RE_OUTER
             .captures_iter(input)
@@ -61,12 +59,7 @@ impl Context {
         // Build new string with replacements
         Ok(RE_OUTER
             .replace_all(input, |_: &Captures| values_iter.next().unwrap())
-            .replace(
-                '~',
-                self.home_dir
-                    .to_str()
-                    .ok_or_else(|| anyhow!("Invalid home directory: {:?}", self.home_dir))?,
-            ))
+            .replace('~', &self.home_dir))
     }
 }
 
@@ -76,7 +69,11 @@ impl From<&ArgMatches> for Context {
             variables: BTreeMap::new(),
             locale: Locale::from(args),
             managers: BTreeSet::new(),
-            home_dir: dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")),
+            home_dir: dirs::home_dir()
+                .as_deref()
+                .and_then(Path::to_str)
+                .unwrap_or("~")
+                .to_string(),
         }
     }
 }
@@ -558,42 +555,8 @@ pub mod tests {
         }
     }
 
-    fn check_pattern_outer(input: &str, output: &str) {
-        let caps = RE_OUTER.captures(input).unwrap();
-        assert_eq!(&caps[0], input);
-        assert_eq!(&caps["inner"], output);
-    }
-
-    fn check_pattern_inner(input: &str, namespace: &str, variable: &str) {
-        let caps = RE_INNER.captures(input).unwrap();
-        assert_eq!(&caps["namespace"], namespace);
-        assert_eq!(&caps["variable"], variable);
-    }
-
     #[test]
-    fn substitution_pattern_outer() {
-        check_pattern_outer("${{}}", "");
-        check_pattern_outer("${{ var }}", " var ");
-        check_pattern_outer("${{ env.var }}", " env.var ");
-        check_pattern_outer("${{ __maybe_invalid__ }}", " __maybe_invalid__ ");
-    }
-
-    #[test]
-    fn substitution_pattern_inner() {
-        check_pattern_inner("   a.b\t ", "a", "b");
-        check_pattern_inner("mod_1.var_1", "mod_1", "var_1");
-    }
-
-    #[test]
-    fn invalid_pattern_inner() {
-        assert!(RE_INNER.captures("a.b.c").is_none());
-        assert!(RE_INNER.captures(".").is_none());
-        assert!(RE_INNER.captures("a.").is_none());
-        assert!(RE_INNER.captures(".b").is_none());
-    }
-
-    #[test]
-    fn replace_from_context() {
+    fn variable_sub() {
         let mut context = get_context(&[]);
         context.set_variable("name", "var_1", "val_1");
         context.set_variable("name", "var_2", "val_2");
@@ -608,6 +571,18 @@ pub mod tests {
                 .unwrap(),
             "val_1/val_2"
         );
+    }
+
+    #[test]
+    fn variable_sub_invalid() {
+        let mut context = get_context(&[]);
+        context.set_variable("a", "b", "c");
+        assert!(context.replace_variables("${{ a.b.c }}").is_err());
+        assert!(context.replace_variables("${{ . }}").is_err());
+        assert!(context.replace_variables("${{ a. }}").is_err());
+        assert!(context.replace_variables("${{ .b }}").is_err());
+        assert!(context.replace_variables("${{ a.c }}").is_err()); // missing key
+        assert!(context.replace_variables("${{ b.a }}").is_err()); // missing namespace
     }
 
     #[test]
