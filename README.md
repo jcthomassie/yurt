@@ -70,7 +70,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: 0.2.1
+version: 0.3.0
 build:
   # Require dotfile repo
   - repo:
