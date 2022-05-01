@@ -74,7 +74,7 @@ impl Resolve for Package {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Deserialize, Serialize, Hash, Copy, Clone, PartialOrd, Ord)]
+#[derive(Debug, Deserialize, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,

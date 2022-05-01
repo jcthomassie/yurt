@@ -7,7 +7,7 @@ trait Condition {
     fn evaluate(&self, context: &Context) -> bool;
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub struct Locale {
     user: String,
     platform: String,
@@ -52,7 +52,7 @@ impl From<&ArgMatches> for Locale {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct LocaleSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<String>,
@@ -77,7 +77,7 @@ impl Condition for LocaleSpec {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
 enum CaseUnit<C, T> {
     Positive { spec: C, include: T },
@@ -106,7 +106,7 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Case<C, T>(Vec<CaseUnit<C, T>>);
 
 impl<C, T> ResolveInto for Case<C, T>

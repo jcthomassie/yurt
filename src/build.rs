@@ -81,13 +81,13 @@ impl From<&ArgMatches> for Context {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
     values: BTreeMap<String, Vec<String>>,
     include: T,
@@ -119,7 +119,7 @@ impl BuildUnit {
     pub const ALL_NAMES: &'static [&'static str] = &["repo", "link", "run", "install", "require"];
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
     Repo(Repo),
@@ -395,7 +395,7 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
     }
 }
 
-#[derive(Debug, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
     pub version: Option<String>,

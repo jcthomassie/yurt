@@ -183,7 +183,7 @@ impl Shell {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(rename = "shell")]
 pub struct ShellSpec(String);
 
