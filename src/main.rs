@@ -6,7 +6,7 @@
 )]
 mod build;
 mod condition;
-mod files;
+mod link;
 mod package;
 mod repo;
 mod shell;

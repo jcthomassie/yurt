@@ -1,5 +1,5 @@
 use crate::condition::{Case, Locale, LocaleSpec};
-use crate::files::Link;
+use crate::link::Link;
 use crate::package::{Package, PackageManager};
 use crate::repo::Repo;
 use crate::shell::ShellCommand;
