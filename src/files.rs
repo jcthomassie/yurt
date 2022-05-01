@@ -28,7 +28,7 @@ impl Link {
         }
     }
 
-    // Get current status of link
+    /// Get current status of link
     fn status(&self) -> Status {
         if !self.tail.exists() {
             return Status::NullTail;
@@ -44,12 +44,12 @@ impl Link {
         }
     }
 
-    // Return true if the link is valid
+    /// Return true if the link is valid
     pub fn is_valid(&self) -> bool {
         matches!(self.status(), Status::Valid)
     }
 
-    // Try to create link if it does not already exist
+    /// Try to create link if it does not already exist
     pub fn link(&self, clean: bool) -> Result<()> {
         if clean {
             self.clean()?;
@@ -70,7 +70,7 @@ impl Link {
         }
     }
 
-    // Try to remove link if it exists
+    /// Try to remove link if it exists
     pub fn unlink(&self) -> Result<()> {
         match self.status() {
             Status::Valid => {
@@ -82,7 +82,7 @@ impl Link {
         }
     }
 
-    // Remove any conflicting files/links at head
+    /// Remove any conflicting files/links at head
     pub fn clean(&self) -> Result<()> {
         match self.status() {
             Status::InvalidHead(_) | Status::InvalidTail(_) => {

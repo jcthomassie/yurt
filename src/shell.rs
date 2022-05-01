@@ -176,7 +176,7 @@ impl Shell {
         }
     }
 
-    // Use curl to fetch remote script and pipe into shell
+    /// Use curl to fetch remote script and pipe into shell
     #[inline]
     pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
         pipe("curl", curl_args, self, &[]).map(drop)

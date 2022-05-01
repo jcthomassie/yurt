@@ -113,7 +113,7 @@ impl PackageManager {
         "sudo".call(&[&[self.name(), "install", package], args].concat())
     }
 
-    // Install a package
+    /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         match self {
             Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
@@ -122,7 +122,7 @@ impl PackageManager {
         }
     }
 
-    // Uninstall a package
+    /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!(
             "Uninstalling package ({} uninstall {})",
@@ -132,7 +132,7 @@ impl PackageManager {
         self.call(&["uninstall", package])
     }
 
-    // Check if a package is installed
+    /// Check if a package is installed
     pub fn has(self, package: &str) -> bool {
         let res = match self {
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
@@ -158,7 +158,7 @@ impl PackageManager {
         }
     }
 
-    // Install the package manager and perform setup
+    /// Install the package manager and perform setup
     pub fn bootstrap(self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
@@ -177,7 +177,7 @@ impl PackageManager {
         }
     }
 
-    // Install the package manager if not already installed
+    /// Install the package manager if not already installed
     pub fn require(self) -> Result<()> {
         if self.is_available() {
             return Ok(());
@@ -185,7 +185,7 @@ impl PackageManager {
         self.bootstrap()
     }
 
-    // Check if package manager is installed
+    /// Check if package manager is installed
     pub fn is_available(self) -> bool {
         which_has(self.name())
     }
@@ -198,7 +198,7 @@ impl Resolve for PackageManager {
     }
 }
 
-// Check if a command is available locally
+/// Check if a command is available locally
 #[inline]
 pub fn which_has(cmd: &str) -> bool {
     #[cfg(unix)]

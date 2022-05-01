@@ -293,7 +293,7 @@ impl ResolvedConfig {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
-    // Pretty-print the complete build; optionally filter out trivial units
+    /// Pretty-print the complete build; optionally filter out trivial units
     pub fn show(&self, nontrivial: bool) -> Result<()> {
         print!(
             "{}",
@@ -306,7 +306,7 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    // Eliminate elements that will conflict with installation
+    /// Eliminate elements that will conflict with installation
     pub fn clean(&self) -> Result<()> {
         info!("Cleaning link heads...");
         for unit in &self.build {
