@@ -81,10 +81,58 @@ impl From<&ArgMatches> for Context {
     }
 }
 
+pub trait Resolve {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
+}
+
+pub trait ResolveInto {
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
+
+    fn resolve_into_new(self, context: &mut Context) -> Result<Vec<BuildUnit>>
+    where
+        Self: Sized,
+    {
+        let mut output = Vec::new();
+        self.resolve_into(context, &mut output)?;
+        Ok(output)
+    }
+}
+
+impl<T> ResolveInto for T
+where
+    T: Resolve,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        output.push(self.resolve(context)?);
+        Ok(())
+    }
+}
+
+impl<T> ResolveInto for Vec<T>
+where
+    T: ResolveInto,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        for inner in self {
+            inner.resolve_into(context, output)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct Namespace {
     name: String,
     values: BTreeMap<String, String>,
+}
+
+impl ResolveInto for Namespace {
+    fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
+        for (variable, value) in &self.values {
+            context.set_variable(&self.name, variable, value);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -103,6 +151,26 @@ impl<T> Matrix<T> {
             }
             None => bail!("Matrix values must be non-empty"),
         }
+    }
+}
+
+impl<T> ResolveInto for Matrix<T>
+where
+    T: ResolveInto + Clone,
+{
+    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        let len = self.length()?;
+        let mut iters: Vec<_> = self.values.iter().map(|(k, v)| (k, v.iter())).collect();
+        let mut context = context.clone();
+        for _ in 0..len {
+            for (variable, values) in &mut iters {
+                // Iterator size has been validated as count; unwrap here is safe
+                let value = &context.replace_variables(values.next().unwrap())?;
+                context.set_variable("matrix", variable, value);
+            }
+            self.include.clone().resolve_into(&mut context, output)?;
+        }
+        Ok(())
     }
 }
 
@@ -149,74 +217,6 @@ impl BuildSpec {
             }
             _ => false,
         }
-    }
-}
-
-pub trait Resolve {
-    fn resolve(self, context: &mut Context) -> Result<BuildUnit>;
-}
-
-pub trait ResolveInto {
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()>;
-
-    fn resolve_into_new(self, context: &mut Context) -> Result<Vec<BuildUnit>>
-    where
-        Self: Sized,
-    {
-        let mut output = Vec::new();
-        self.resolve_into(context, &mut output)?;
-        Ok(output)
-    }
-}
-
-impl<T> ResolveInto for T
-where
-    T: Resolve,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        output.push(self.resolve(context)?);
-        Ok(())
-    }
-}
-
-impl ResolveInto for Namespace {
-    fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
-        for (variable, value) in &self.values {
-            context.set_variable(&self.name, variable, value);
-        }
-        Ok(())
-    }
-}
-
-impl<T> ResolveInto for Matrix<T>
-where
-    T: ResolveInto + Clone,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let len = self.length()?;
-        let mut iters: Vec<_> = self.values.iter().map(|(k, v)| (k, v.iter())).collect();
-        let mut context = context.clone();
-        for _ in 0..len {
-            for (variable, values) in &mut iters {
-                // Iterator size has been validated as count; unwrap here is safe
-                let value = &context.replace_variables(values.next().unwrap())?;
-                context.set_variable("matrix", variable, value);
-            }
-            self.include.clone().resolve_into(&mut context, output)?;
-        }
-        Ok(())
-    }
-}
-
-impl<T> ResolveInto for Vec<T>
-where
-    T: ResolveInto,
-{
-    fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        for inner in self {
-            inner.resolve_into(context, output)?;
-        }
-        Ok(())
     }
 }
 
