@@ -96,13 +96,13 @@ impl Condition {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
-enum CaseUnit<T> {
+enum CaseBranch<T> {
     Positive { condition: Condition, include: T },
     Negative { condition: Condition, include: T },
     Default { include: T },
 }
 
-impl<T> CaseUnit<T> {
+impl<T> CaseBranch<T> {
     fn evaluate(&self, default: bool, context: &Context) -> bool {
         match self {
             Self::Positive { condition, .. } => condition.evaluate(context),
@@ -121,7 +121,7 @@ impl<T> CaseUnit<T> {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Case<T>(Vec<CaseUnit<T>>);
+pub struct Case<T>(Vec<CaseBranch<T>>);
 
 impl<T> ResolveInto for Case<T>
 where
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn positive_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Positive {
+        let case = CaseBranch::Positive {
             condition: Condition::Bool(true),
             include: "something",
         };
@@ -197,7 +197,7 @@ mod tests {
     #[test]
     fn positive_non_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Positive {
+        let case = CaseBranch::Positive {
             condition: Condition::Bool(false),
             include: "something",
         };
@@ -207,7 +207,7 @@ mod tests {
     #[test]
     fn negative_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Negative {
+        let case = CaseBranch::Negative {
             condition: Condition::Bool(false),
             include: "something",
         };
@@ -217,7 +217,7 @@ mod tests {
     #[test]
     fn negative_non_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Negative {
+        let case = CaseBranch::Negative {
             condition: Condition::Bool(true),
             include: "something",
         };
