@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context, Result};
-use log::{debug, info};
+use log::debug;
 use serde::{Deserialize, Serialize};
 use std::{
     env,
@@ -177,10 +177,9 @@ impl Shell {
     }
 
     // Use curl to fetch remote script and pipe into shell
+    #[inline]
     pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
-        info!("Running remote script");
-        pipe("curl", curl_args, self, &[])?;
-        Ok(())
+        pipe("curl", curl_args, self, &[]).map(drop)
     }
 }
 
