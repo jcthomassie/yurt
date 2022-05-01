@@ -139,16 +139,14 @@ impl PackageManager {
         let res = match self {
             Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
             Self::Brew => self.call_bool(&["list", package]),
-            Self::Cargo => Shell::default()
-                .run(
-                    if cfg!(windows) {
-                        format!("cargo install --list | findstr /b /l /c:{}", package)
-                    } else {
-                        format!("cargo install --list | grep '^{} v'", package)
-                    }
-                    .as_str(),
-                )
-                .map(|s| s.status.success()),
+            Self::Cargo => Shell::default().run_bool(
+                if cfg!(windows) {
+                    format!("cargo install --list | findstr /b /l /c:{}", package)
+                } else {
+                    format!("cargo install --list | grep '^{} v'", package)
+                }
+                .as_str(),
+            ),
             _ => Ok(false),
         };
         match res {
