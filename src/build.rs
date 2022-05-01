@@ -229,16 +229,15 @@ where
 impl ResolveInto for BuildSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
-            Self::Repo(r) => r.resolve_into(context, output)?,
-            Self::Namespace(n) => n.resolve_into(context, output)?,
-            Self::Matrix(m) => m.resolve_into(context, output)?,
-            Self::Case(v) => v.resolve_into(context, output)?,
-            Self::Link(v) => v.resolve_into(context, output)?,
-            Self::Run(s) => s.resolve_into(context, output)?,
-            Self::Install(v) => v.resolve_into(context, output)?,
-            Self::Require(v) => v.resolve_into(context, output)?,
+            Self::Repo(r) => r.resolve_into(context, output),
+            Self::Namespace(n) => n.resolve_into(context, output),
+            Self::Matrix(m) => m.resolve_into(context, output),
+            Self::Case(v) => v.resolve_into(context, output),
+            Self::Link(v) => v.resolve_into(context, output),
+            Self::Run(s) => s.resolve_into(context, output),
+            Self::Install(v) => v.resolve_into(context, output),
+            Self::Require(v) => v.resolve_into(context, output),
         }
-        Ok(())
     }
 }
 
