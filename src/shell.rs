@@ -211,6 +211,10 @@ impl ShellCommand {
     pub fn run(&self) -> Result<()> {
         self.shell.run(&self.command)
     }
+
+    pub fn run_bool(&self) -> Result<bool> {
+        self.shell.run_bool(&self.command)
+    }
 }
 
 impl Resolve for ShellCommand {

@@ -5,6 +5,7 @@ use crate::{
 use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
+use std::ops::Not;
 
 #[derive(Debug, Clone)]
 pub struct Locale {
@@ -79,17 +80,17 @@ impl LocaleSpec {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(untagged)]
 enum Condition {
+    Bool(bool),
     Locale(LocaleSpec),
     Command(ShellCommand),
-    Bool(bool),
 }
 
 impl Condition {
-    fn evaluate(&self, context: &Context) -> bool {
+    fn evaluate(&self, context: &Context) -> Result<bool> {
         match self {
-            Self::Locale(spec) => spec.is_local(context),
-            Self::Command(command) => command.run().is_ok(),
-            Self::Bool(literal) => *literal,
+            Self::Bool(literal) => Ok(*literal),
+            Self::Locale(spec) => Ok(spec.is_local(context)),
+            Self::Command(command) => command.run_bool(),
         }
     }
 }
@@ -103,11 +104,11 @@ enum CaseBranch<T> {
 }
 
 impl<T> CaseBranch<T> {
-    fn evaluate(&self, default: bool, context: &Context) -> bool {
+    fn evaluate(&self, default: bool, context: &Context) -> Result<bool> {
         match self {
             Self::Positive { condition, .. } => condition.evaluate(context),
-            Self::Negative { condition, .. } => !condition.evaluate(context),
-            Self::Default { .. } => default,
+            Self::Negative { condition, .. } => condition.evaluate(context).map(Not::not),
+            Self::Default { .. } => Ok(default),
         }
     }
 
@@ -130,7 +131,7 @@ where
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         let mut default = true;
         for case in self.0 {
-            if case.evaluate(default, context) {
+            if case.evaluate(default, context)? {
                 default = false;
                 case.unpack().resolve_into(context, output)?;
             };
@@ -166,7 +167,7 @@ mod tests {
         ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
             let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
             assert!(matches!(cond, $enum_pattern));
-            assert_eq!(cond.evaluate(&get_context(&[])), $evaluation);
+            assert_eq!(cond.evaluate(&get_context(&[])).unwrap(), $evaluation);
         };
     }
 
@@ -196,7 +197,7 @@ mod tests {
             condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(case.evaluate(false, &context));
+        assert!(case.evaluate(false, &context).unwrap());
     }
 
     #[test]
@@ -206,7 +207,7 @@ mod tests {
             condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context));
+        assert!(!case.evaluate(false, &context).unwrap());
     }
 
     #[test]
@@ -216,7 +217,7 @@ mod tests {
             condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(case.evaluate(false, &context));
+        assert!(case.evaluate(false, &context).unwrap());
     }
 
     #[test]
@@ -226,6 +227,6 @@ mod tests {
             condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context));
+        assert!(!case.evaluate(false, &context).unwrap());
     }
 }
