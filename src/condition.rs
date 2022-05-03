@@ -145,20 +145,45 @@ mod tests {
 
     #[test]
     fn override_user() {
-        let locale = get_context(&["yurt", "--override-user", "some-other-user"]).locale;
-        assert_eq!(locale.user, "some-other-user");
+        let locale = get_context(&["yurt", "--override-user", "yurt-test-user"]).locale;
+        assert_eq!(locale.user, "yurt-test-user");
     }
 
     #[test]
     fn override_distro() {
-        let locale = get_context(&["yurt", "--override-distro", "some-other-distro"]).locale;
-        assert_eq!(locale.distro, "some-other-distro");
+        let locale = get_context(&["yurt", "--override-distro", "yurt-test-distro"]).locale;
+        assert_eq!(locale.distro, "yurt-test-distro");
     }
 
     #[test]
     fn override_platform() {
-        let locale = get_context(&["yurt", "--override-platform", "some-other-platform"]).locale;
-        assert_eq!(locale.platform, "some-other-platform");
+        let locale = get_context(&["yurt", "--override-platform", "yurt-test-platform"]).locale;
+        assert_eq!(locale.platform, "yurt-test-platform");
+    }
+
+    #[test]
+    fn locale_matching() {
+        let context = get_context(&[
+            "yurt",
+            "--override-user=u",
+            "--override-distro=d",
+            "--override-platform=p",
+        ]);
+        let cases = [
+            ("{}", true),
+            ("{ user: u }", true),
+            ("{ distro: d }", true),
+            ("{ user: u, distro: d }", true),
+            ("{ user: u, distro: d, platform: p }", true),
+            ("{ user: _ }", false),
+            ("{ platform: _ }", false),
+            ("{ user: u, distro: _ }", false),
+            ("{ user: u, distro: d, platform: _ }", false),
+        ];
+        for (yaml, result) in cases {
+            let locale: LocaleSpec = serde_yaml::from_str(yaml).expect("Deserialization failed");
+            assert_eq!(locale.is_local(&context), result);
+        }
     }
 
     macro_rules! yaml_condition {
