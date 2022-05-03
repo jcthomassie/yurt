@@ -1,5 +1,5 @@
 ---
-version: 0.2.0
+version: 0.4.0
 build:
   - case:
     - positive:
@@ -33,3 +33,9 @@ build:
         include:
           - install:
             - name: package_2
+    # Break on first match
+    - positive:
+        condition: true
+        include:
+          - install:
+            - name: not_package
