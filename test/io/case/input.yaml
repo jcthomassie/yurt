@@ -1,9 +1,9 @@
 ---
-version: 0.2.0
+version: 0.4.0
 build:
   - case:
     - positive:
-        spec:
+        condition:
           user: not_user
         include:
         - install:
@@ -13,14 +13,13 @@ build:
         # Nested conditional
         - case:
           - positive:
-              spec:
+              condition:
                 user: not_user
               include:
                 - require:
                   - choco
           - negative:
-              spec:
-                user: not_user
+              condition: false
               include:
                 - install:
                   - name: package_0
@@ -28,3 +27,15 @@ build:
           - name: package_1
             managers: [ apt, apt-get ]
             aliases: { apt: package_1-alias }
+  - case:
+    - negative:
+        condition: bad-command
+        include:
+          - install:
+            - name: package_2
+    # Break on first match
+    - positive:
+        condition: true
+        include:
+          - install:
+            - name: not_package

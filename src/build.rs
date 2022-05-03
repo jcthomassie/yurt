@@ -1,5 +1,5 @@
 use crate::{
-    condition::{Case, Locale, LocaleSpec},
+    condition::{Case, Locale},
     link::Link,
     package::{Package, PackageManager},
     repo::Repo,
@@ -192,7 +192,7 @@ enum BuildSpec {
     Repo(Repo),
     Namespace(Namespace),
     Matrix(Matrix<Vec<BuildSpec>>),
-    Case(Case<LocaleSpec, Vec<BuildSpec>>),
+    Case(Case<Vec<BuildSpec>>),
     Link(Vec<Link>),
     Run(ShellCommand),
     Install(Vec<Package>),

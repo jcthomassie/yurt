@@ -1,11 +1,11 @@
-use crate::build::{BuildUnit, Context, ResolveInto};
+use crate::{
+    build::{BuildUnit, Context, ResolveInto},
+    shell::ShellCommand,
+};
 use anyhow::Result;
 use clap::ArgMatches;
 use serde::{Deserialize, Serialize};
-
-trait Condition {
-    fn evaluate(&self, context: &Context) -> bool;
-}
+use std::ops::Not;
 
 #[derive(Debug, Clone)]
 pub struct Locale {
@@ -53,7 +53,7 @@ impl From<&ArgMatches> for Locale {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct LocaleSpec {
+struct LocaleSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     user: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -62,8 +62,8 @@ pub struct LocaleSpec {
     distro: Option<String>,
 }
 
-impl Condition for LocaleSpec {
-    fn evaluate(&self, context: &Context) -> bool {
+impl LocaleSpec {
+    fn is_local(&self, context: &Context) -> bool {
         match self {
             LocaleSpec { user: Some(u), .. } if u != &context.locale.user => false,
             LocaleSpec {
@@ -78,22 +78,37 @@ impl Condition for LocaleSpec {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(untagged)]
+enum Condition {
+    Bool(bool),
+    Locale(LocaleSpec),
+    Command(ShellCommand),
+}
+
+impl Condition {
+    fn evaluate(&self, context: &Context) -> Result<bool> {
+        match self {
+            Self::Bool(literal) => Ok(*literal),
+            Self::Locale(spec) => Ok(spec.is_local(context)),
+            Self::Command(command) => command.run_bool(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all(deserialize = "snake_case"))]
-enum CaseUnit<C, T> {
-    Positive { spec: C, include: T },
-    Negative { spec: C, include: T },
+enum CaseBranch<T> {
+    Positive { condition: Condition, include: T },
+    Negative { condition: Condition, include: T },
     Default { include: T },
 }
 
-impl<C, T> CaseUnit<C, T>
-where
-    C: Condition,
-{
-    fn evaluate(&self, default: bool, context: &Context) -> bool {
+impl<T> CaseBranch<T> {
+    fn evaluate(&self, context: &Context) -> Result<bool> {
         match self {
-            Self::Positive { spec, .. } => spec.evaluate(context),
-            Self::Negative { spec, .. } => !spec.evaluate(context),
-            Self::Default { .. } => default,
+            Self::Positive { condition, .. } => condition.evaluate(context),
+            Self::Negative { condition, .. } => condition.evaluate(context).map(Not::not),
+            Self::Default { .. } => Ok(true),
         }
     }
 
@@ -107,19 +122,16 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Case<C, T>(Vec<CaseUnit<C, T>>);
+pub struct Case<T>(Vec<CaseBranch<T>>);
 
-impl<C, T> ResolveInto for Case<C, T>
+impl<T> ResolveInto for Case<T>
 where
-    C: Condition,
     T: ResolveInto,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let mut default = true;
         for case in self.0 {
-            if case.evaluate(default, context) {
-                default = false;
-                case.unpack().resolve_into(context, output)?;
+            if case.evaluate(context)? {
+                return case.unpack().resolve_into(context, output);
             };
         }
         Ok(())
@@ -149,47 +161,70 @@ mod tests {
         assert_eq!(locale.platform, "some-other-platform");
     }
 
-    fn locale_spec(s: &str) -> LocaleSpec {
-        serde_yaml::from_str::<LocaleSpec>(s).expect("Invalid yaml LocaleSpec")
+    macro_rules! yaml_condition {
+        ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
+            let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
+            assert!(matches!(cond, $enum_pattern));
+            assert_eq!(cond.evaluate(&get_context(&[])).unwrap(), $evaluation);
+        };
+    }
+
+    #[test]
+    fn locale_condition() {
+        let user_locale = format!("{{ user: {} }}", whoami::username());
+        yaml_condition!(user_locale.as_str(), Condition::Locale(_), true);
+        yaml_condition!("{ platform: fake }", Condition::Locale(_), false);
+    }
+
+    #[test]
+    fn command_condition() {
+        yaml_condition!(r#""echo 'hello'""#, Condition::Command(_), true);
+        yaml_condition!("bad-command -a -b", Condition::Command(_), false);
+    }
+
+    #[test]
+    fn bool_condition() {
+        yaml_condition!("true", Condition::Bool(true), true);
+        yaml_condition!("false", Condition::Bool(false), false);
     }
 
     #[test]
     fn positive_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Positive {
-            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
+        let case = CaseBranch::Positive {
+            condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(case.evaluate(false, &context));
+        assert!(case.evaluate(&context).unwrap());
     }
 
     #[test]
     fn positive_non_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Positive {
-            spec: locale_spec("distro: something_else"),
+        let case = CaseBranch::Positive {
+            condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context));
+        assert!(!case.evaluate(&context).unwrap());
     }
 
     #[test]
     fn negative_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Negative {
-            spec: locale_spec("platform: somewhere_else"),
+        let case = CaseBranch::Negative {
+            condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(case.evaluate(false, &context));
+        assert!(case.evaluate(&context).unwrap());
     }
 
     #[test]
     fn negative_non_match() {
         let context = get_context(&[]);
-        let case = CaseUnit::Negative {
-            spec: locale_spec(format!("user: {}", whoami::username()).as_str()),
+        let case = CaseBranch::Negative {
+            condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context));
+        assert!(!case.evaluate(&context).unwrap());
     }
 }

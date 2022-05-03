@@ -70,7 +70,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: 0.3.0
+version: 0.4.0
 build:
   # Require dotfile repo
   - repo:
@@ -80,18 +80,18 @@ build:
   # Specify package managers
   - case:
     - positive:
-        spec: { distro: ubuntu }
+        condition: { distro: ubuntu }
         include:
           - require:
             - apt
             - apt-get
     - positive:
-        spec: { platform: windows }
+        condition: { platform: windows }
         include:
           - require:
             - choco
     - negative:
-        spec: { platform: windows }
+        condition: { platform: windows }
         include:
           - require:
             - brew

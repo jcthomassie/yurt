@@ -135,10 +135,17 @@ impl Shell {
         }
     }
 
-    pub fn run(&self, command: &str) -> Result<Output> {
+    pub fn run(&self, command: &str) -> Result<()> {
         match self.kind {
-            ShellKind::Cmd => self.call_unchecked(&["/C", command]),
-            _ => self.call_unchecked(&["-c", command]),
+            ShellKind::Cmd => self.call(&["/C", command]),
+            _ => self.call(&["-c", command]),
+        }
+    }
+
+    pub fn run_bool(&self, command: &str) -> Result<bool> {
+        match self.kind {
+            ShellKind::Cmd => self.call_bool(&["/C", command]),
+            _ => self.call_bool(&["-c", command]),
         }
     }
 
@@ -202,7 +209,11 @@ pub struct ShellCommand {
 
 impl ShellCommand {
     pub fn run(&self) -> Result<()> {
-        self.shell.run(&self.command).map(drop)
+        self.shell.run(&self.command)
+    }
+
+    pub fn run_bool(&self) -> Result<bool> {
+        self.shell.run_bool(&self.command)
     }
 }
 
@@ -276,6 +287,18 @@ mod tests {
     }
 
     #[test]
+    fn shell_run_success() {
+        Shell::default().run("echo 'hello world!'").unwrap();
+    }
+
+    #[test]
+    fn shell_run_failure() {
+        assert!(Shell::default()
+            .run("made_up_command with parameters")
+            .is_err());
+    }
+
+    #[test]
     fn shell_command_from_str() {
         let cmd = ShellCommand::from("echo 'hello world!'".to_string());
         assert_eq!(cmd.shell, Shell::from_env());
@@ -284,21 +307,16 @@ mod tests {
 
     #[test]
     fn shell_command_success() {
-        let out = Shell::default().run("echo 'hello world!'").unwrap();
-        assert!(out.status.success());
-        #[cfg(unix)]
-        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
-        #[cfg(windows)]
-        assert_eq!(String::from_utf8_lossy(&out.stdout), "'hello world!'\r\n");
-        // Windows escapes shell commands over-eagerly
+        ShellCommand::from("echo 'hello world!'".to_string())
+            .run()
+            .unwrap();
     }
 
     #[test]
     fn shell_command_failure() {
-        let out = Shell::default()
-            .run("made_up_command with parameters")
-            .unwrap();
-        assert!(!out.status.success());
+        assert!(ShellCommand::from("made_up_command -a -b".to_string())
+            .run()
+            .is_err());
     }
 
     #[test]
