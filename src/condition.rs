@@ -104,11 +104,11 @@ enum CaseBranch<T> {
 }
 
 impl<T> CaseBranch<T> {
-    fn evaluate(&self, default: bool, context: &Context) -> Result<bool> {
+    fn evaluate(&self, context: &Context) -> Result<bool> {
         match self {
             Self::Positive { condition, .. } => condition.evaluate(context),
             Self::Negative { condition, .. } => condition.evaluate(context).map(Not::not),
-            Self::Default { .. } => Ok(default),
+            Self::Default { .. } => Ok(true),
         }
     }
 
@@ -129,11 +129,9 @@ where
     T: ResolveInto,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let mut default = true;
         for case in self.0 {
-            if case.evaluate(default, context)? {
-                default = false;
-                case.unpack().resolve_into(context, output)?;
+            if case.evaluate(context)? {
+                return case.unpack().resolve_into(context, output);
             };
         }
         Ok(())
@@ -197,7 +195,7 @@ mod tests {
             condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(case.evaluate(false, &context).unwrap());
+        assert!(case.evaluate(&context).unwrap());
     }
 
     #[test]
@@ -207,7 +205,7 @@ mod tests {
             condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context).unwrap());
+        assert!(!case.evaluate(&context).unwrap());
     }
 
     #[test]
@@ -217,7 +215,7 @@ mod tests {
             condition: Condition::Bool(false),
             include: "something",
         };
-        assert!(case.evaluate(false, &context).unwrap());
+        assert!(case.evaluate(&context).unwrap());
     }
 
     #[test]
@@ -227,6 +225,6 @@ mod tests {
             condition: Condition::Bool(true),
             include: "something",
         };
-        assert!(!case.evaluate(false, &context).unwrap());
+        assert!(!case.evaluate(&context).unwrap());
     }
 }
