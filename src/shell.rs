@@ -32,19 +32,17 @@ pub trait Cmd {
     }
 
     #[inline]
-    fn call(&self, args: &[&str]) -> Result<()> {
-        match self.call_unchecked(args)?.status.success() {
-            true => Ok(()),
-            false => Err(anyhow!(
-                "Command exited with error: `{}`",
-                self.format(args)
-            )),
-        }
+    fn call_bool(&self, args: &[&str]) -> Result<bool> {
+        self.call_unchecked(args).map(|out| out.status.success())
     }
 
     #[inline]
-    fn call_bool(&self, args: &[&str]) -> Result<bool> {
-        Ok(self.call_unchecked(args)?.status.success())
+    fn call(&self, args: &[&str]) -> Result<()> {
+        self.call_bool(args).and_then(|success| {
+            success
+                .then(|| ())
+                .with_context(|| anyhow!("Command exited with error: `{}`", self.format(args)))
+        })
     }
 }
 
