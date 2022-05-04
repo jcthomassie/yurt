@@ -1,6 +1,7 @@
 use crate::build::{self, BuildUnit, Resolve};
 use anyhow::{anyhow, Context, Result};
 use git2::{build::CheckoutBuilder, Repository};
+use log::debug;
 use serde::{Deserialize, Serialize};
 
 fn default_branch() -> String {
@@ -41,6 +42,7 @@ impl Repo {
     }
 
     pub fn pull(&self) -> Result<bool> {
+        debug!("Updating repository: {}", self.path);
         let repo = self.require()?;
         // Fetch remote
         repo.find_remote(&self.remote)?

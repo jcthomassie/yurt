@@ -337,8 +337,8 @@ impl ResolvedConfig {
         Ok(())
     }
 
-    #[allow(clippy::unused_self)]
     pub fn update(&self) -> Result<()> {
+        info!("Updating...");
         for unit in &self.build {
             match unit {
                 BuildUnit::Repo(repo) => {
