@@ -103,36 +103,22 @@ impl Cmd for PackageManager {
 }
 
 impl PackageManager {
-    fn _install(self, package: &str, args: &[&str]) -> Result<()> {
-        info!("Installing package ({} install {})", self.name(), package);
-        self.call(&[&["install", package], args].concat())
-    }
-
-    fn _sudo_install(self, package: &str, args: &[&str]) -> Result<()> {
-        info!(
-            "Installing package (sudo {} install {})",
-            self.name(),
-            package
-        );
-        "sudo".call(&[&[self.name(), "install", package], args].concat())
-    }
-
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
+        info!("Installing package `{}` with `{}`", package, self.name());
         match self {
-            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
-            Self::Pkg => self._sudo_install(package, &[]), 
-            Self::Cargo => self._install(package, &[]),
-            _ => self._install(package, &["-y"]),
+            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => "sudo".call(&[self.name(), "-y", package]),
+            Self::Cargo => self.call(&["install", package]),
+            _ => self.call(&["install", "-y", package]),
         }
     }
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!(
-            "Uninstalling package ({} uninstall {})",
-            self.name(),
-            package
+            "Uninstalling package `{}` from `{}`",
+            package,
+            self.name()
         );
         self.call(&["uninstall", package])
     }
