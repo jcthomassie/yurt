@@ -425,6 +425,7 @@ checksum = "0f647032dfaa1f8b6dc29bd3edb7bbef4861b8b8007ebb118d6db284fd59f6ee"
 dependencies = [
  "autocfg",
  "hashbrown",
+ "serde",
 ]
 
 [[package]]
@@ -1288,6 +1289,7 @@ dependencies = [
  "dirs",
  "env_logger",
  "git2",
+ "indexmap",
  "lazy_static",
  "log",
  "pretty_assertions",

@@ -7,12 +7,13 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
+use indexmap::{IndexMap, IndexSet};
 use lazy_static::lazy_static;
 use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{HashMap, HashSet},
     env,
     fs::File,
     io::BufReader,
@@ -22,8 +23,8 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Context {
     pub locale: Locale,
-    pub managers: BTreeSet<PackageManager>,
-    variables: BTreeMap<String, String>,
+    pub managers: IndexSet<PackageManager>,
+    variables: HashMap<String, String>,
     home_dir: String,
 }
 
@@ -68,9 +69,9 @@ impl Context {
 impl From<&ArgMatches> for Context {
     fn from(args: &ArgMatches) -> Self {
         Self {
-            variables: BTreeMap::new(),
             locale: Locale::from(args),
-            managers: BTreeSet::new(),
+            managers: IndexSet::new(),
+            variables: HashMap::new(),
             home_dir: dirs::home_dir()
                 .as_deref()
                 .and_then(Path::to_str)
@@ -122,7 +123,7 @@ where
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct Namespace {
     name: String,
-    values: BTreeMap<String, String>,
+    values: IndexMap<String, String>,
 }
 
 impl ResolveInto for Namespace {
@@ -136,7 +137,7 @@ impl ResolveInto for Namespace {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct Matrix<T> {
-    values: BTreeMap<String, Vec<String>>,
+    values: IndexMap<String, Vec<String>>,
     include: T,
 }
 

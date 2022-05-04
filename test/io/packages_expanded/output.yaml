@@ -17,7 +17,7 @@ build:
       - name: package_e
       - name: package_f
         managers:
-          - apt
           - cargo
+          - apt
         aliases:
           cargo: pack-f

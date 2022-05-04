@@ -3,21 +3,21 @@ use crate::{
     shell::{Cmd, Shell},
 };
 use anyhow::{anyhow, bail, Result};
+use indexmap::{IndexMap, IndexSet};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
     name: String,
-    #[serde(default = "BTreeSet::new")]
-    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
-    managers: BTreeSet<PackageManager>,
-    #[serde(default = "BTreeMap::new")]
-    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    aliases: BTreeMap<PackageManager, String>,
+    #[serde(default = "IndexSet::new")]
+    #[serde(skip_serializing_if = "IndexSet::is_empty")]
+    managers: IndexSet<PackageManager>,
+    #[serde(default = "IndexMap::new")]
+    #[serde(skip_serializing_if = "IndexMap::is_empty")]
+    aliases: IndexMap<PackageManager, String>,
 }
 
 impl Package {
@@ -76,7 +76,7 @@ impl Resolve for Package {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Deserialize, Serialize, Copy, Clone, PartialEq, Eq, Hash)]
 #[serde(rename_all = "kebab-case")]
 pub enum PackageManager {
     Apt,
@@ -259,7 +259,7 @@ mod tests {
         assert!(!which_has("some_missing_package"));
     }
 
-    fn all() -> BTreeSet<PackageManager> {
+    fn all() -> IndexSet<PackageManager> {
         vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
             .into_iter()
             .collect()
@@ -273,7 +273,7 @@ mod tests {
             name: "name".to_string(),
             managers: all(),
             aliases: {
-                let mut map = BTreeMap::new();
+                let mut map = IndexMap::new();
                 map.insert(aliased, "alias".into());
                 map
             },
@@ -289,7 +289,7 @@ mod tests {
         assert!(Package {
             name: "cargo".to_string(),
             managers: all(),
-            aliases: BTreeMap::new(),
+            aliases: IndexMap::new(),
         }
         .is_installed());
     }
@@ -299,7 +299,7 @@ mod tests {
         assert!(!Package {
             name: "some_missing_package".to_string(),
             managers: all(),
-            aliases: BTreeMap::new()
+            aliases: IndexMap::new()
         }
         .is_installed());
     }
@@ -356,7 +356,9 @@ mod tests {
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
         assert_eq!(
             package.managers,
-            vec![PackageManager::Brew].into_iter().collect()
+            vec![PackageManager::Brew]
+                .into_iter()
+                .collect::<IndexSet<_>>()
         );
     }
 }
