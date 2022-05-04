@@ -88,10 +88,9 @@ mod tests {
     use super::Repo;
     use lazy_static::lazy_static;
 
-    // Assumes cargo is run from repository root
     lazy_static! {
         pub static ref REPO: Repo = Repo {
-            path: "./".to_string(),
+            path: env!("CARGO_MANIFEST_DIR").to_string(),
             url: "https://github.com/jcthomassie/yurt.git".to_string(),
             branch: "main".to_string(),
             remote: "origin".to_string(),
@@ -114,7 +113,7 @@ mod tests {
     }
 
     fn repo(path: &str) -> Repo {
-        serde_yaml::from_str(&format!("{{ path: {}, url: www.web.site }}", path)).unwrap()
+        serde_yaml::from_str(&format!("{{ path: '{}', url: www.web.site }}", path)).unwrap()
     }
 
     #[test]
