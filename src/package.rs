@@ -118,7 +118,13 @@ impl PackageManager {
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!("Uninstalling package `{}` from `{}`", package, self.name());
-        self.call(&["uninstall", "-y", package])
+        match self {
+            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
+                "sudo".call(&[self.name(), "remove", "-y", package])
+            }
+            Self::Cargo => self.call(&["uninstall", package]),
+            _ => self.call(&["uninstall", "-y", package]),
+        }
     }
 
     /// Check if a package is installed
