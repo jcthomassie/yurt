@@ -120,7 +120,7 @@ impl PackageManager {
             package,
             self.name()
         );
-        self.call(&["uninstall", package])
+        self.call(&["uninstall", "-y", package])
     }
 
     /// Check if a package is installed
