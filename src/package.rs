@@ -107,7 +107,9 @@ impl PackageManager {
     pub fn install(self, package: &str) -> Result<()> {
         info!("Installing package `{}` with `{}`", package, self.name());
         match self {
-            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => "sudo".call(&[self.name(), "install", "-y", package]),
+            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
+                "sudo".call(&[self.name(), "install", "-y", package])
+            }
             Self::Cargo => self.call(&["install", package]),
             _ => self.call(&["install", "-y", package]),
         }
@@ -115,11 +117,7 @@ impl PackageManager {
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
-        info!(
-            "Uninstalling package `{}` from `{}`",
-            package,
-            self.name()
-        );
+        info!("Uninstalling package `{}` from `{}`", package, self.name());
         self.call(&["uninstall", "-y", package])
     }
 
