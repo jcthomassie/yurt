@@ -3,12 +3,22 @@ use anyhow::{anyhow, Context, Result};
 use git2::{build::CheckoutBuilder, Repository};
 use serde::{Deserialize, Serialize};
 
+fn default_branch() -> String {
+    "main".to_string()
+}
+
+fn default_remote() -> String {
+    "origin".to_string()
+}
+
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
-    pub path: String,
-    pub url: String,
-    pub branch: Option<String>,
-    pub remote: Option<String>,
+    path: String,
+    url: String,
+    #[serde(default = "default_branch")]
+    branch: String,
+    #[serde(default = "default_remote")]
+    remote: String,
 }
 
 impl Repo {
@@ -32,10 +42,9 @@ impl Repo {
 
     pub fn pull(&self) -> Result<bool> {
         let repo = self.require()?;
-        let remote = self.remote.as_deref().unwrap_or("origin");
-        let branch = self.branch.as_deref().unwrap_or("master");
         // Fetch remote
-        repo.find_remote(remote)?.fetch(&[branch], None, None)?;
+        repo.find_remote(&self.remote)?
+            .fetch(&[&self.branch], None, None)?;
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
         // Try fast-forward merge
@@ -43,7 +52,7 @@ impl Repo {
         if analysis.0.is_up_to_date() {
             Ok(false)
         } else if analysis.0.is_fast_forward() {
-            let refname = format!("refs/heads/{}", branch);
+            let refname = format!("refs/heads/{}", &self.branch);
             let mut reference = repo.find_reference(&refname)?;
             reference.set_target(fetch_commit.id(), "Fast-Forward")?;
             repo.set_head(&refname)?;
@@ -84,8 +93,8 @@ mod tests {
         pub static ref REPO: Repo = Repo {
             path: "./".to_string(),
             url: "https://github.com/jcthomassie/yurt.git".to_string(),
-            branch: Some("master".to_string()),
-            remote: Some("origin".to_string()),
+            branch: "main".to_string(),
+            remote: "origin".to_string(),
         };
     }
 
@@ -105,12 +114,7 @@ mod tests {
     }
 
     fn repo(path: &str) -> Repo {
-        Repo {
-            path: path.to_string(),
-            url: "repo-url".to_string(),
-            branch: None,
-            remote: None,
-        }
+        serde_yaml::from_str(&format!("{{ path: {}, url: www.web.site }}", path)).unwrap()
     }
 
     #[test]
