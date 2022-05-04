@@ -108,9 +108,20 @@ impl PackageManager {
         self.call(&[&["install", package], args].concat())
     }
 
+    fn _sudo_install(self, package: &str, args: &[&str]) -> Result<()> {
+        info!(
+            "Installing package (sudo {} install {})",
+            self.name(),
+            package
+        );
+        "sudo".call(&[&[self.name(), "install", package], args].concat())
+    }
+
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         match self {
+            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
+            Self::Pkg => self._sudo_install(package, &[]), 
             Self::Cargo => self._install(package, &[]),
             _ => self._install(package, &["-y"]),
         }
