@@ -7,7 +7,7 @@ use indexmap::{IndexMap, IndexSet};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
-pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Yum};
+pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
@@ -84,6 +84,7 @@ pub enum PackageManager {
     Brew,
     Cargo,
     Choco,
+    Pkg,
     Yum,
 }
 
@@ -95,43 +96,35 @@ impl Cmd for PackageManager {
             Self::Brew => "brew",
             Self::Cargo => "cargo",
             Self::Choco => "choco",
+            Self::Pkg => "pkg",
             Self::Yum => "yum",
         }
     }
 }
 
 impl PackageManager {
-    fn _install(self, package: &str, args: &[&str]) -> Result<()> {
-        info!("Installing package ({} install {})", self.name(), package);
-        self.call(&[&["install", package], args].concat())
-    }
-
-    fn _sudo_install(self, package: &str, args: &[&str]) -> Result<()> {
-        info!(
-            "Installing package (sudo {} install {})",
-            self.name(),
-            package
-        );
-        "sudo".call(&[&[self.name(), "install", package], args].concat())
-    }
-
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
+        info!("Installing package `{}` with `{}`", package, self.name());
         match self {
-            Self::Apt | Self::AptGet | Self::Yum => self._sudo_install(package, &["-y"]),
-            Self::Cargo => self._install(package, &[]),
-            _ => self._install(package, &["-y"]),
+            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
+                "sudo".call(&[self.name(), "install", "-y", package])
+            }
+            Self::Cargo => self.call(&["install", package]),
+            _ => self.call(&["install", "-y", package]),
         }
     }
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
-        info!(
-            "Uninstalling package ({} uninstall {})",
-            self.name(),
-            package
-        );
-        self.call(&["uninstall", package])
+        info!("Uninstalling package `{}` from `{}`", package, self.name());
+        match self {
+            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
+                "sudo".call(&[self.name(), "remove", "-y", package])
+            }
+            Self::Cargo => self.call(&["uninstall", package]),
+            _ => self.call(&["uninstall", "-y", package]),
+        }
     }
 
     /// Check if a package is installed
@@ -247,6 +240,8 @@ mod tests {
 
     check_missing!(Choco, choco);
 
+    check_missing!(Pkg, pkg);
+
     check_missing!(Yum, yum);
 
     #[test]
@@ -260,7 +255,7 @@ mod tests {
     }
 
     fn all() -> IndexSet<PackageManager> {
-        vec![Apt, AptGet, Brew, Cargo, Choco, Yum]
+        vec![Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum]
             .into_iter()
             .collect()
     }
