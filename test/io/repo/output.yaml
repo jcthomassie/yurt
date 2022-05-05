@@ -4,6 +4,8 @@ build:
   - repo:
       path: /home/dotfiles
       url: "https://github.com/user/dotfiles.git"
+      branch: main
+      remote: origin
   - link:
       - head: /dotfiles
         tail: /home/dotfiles

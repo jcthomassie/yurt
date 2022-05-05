@@ -32,6 +32,7 @@ pub fn yurt_command() -> Command<'static> {
                 ),
         )
         .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
+        .subcommand(Command::new("update").about("Update installed build items"))
         .subcommand(Command::new("clean").about("Clean link target conflicts"))
         .subcommand(
             Command::new("show").about("Show the resolved build").arg(
