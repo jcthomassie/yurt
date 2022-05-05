@@ -5,7 +5,7 @@ use crate::{
     repo::Repo,
     shell::ShellCommand,
 };
-use anyhow::{anyhow, bail, ensure, Context as AnyContext, Result};
+use anyhow::{anyhow, bail, Context as AnyContext, Result};
 use clap::{crate_version, ArgMatches};
 use indexmap::{IndexMap, IndexSet};
 use lazy_static::lazy_static;
@@ -145,10 +145,10 @@ impl<T> Matrix<T> {
     fn length(&self) -> Result<usize> {
         let mut counts = self.values.values().map(Vec::len);
         match counts.next() {
-            Some(len) => {
-                ensure!(counts.all(|next| next == len), "Matrix array size mismatch");
-                Ok(len)
-            }
+            Some(first) => counts
+                .all(|next| next == first)
+                .then(|| first)
+                .context("Matrix array size mismatch"),
             None => bail!("Matrix values must be non-empty"),
         }
     }
