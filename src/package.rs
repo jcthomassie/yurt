@@ -140,6 +140,7 @@ impl PackageManager {
                 }
                 .as_str(),
             ),
+            Self::Pkg => self.call_bool(&["info", package]),
             _ => Ok(false),
         };
         match res {
@@ -213,20 +214,24 @@ mod tests {
     use crate::build::tests::get_context;
 
     macro_rules! check_missing {
-        ($manager:ident, $mod_name:ident) => {
+        ($manager:ident, $mod_name:ident, $expect_fake:expr, $expect_empty:expr) => {
             mod $mod_name {
                 use super::*;
 
                 #[test]
-                fn not_has_fake() {
-                    assert!(!$manager.has("some_missing_package"));
+                fn fake_package() {
+                    assert_eq!($manager.has("some_missing_package"), $expect_fake);
                 }
 
                 #[test]
-                fn not_has_empty() {
-                    assert!(!$manager.has(""));
+                fn empty_package() {
+                    assert_eq!($manager.has(""), $expect_empty);
                 }
             }
+        };
+
+        ($manager:ident, $mod_name:ident) => {
+            check_missing!($manager, $mod_name, false, false);
         };
     }
 
@@ -240,7 +245,7 @@ mod tests {
 
     check_missing!(Choco, choco);
 
-    check_missing!(Pkg, pkg);
+    check_missing!(Pkg, pkg, false, true);
 
     check_missing!(Yum, yum);
 
