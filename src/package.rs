@@ -245,6 +245,9 @@ mod tests {
 
     check_missing!(Choco, choco);
 
+    #[cfg(not(target_os = "freebsd"))]
+    check_missing!(Pkg, pkg);
+    #[cfg(target_os = "freebsd")]
     check_missing!(Pkg, pkg, false, true);
 
     check_missing!(Yum, yum);
