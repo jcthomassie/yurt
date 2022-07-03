@@ -61,7 +61,7 @@ impl Link {
                 if let Some(dir) = self.head.parent() {
                     fs::create_dir_all(dir)?;
                 }
-                symlink::symlink_file(&self.tail, &self.head)
+                symlink::symlink_auto(&self.tail, &self.head)
                     .with_context(|| format!("Failed to apply symlink: {}", self))
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
@@ -75,8 +75,12 @@ impl Link {
         match self.status() {
             Status::Valid => {
                 info!("Unlinking {}", self);
-                symlink::remove_symlink_file(&self.head)
-                    .with_context(|| format!("Failed to remove symlink: {}", self))
+                if self.tail.is_file() {
+                    symlink::remove_symlink_file(&self.head)
+                } else {
+                    symlink::remove_symlink_dir(&self.head)
+                }
+                .with_context(|| format!("Failed to remove symlink: {}", self))
             }
             _ => Ok(()),
         }
