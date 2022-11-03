@@ -40,10 +40,12 @@ impl Repo {
 impl Resolve for Repo {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
         let new = Self {
-            path: context.replace_variables(&self.path)?,
+            path: context.parse_path(&self.path)?,
             ..self
         };
-        context.set_variable(new.name()?, "path", &new.path);
+        context
+            .variables
+            .push(new.name()?, [("path", &new.path)].into_iter());
         Ok(BuildUnit::Repo(new))
     }
 }

@@ -13,7 +13,7 @@ use log::{info, warn};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{hash_map::Entry, HashMap, HashSet},
     env,
     fs::File,
     io::BufReader,
@@ -24,45 +24,16 @@ use std::{
 pub struct Context {
     pub locale: Locale,
     pub managers: IndexSet<PackageManager>,
-    variables: HashMap<String, String>,
+    pub variables: VarStack,
     home_dir: String,
 }
 
 impl Context {
-    #[inline]
-    pub fn set_variable(&mut self, namespace: &str, key: &str, value: &str) -> Option<String> {
+    /// Replace '~' with home directory and resolve variables
+    pub fn parse_path(&self, input: &str) -> Result<String> {
         self.variables
-            .insert(format!("{}.{}", namespace, key), value.to_string())
-    }
-
-    pub fn get_variable(&self, namespace: &str, key: &str) -> Result<String> {
-        match self.variables.get(&format!("{}.{}", namespace, key)) {
-            Some(value) => Ok(value.clone()),
-            None if namespace == "env" => env::var(key)
-                .with_context(|| format!("Failed to get environment variable: {}", key)),
-            None => Err(anyhow!("Variable {}.{} is undefined", namespace, key)),
-        }
-    }
-
-    /// Replaces patterns of the form "${{ namespace.key }}"
-    pub fn replace_variables(&self, input: &str) -> Result<String> {
-        lazy_static! {
-            static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
-            static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
-        }
-        // Build iterator of replaced values
-        let values: Result<Vec<String>> = RE_OUTER
-            .captures_iter(input)
-            .map(|outer| match RE_INNER.captures(&outer["inner"]) {
-                Some(inner) => self.get_variable(&inner["namespace"], &inner["variable"]),
-                None => Err(anyhow!("Invalid substitution: {}", &outer["inner"])),
-            })
-            .collect();
-        let mut values_iter = values?.into_iter();
-        // Build new string with replacements
-        Ok(RE_OUTER
-            .replace_all(input, |_: &Captures| values_iter.next().unwrap())
-            .replace('~', &self.home_dir))
+            .parse_str(input)
+            .map(|s| s.replace('~', &self.home_dir))
     }
 }
 
@@ -71,12 +42,94 @@ impl From<&ArgMatches> for Context {
         Self {
             locale: Locale::from(args),
             managers: IndexSet::new(),
-            variables: HashMap::new(),
+            variables: VarStack(HashMap::new()),
             home_dir: dirs::home_dir()
                 .as_deref()
                 .and_then(Path::to_str)
                 .unwrap_or("~")
                 .to_string(),
+        }
+    }
+}
+
+type Key = String;
+
+#[derive(Debug, Clone)]
+pub struct VarStack(HashMap<String, Vec<String>>);
+
+impl VarStack {
+    /// Replaces patterns of the form "${{ namespace.key }}"
+    pub fn parse_str(&self, input: &str) -> Result<String> {
+        lazy_static! {
+            static ref RE_OUTER: Regex = Regex::new(r"\$\{\{(?P<inner>[^{}]*)\}\}").unwrap();
+            static ref RE_INNER: Regex = Regex::new(r"^\s*(?P<namespace>[a-zA-Z_][a-zA-Z_0-9]*)\.(?P<variable>[a-zA-Z_][a-zA-Z_0-9]*)\s*$").unwrap();
+        }
+        // Build iterator of replaced values
+        let values: Result<Vec<String>> = RE_OUTER
+            .captures_iter(input)
+            .map(|outer| match RE_INNER.captures(&outer["inner"]) {
+                Some(inner) => self.get(&inner["namespace"], &inner["variable"]),
+                None => Err(anyhow!("Invalid substitution: {}", &outer["inner"])),
+            })
+            .collect();
+        let mut values_iter = values?.into_iter();
+        // Build new string with replacements
+        Ok(RE_OUTER
+            .replace_all(input, |_: &Captures| values_iter.next().unwrap())
+            .to_string())
+    }
+
+    #[inline]
+    pub fn key<N: AsRef<str>, K: AsRef<str>>(namespace: N, variable: K) -> Key {
+        format!("{}.{}", namespace.as_ref(), variable.as_ref())
+    }
+
+    pub fn get<N: AsRef<str>, K: AsRef<str>>(&self, namespace: N, variable: K) -> Result<String> {
+        let key = Self::key(namespace.as_ref(), variable.as_ref());
+        match self.get_raw(&key) {
+            Some(value) => Ok(value.clone()),
+            None if namespace.as_ref() == "env" => env::var(key).with_context(|| {
+                format!("Failed to get environment variable: {}", variable.as_ref())
+            }),
+            None => Err(anyhow!("Variable {} is undefined", key)),
+        }
+    }
+
+    pub fn push<K: AsRef<str>, V: Into<String>>(
+        &mut self,
+        namespace: &str,
+        items: impl Iterator<Item = (K, V)>,
+    ) {
+        for (key, val) in items {
+            self.push_raw(Self::key(namespace, key), val.into());
+        }
+    }
+
+    pub fn drop<N: AsRef<str>, K: AsRef<str>>(
+        &mut self,
+        namespace: N,
+        keys: impl Iterator<Item = K>,
+    ) {
+        for key in keys {
+            self.drop_raw(Self::key(namespace.as_ref(), key));
+        }
+    }
+
+    fn get_raw(&self, key: &Key) -> Option<&String> {
+        self.0.get(key).and_then(|vec| vec.last())
+    }
+
+    fn push_raw(&mut self, key: Key, val: String) {
+        self.0.entry(key).or_default().push(val);
+    }
+
+    fn drop_raw(&mut self, key: Key) {
+        if let Entry::Occupied(mut entry) = self.0.entry(key) {
+            let vec = entry.get_mut();
+            let _val = vec.pop();
+            if vec.is_empty() {
+                entry.remove();
+            }
         }
     }
 }
@@ -128,9 +181,7 @@ struct Namespace {
 
 impl ResolveInto for Namespace {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
-        for (variable, value) in &self.values {
-            context.set_variable(&self.name, variable, value);
-        }
+        context.variables.push(&self.name, self.values.iter());
         Ok(())
     }
 }
@@ -159,16 +210,17 @@ where
     T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let len = self.length()?;
-        let mut iters: Vec<_> = self.values.iter().map(|(k, v)| (k, v.iter())).collect();
-        let mut context = context.clone();
-        for _ in 0..len {
-            for (variable, values) in &mut iters {
-                // Iterator size has been validated as count; unwrap here is safe
-                let value = &context.replace_variables(values.next().unwrap())?;
-                context.set_variable("matrix", variable, value);
-            }
-            self.include.clone().resolve_into(&mut context, output)?;
+        for i in 0..self.length()? {
+            let vals = self
+                .values
+                .values()
+                .map(|vec| context.variables.parse_str(&vec[i]))
+                .collect::<Result<Vec<_>>>()?;
+            context
+                .variables
+                .push("matrix", self.values.keys().zip(vals.iter()));
+            self.include.clone().resolve_into(context, output)?;
+            context.variables.drop("matrix", self.values.keys());
         }
         Ok(())
     }
@@ -457,6 +509,7 @@ impl TryFrom<&ArgMatches> for Config {
 pub mod tests {
     use super::*;
     use crate::yurt_command;
+    use pretty_assertions::assert_eq;
 
     #[inline]
     pub fn get_context(args: &[&str]) -> Context {
@@ -484,7 +537,6 @@ pub mod tests {
 
         mod io {
             use super::*;
-            use pretty_assertions::assert_eq;
             use std::fs::read_to_string;
             use std::path::{Path, PathBuf};
 
@@ -524,7 +576,7 @@ pub mod tests {
                         let raw_output = read_to_string(&dir.join("output.yaml"))
                             .expect("Failed to read output");
                         let yaml = resolved.into_yaml().unwrap();
-                        assert_eq!(yaml, raw_output)
+                        pretty_assertions::assert_eq!(yaml, raw_output)
                     }
                 };
             }
@@ -559,18 +611,16 @@ pub mod tests {
     }
 
     #[test]
-    fn variable_sub() {
+    fn path_variable_sub() {
         let mut context = get_context(&[]);
-        context.set_variable("name", "var_1", "val_1");
-        context.set_variable("name", "var_2", "val_2");
-        assert!(!context.replace_variables("~").unwrap().is_empty());
-        assert_eq!(
-            context.replace_variables("${{ name.var_1 }}").unwrap(),
-            "val_1"
-        );
+        context
+            .variables
+            .push("name", [("var_1", "val_1"), ("var_2", "val_2")].into_iter());
+        assert!(!context.parse_path("~").unwrap().is_empty());
+        assert_eq!(context.parse_path("${{ name.var_1 }}").unwrap(), "val_1");
         assert_eq!(
             context
-                .replace_variables("${{ name.var_1 }}/${{ name.var_2 }}")
+                .parse_path("${{ name.var_1 }}/${{ name.var_2 }}")
                 .unwrap(),
             "val_1/val_2"
         );
@@ -579,13 +629,13 @@ pub mod tests {
     #[test]
     fn variable_sub_invalid() {
         let mut context = get_context(&[]);
-        context.set_variable("a", "b", "c");
-        assert!(context.replace_variables("${{ a.b.c }}").is_err());
-        assert!(context.replace_variables("${{ . }}").is_err());
-        assert!(context.replace_variables("${{ a. }}").is_err());
-        assert!(context.replace_variables("${{ .b }}").is_err());
-        assert!(context.replace_variables("${{ a.c }}").is_err()); // missing key
-        assert!(context.replace_variables("${{ b.a }}").is_err()); // missing namespace
+        context.variables.push("a", [("b", "c")].into_iter());
+        assert!(context.variables.parse_str("${{ a.b.c }}").is_err());
+        assert!(context.variables.parse_str("${{ . }}").is_err());
+        assert!(context.variables.parse_str("${{ a. }}").is_err());
+        assert!(context.variables.parse_str("${{ .b }}").is_err());
+        assert!(context.variables.parse_str("${{ a.c }}").is_err()); // missing key
+        assert!(context.variables.parse_str("${{ b.a }}").is_err()); // missing namespace
     }
 
     #[test]
@@ -599,8 +649,14 @@ pub mod tests {
         ").unwrap();
         let mut context = get_context(&[]);
         namespace.resolve_into_new(&mut context).unwrap();
-        assert_eq!(context.get_variable("namespace", "key_a").unwrap(), "val_a");
-        assert_eq!(context.get_variable("namespace", "key_b").unwrap(), "val_b");
+        assert_eq!(
+            context.variables.get("namespace", "key_a").unwrap(),
+            "val_a"
+        );
+        assert_eq!(
+            context.variables.get("namespace", "key_b").unwrap(),
+            "val_b"
+        );
     }
 
     #[test]
@@ -631,7 +687,9 @@ pub mod tests {
     #[test]
     fn matrix_expansion() {
         let mut context = get_context(&[]);
-        context.set_variable("outer", "key", "value");
+        context
+            .variables
+            .push("outer", [("key", "value")].into_iter());
         #[rustfmt::skip]
         let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
             values:

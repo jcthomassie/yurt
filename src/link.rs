@@ -108,8 +108,8 @@ impl fmt::Display for Link {
 impl Resolve for Link {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Link(Self::new(
-            context.replace_variables(self.head.to_str().unwrap_or(""))?,
-            context.replace_variables(self.tail.to_str().unwrap_or(""))?,
+            context.parse_path(self.head.to_str().unwrap_or(""))?,
+            context.parse_path(self.tail.to_str().unwrap_or(""))?,
         )))
     }
 }

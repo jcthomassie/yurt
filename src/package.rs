@@ -62,7 +62,7 @@ impl Package {
 impl Resolve for Package {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Install(Self {
-            name: context.replace_variables(&self.name)?,
+            name: context.variables.parse_str(&self.name)?,
             managers: match self.managers.is_empty() {
                 false => context
                     .managers
@@ -326,7 +326,9 @@ mod tests {
     fn package_name_substitution() {
         let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
         let mut context = get_context(&[]);
-        context.set_variable("namespace", "key", "value");
+        context
+            .variables
+            .push("namespace", [("key", "value")].into_iter());
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);

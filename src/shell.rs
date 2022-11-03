@@ -218,7 +218,7 @@ impl ShellCommand {
 impl Resolve for ShellCommand {
     fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Run(Self {
-            command: context.replace_variables(&self.command)?,
+            command: context.variables.parse_str(&self.command)?,
             ..self
         }))
     }
