@@ -1,9 +1,8 @@
----
 version: 0.2.0
 build:
-  - repo:
-      path: /home/dotfiles
-      url: "https://github.com/user/dotfiles.git"
-  - link:
-      - head: /dotfiles
-        tail: /home/dotfiles
+- !repo
+  path: /home/dotfiles
+  url: https://github.com/user/dotfiles.git
+- !link
+  - head: /dotfiles
+    tail: /home/dotfiles

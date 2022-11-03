@@ -1,11 +1,11 @@
 ---
 version: 0.3.0
 build:
-  - run:
+  - !run
       shell: /usr/bin/bash
       command: my-command
-  - link:
+  - !link
     - head: a
       tail: b
-  - install:
+  - !install
     - name: p

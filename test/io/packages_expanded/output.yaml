@@ -1,23 +1,22 @@
----
-version: "0.0"
+version: '0.0'
 build:
-  - install:
-      - name: package_a
-      - name: package_b
-  - require:
-      - cargo
-      - apt
-  - install:
-      - name: package_c
-        managers:
-          - cargo
-      - name: package_d
-        managers:
-          - apt
-      - name: package_e
-      - name: package_f
-        managers:
-          - cargo
-          - apt
-        aliases:
-          cargo: pack-f
+- !install
+  - name: package_a
+  - name: package_b
+- !require
+  - cargo
+  - apt
+- !install
+  - name: package_c
+    managers:
+    - cargo
+  - name: package_d
+    managers:
+    - apt
+  - name: package_e
+  - name: package_f
+    managers:
+    - cargo
+    - apt
+    aliases:
+      cargo: pack-f

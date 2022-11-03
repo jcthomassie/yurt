@@ -1,13 +1,13 @@
 ---
 version: 0.2.0
 build:
-  - namespace:
+  - !namespace
       name: names
       values:
         alpha: package_2
         beta: package_3
         gamma: package_4
-  - install:
+  - !install
     - name: ${{ names.alpha }}
     - name: ${{ names.beta }}
     - name: ${{ names.gamma }}

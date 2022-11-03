@@ -1,9 +1,8 @@
----
 version: 0.3.0
 build:
-  - run:
-      shell: /usr/bin/bash
-      command: my-command
-  - link:
-      - head: a
-        tail: b
+- !run
+  shell: /usr/bin/bash
+  command: my-command
+- !link
+  - head: a
+    tail: b

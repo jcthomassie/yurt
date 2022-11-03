@@ -1,11 +1,11 @@
 ---
 version: 0.1.0
 build:
-  - matrix:
+  - !matrix
       values:
         number: [ 1, 2, 3 ]
         letter: [ a, b, c ]
       include:
-      - link:
+      - !link
         - tail: dir_${{ matrix.letter }}/tail_${{ matrix.number }}
           head: dir_${{ matrix.letter }}/head_${{ matrix.number }}

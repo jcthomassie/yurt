@@ -1,41 +1,41 @@
 ---
 version: 0.4.0
 build:
-  - case:
-    - positive:
+  - !case
+    - !positive
         condition:
           user: not_user
         include:
-        - install:
+        - !install
           - name: not_package
-    - default:
+    - !default
         include:
         # Nested conditional
-        - case:
-          - positive:
+        - !case
+          - !positive
               condition:
                 user: not_user
               include:
-                - require:
+                - !require
                   - choco
-          - negative:
+          - !negative
               condition: false
               include:
-                - install:
+                - !install
                   - name: package_0
-        - install:
+        - !install
           - name: package_1
             managers: [ apt, apt-get ]
             aliases: { apt: package_1-alias }
-  - case:
-    - negative:
+  - !case
+    - !negative
         condition: bad-command
         include:
-          - install:
+          - !install
             - name: package_2
     # Break on first match
-    - positive:
+    - !positive
         condition: true
         include:
-          - install:
+          - !install
             - name: not_package
