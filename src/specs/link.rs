@@ -1,4 +1,4 @@
-use crate::units::{BuildUnit, Context, Resolve};
+use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
 use log::info;

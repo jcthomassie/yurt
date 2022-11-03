@@ -1,4 +1,4 @@
-use crate::units::{
+use crate::specs::{
     shell::{Cmd, Shell},
     BuildUnit, Context, Resolve,
 };

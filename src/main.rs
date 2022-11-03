@@ -7,9 +7,9 @@
 )]
 mod config;
 mod context;
-mod units;
+mod specs;
 
-use self::{config::ResolvedConfig, units::BuildUnit};
+use self::{config::ResolvedConfig, specs::BuildUnit};
 use anyhow::{Context, Result};
 use clap::{command, Arg, Command};
 use log::debug;

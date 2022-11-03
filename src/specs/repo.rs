@@ -1,4 +1,4 @@
-use crate::units::{BuildUnit, Context, Resolve};
+use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{Context as _, Result};
 use git2::Repository;

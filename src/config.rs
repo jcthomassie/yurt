@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    units::{BuildSpec, BuildUnit, ResolveInto},
+    specs::{BuildSpec, BuildUnit, ResolveInto},
 };
 
 use anyhow::{Context as _, Result};

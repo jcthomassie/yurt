@@ -1,4 +1,4 @@
-use crate::units::PackageManager;
+use crate::specs::PackageManager;
 
 use anyhow::{anyhow, Context as _, Result};
 use clap::ArgMatches;

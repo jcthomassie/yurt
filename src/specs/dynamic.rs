@@ -1,6 +1,6 @@
 use crate::{
     context::{Context, LocaleSpec},
-    units::{shell::ShellCommand, BuildUnit, ResolveInto},
+    specs::{shell::ShellCommand, BuildUnit, ResolveInto},
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -125,7 +125,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{context::tests::get_context, units::BuildSpec};
+    use crate::{context::tests::get_context, specs::BuildSpec};
     use pretty_assertions::assert_eq;
 
     macro_rules! yaml_condition {
