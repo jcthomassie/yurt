@@ -4,15 +4,12 @@
     clippy::module_name_repetitions,
     clippy::must_use_candidate
 )]
-mod build;
-mod condition;
-mod link;
-mod package;
-mod repo;
-mod shell;
+mod config;
+mod context;
+mod units;
 
+use self::{config::ResolvedConfig, units::BuildUnit};
 use anyhow::{Context, Result};
-use build::{BuildUnit, ResolvedConfig};
 use clap::{command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};

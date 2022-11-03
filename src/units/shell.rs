@@ -1,5 +1,6 @@
-use crate::build::{self, BuildUnit, Resolve};
-use anyhow::{anyhow, Context, Result};
+use crate::units::{BuildUnit, Context, Resolve};
+
+use anyhow::{anyhow, Context as _, Result};
 use log::debug;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -216,7 +217,7 @@ impl ShellCommand {
 }
 
 impl Resolve for ShellCommand {
-    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Run(Self {
             command: context.variables.parse_str(&self.command)?,
             ..self

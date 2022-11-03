@@ -1,7 +1,8 @@
-use crate::{
-    build::{self, BuildUnit, Resolve},
+use crate::units::{
     shell::{Cmd, Shell},
+    BuildUnit, Context, Resolve,
 };
+
 use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::{info, warn};
@@ -60,7 +61,7 @@ impl Package {
 }
 
 impl Resolve for Package {
-    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Install(Self {
             name: context.variables.parse_str(&self.name)?,
             managers: match self.managers.is_empty() {
@@ -186,7 +187,7 @@ impl PackageManager {
 }
 
 impl Resolve for PackageManager {
-    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         context.managers.insert(self);
         Ok(BuildUnit::Require(self))
     }
@@ -211,7 +212,7 @@ fn which_has(cmd: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::build::tests::get_context;
+    use crate::context::tests::get_context;
 
     macro_rules! check_missing {
         ($manager:ident, $mod_name:ident, $expect_fake:expr, $expect_empty:expr) => {

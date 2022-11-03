@@ -1,5 +1,6 @@
-use crate::build::{self, BuildUnit, Resolve};
-use anyhow::{anyhow, Context, Error, Result};
+use crate::units::{BuildUnit, Context, Resolve};
+
+use anyhow::{anyhow, Context as _, Error, Result};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
@@ -106,7 +107,7 @@ impl fmt::Display for Link {
 }
 
 impl Resolve for Link {
-    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Link(Self::new(
             context.parse_path(self.head.to_str().unwrap_or(""))?,
             context.parse_path(self.tail.to_str().unwrap_or(""))?,

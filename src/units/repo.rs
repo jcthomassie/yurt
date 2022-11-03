@@ -1,5 +1,6 @@
-use crate::build::{self, BuildUnit, Resolve};
-use anyhow::{Context, Result};
+use crate::units::{BuildUnit, Context, Resolve};
+
+use anyhow::{Context as _, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
@@ -38,7 +39,7 @@ impl Repo {
 }
 
 impl Resolve for Repo {
-    fn resolve(self, context: &mut build::Context) -> Result<BuildUnit> {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         let new = Self {
             path: context.parse_path(&self.path)?,
             ..self
