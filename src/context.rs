@@ -150,7 +150,7 @@ impl VarStack {
         let key = Self::key(namespace.as_ref(), variable.as_ref());
         match self.get_raw(&key) {
             Some(value) => Ok(value.clone()),
-            None if namespace.as_ref() == "env" => env::var(key).with_context(|| {
+            None if namespace.as_ref() == "env" => env::var(variable.as_ref()).with_context(|| {
                 format!("Failed to get environment variable: {}", variable.as_ref())
             }),
             None => Err(anyhow!("Variable {} is undefined", key)),
