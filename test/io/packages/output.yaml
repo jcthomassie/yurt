@@ -1,7 +1,6 @@
----
-version: "0.0"
+version: '0.0'
 build:
-  - install:
-      - name: package_a
-      - name: package_b
-      - name: package_c
+- !install
+  - name: package_a
+  - name: package_b
+  - name: package_c

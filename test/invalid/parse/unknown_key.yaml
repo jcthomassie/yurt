@@ -3,6 +3,6 @@ version: 0.3.0
 something: invalid
 build:
   include:
-  - link:
+  - !link
     - tail: t
       head: h

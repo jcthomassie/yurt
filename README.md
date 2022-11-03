@@ -40,28 +40,28 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 
 `build`
 
-- `repo`
+- `!repo`
   - `path` local repo directory path
   - `url` remote url for cloning the repo
-- `namespace` map of substitution values
+- `!namespace` map of substitution values
   - `name` name of the namespace
   - `values` variable definitions
-- `matrix` repeat include block for each value
+- `!matrix` repeat include block for each value
   - `values` values to substitute in the include block
   - `include` build steps to be repeated
-- `case` list of conditional build steps
+- `!case` list of conditional build steps
   - `positive` if the spec matches the local spec
   - `negative` if the spec does not match the local spec
   - `default` if none of the preceeding conditions are met
-- `link` list of symlinks to be applied
-- `run` shell command to run on install
+- `!link` list of symlinks to be applied
+- `!run` shell command to run on install
   - `shell` shell to run the command with
   - `command` command to run
-- `install` list of packages to install
+- `!install` list of packages to install
   - `name` package name
   - `managers` (optional) list of package managers that provide the package
   - `aliases` (optional) package aliases for specific package managers
-- `require` list of package managers to bootstrap
+- `!require` list of package managers to bootstrap
 
 Some build steps (such as `require` and `namespace`) modify the resolver state.
 The order of build steps may change the resolved values.
@@ -73,39 +73,39 @@ The order of build steps may change the resolved values.
 version: 0.4.0
 build:
   # Require dotfile repo
-  - repo:
+  - !repo
       path: ~/dotfiles
       url: https://github.com/jcthomassie/dotfiles.git
 
   # Specify package managers
-  - case:
-    - positive:
+  - !case
+    - !positive
         condition: { distro: ubuntu }
         include:
-          - require:
+          - !require
             - apt
             - apt-get
-    - positive:
+    - !positive
         condition: { platform: windows }
         include:
-          - require:
+          - !require
             - choco
-    - negative:
+    - !negative
         condition: { platform: windows }
         include:
-          - require:
+          - !require
             - brew
           # Run a command with a specific shell
-          - run:
+          - !run
               shell: /usr/bin/bash
               command: brew bundle --file ${{ dotfiles.path }}/.brewfile
 
   # Run a command with the system default shell
-  - run: |
+  - !run |
       echo "hello world"
 
   # Install packages
-  - install:
+  - !install
     - name: bat
     - name: git
       managers:
@@ -117,7 +117,7 @@ build:
         cargo: git-delta
 
   # Apply symlinks
-  - link:
+  - !link
     - tail: ${{ dotfiles.path }}/.zsh/.zshrc
       head: ~/.zshrc
     - tail: ${{ dotfiles.path }}/.gitconfig

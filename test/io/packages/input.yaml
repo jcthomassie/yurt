@@ -1,9 +1,9 @@
 ---
 version: 0.0 # becomes explicit string
 build:
-  - install:
+  - !install
     - name: package_a
     - name: package_b
   # Separate chunk should be joined
-  - install:
+  - !install
     - name: package_c
