@@ -22,13 +22,14 @@ pub struct Package {
 }
 
 impl Package {
-    fn get_name(&self, manager: &PackageManager) -> &String {
-        self.aliases.get(manager).unwrap_or(&self.name)
+    fn get_name(&self, manager: PackageManager) -> &String {
+        self.aliases.get(&manager).unwrap_or(&self.name)
     }
 
-    fn manager_names(&self) -> impl Iterator<Item = (&PackageManager, &String)> {
+    fn manager_names(&self) -> impl Iterator<Item = (PackageManager, &String)> {
         self.managers
             .iter()
+            .copied()
             .map(move |manager| (manager, self.get_name(manager)))
     }
 
@@ -282,8 +283,8 @@ mod tests {
                 map
             },
         };
-        assert_eq!(package.get_name(&aliased), "alias");
-        for manager in &managers {
+        assert_eq!(package.get_name(aliased), "alias");
+        for manager in managers {
             assert_eq!(package.get_name(manager), "name");
         }
     }

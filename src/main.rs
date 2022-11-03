@@ -1,5 +1,6 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
+    clippy::derive_partial_eq_without_eq,
     clippy::match_bool,
     clippy::module_name_repetitions,
     clippy::must_use_candidate

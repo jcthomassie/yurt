@@ -41,7 +41,7 @@ pub trait Cmd {
     fn call(&self, args: &[&str]) -> Result<()> {
         self.call_bool(args).and_then(|success| {
             success
-                .then(|| ())
+                .then_some(())
                 .with_context(|| anyhow!("Command exited with error: `{}`", self.format(args)))
         })
     }

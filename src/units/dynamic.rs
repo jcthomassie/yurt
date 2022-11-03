@@ -94,7 +94,7 @@ impl<T> Matrix<T> {
         match counts.next() {
             Some(first) => counts
                 .all(|next| next == first)
-                .then(|| first)
+                .then_some(first)
                 .context("Matrix array size mismatch"),
             None => bail!("Matrix values must be non-empty"),
         }
