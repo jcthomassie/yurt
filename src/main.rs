@@ -11,12 +11,12 @@ mod specs;
 
 use self::{config::ResolvedConfig, specs::BuildUnit};
 use anyhow::{Context, Result};
-use clap::{command, Arg, Command};
+use clap::{builder::PossibleValuesParser, command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
 
 #[inline]
-pub fn yurt_command() -> Command<'static> {
+pub fn yurt_command() -> Command {
     command!()
         .subcommand(
             Command::new("install")
@@ -26,7 +26,7 @@ pub fn yurt_command() -> Command<'static> {
                         .help("Clean link target conflicts")
                         .short('c')
                         .long("clean")
-                        .takes_value(false),
+                        .num_args(0),
                 ),
         )
         .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
@@ -37,7 +37,7 @@ pub fn yurt_command() -> Command<'static> {
                     .help("Hide trivial build units")
                     .short('n')
                     .long("non-trivial")
-                    .takes_value(false),
+                    .num_args(0),
             ),
         )
         .arg(
@@ -45,13 +45,13 @@ pub fn yurt_command() -> Command<'static> {
                 .help("YAML build file path")
                 .short('y')
                 .long("yaml")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("yaml-url")
                 .help("YAML build file URL")
                 .long("yaml-url")
-                .takes_value(true)
+                .num_args(1)
                 .conflicts_with("yaml"),
         )
         .arg(
@@ -59,18 +59,15 @@ pub fn yurt_command() -> Command<'static> {
                 .help("Logging level")
                 .short('l')
                 .long("log")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("exclude")
                 .help("Exclude build types")
                 .short('E')
                 .long("exclude")
-                .takes_value(true)
-                .use_value_delimiter(true)
-                .require_value_delimiter(true)
-                .multiple_values(true)
-                .possible_values(BuildUnit::ALL_NAMES)
+                .value_delimiter(',')
+                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
                 .hide_possible_values(true),
         )
         .arg(
@@ -78,11 +75,8 @@ pub fn yurt_command() -> Command<'static> {
                 .help("Include build types")
                 .short('I')
                 .long("include")
-                .takes_value(true)
-                .use_value_delimiter(true)
-                .require_value_delimiter(true)
-                .multiple_values(true)
-                .possible_values(BuildUnit::ALL_NAMES)
+                .value_delimiter(',')
+                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
                 .hide_possible_values(true)
                 .conflicts_with("exclude"),
         )
@@ -90,19 +84,19 @@ pub fn yurt_command() -> Command<'static> {
             Arg::new("user")
                 .help("Override target user name")
                 .long("override-user")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("platform")
                 .help("Override target platform")
                 .long("override-platform")
-                .takes_value(true),
+                .num_args(1),
         )
         .arg(
             Arg::new("distro")
                 .help("Override target distro")
                 .long("override-distro")
-                .takes_value(true),
+                .num_args(1),
         )
 }
 
@@ -112,7 +106,7 @@ fn main() -> Result<()> {
         .arg_required_else_help(true)
         .get_matches();
 
-    if let Some(level) = matches.value_of("log") {
+    if let Some(level) = matches.get_one::<&str>("log") {
         env::set_var("RUST_LOG", level);
     }
     env_logger::init();
@@ -121,8 +115,8 @@ fn main() -> Result<()> {
     let result = ResolvedConfig::try_from(&matches)
         .context("Failed to resolve build")
         .and_then(|r| match matches.subcommand() {
-            Some(("show", s)) => r.show(s.is_present("non-trivial")),
-            Some(("install", s)) => r.install(s.is_present("clean")),
+            Some(("show", s)) => r.show(s.get_flag("non-trivial")),
+            Some(("install", s)) => r.install(s.get_flag("clean")),
             Some(("uninstall", _)) => r.uninstall(),
             Some(("clean", _)) => r.clean(),
             Some(("update", _)) => r.update(),

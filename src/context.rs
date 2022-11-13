@@ -77,13 +77,13 @@ impl From<&ArgMatches> for Locale {
     fn from(args: &ArgMatches) -> Self {
         Self {
             user: args
-                .value_of("user")
+                .get_one::<String>("user")
                 .map_or_else(Self::get_user, String::from),
             platform: args
-                .value_of("platform")
+                .get_one::<String>("platform")
                 .map_or_else(Self::get_platform, String::from),
             distro: args
-                .value_of("distro")
+                .get_one::<String>("distro")
                 .map_or_else(Self::get_distro, String::from),
         }
     }
