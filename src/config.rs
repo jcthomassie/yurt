@@ -150,10 +150,10 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
         Config::try_from(args)
             .and_then(|c| c.resolve(Context::from(args)))
             .map(|r| {
-                if let Some(units) = args.values_of("include") {
-                    r.include(&units.map(String::from).collect())
-                } else if let Some(units) = args.values_of("exclude") {
-                    r.exclude(&units.map(String::from).collect())
+                if let Some(units) = args.get_many::<String>("include") {
+                    r.include(&units.cloned().collect())
+                } else if let Some(units) = args.get_many::<String>("exclude") {
+                    r.exclude(&units.cloned().collect())
                 } else {
                     r
                 }
@@ -216,11 +216,11 @@ impl TryFrom<&ArgMatches> for Config {
     type Error = anyhow::Error;
 
     fn try_from(args: &ArgMatches) -> Result<Self> {
-        if let Some(url) = args.value_of("yaml-url") {
+        if let Some(url) = args.get_one::<String>("yaml-url") {
             Self::from_url(url)
         } else {
-            Self::from_path(match args.value_of("yaml") {
-                Some(path) => path.to_string(),
+            Self::from_path(match args.get_one::<String>("yaml") {
+                Some(path) => path.clone(),
                 None => env::var("YURT_BUILD_FILE").context("Build file not specified")?,
             })
         }
