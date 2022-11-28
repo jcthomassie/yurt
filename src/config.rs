@@ -300,7 +300,7 @@ pub mod tests {
             test_case!(packages);
             test_case!(packages_expanded);
             test_case!(matrix);
-            test_case!(namespace);
+            test_case!(vars);
             test_case!(case);
             test_case!(repo);
             test_case!(exclude);

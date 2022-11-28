@@ -70,14 +70,15 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Namespace {
-    name: String,
-    values: IndexMap<String, String>,
+pub struct Vars(IndexMap<String, String>);
+
+impl Vars {
+    const NAMESPACE: &str = "vars";
 }
 
-impl ResolveInto for Namespace {
+impl ResolveInto for Vars {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
-        context.variables.push(&self.name, self.values.iter());
+        context.variables.push(Self::NAMESPACE, self.0.iter());
         Ok(())
     }
 }
@@ -89,6 +90,8 @@ pub struct Matrix<T> {
 }
 
 impl<T> Matrix<T> {
+    const NAMESPACE: &str = "matrix";
+
     fn length(&self) -> Result<usize> {
         let mut counts = self.values.values().map(Vec::len);
         match counts.next() {
@@ -114,9 +117,9 @@ where
                 .collect::<Result<Vec<_>>>()?;
             context
                 .variables
-                .push("matrix", self.values.keys().zip(vals.iter()));
+                .push(Self::NAMESPACE, self.values.keys().zip(vals.iter()));
             self.include.clone().resolve_into(context, output)?;
-            context.variables.drop("matrix", self.values.keys());
+            context.variables.drop(Self::NAMESPACE, self.values.keys());
         }
         Ok(())
     }
@@ -196,22 +199,20 @@ mod tests {
     }
 
     #[test]
-    fn namespace_resolves() {
+    fn vars_resolve() {
         #[rustfmt::skip]
-        let namespace: Namespace = serde_yaml::from_str("
-            name: namespace
-            values:
-              key_a: val_a
-              key_b: val_b
+        let vars: Vars = serde_yaml::from_str("
+            key_a: val_a
+            key_b: val_b
         ").unwrap();
         let mut context = get_context(&[]);
-        namespace.resolve_into_new(&mut context).unwrap();
+        vars.resolve_into_new(&mut context).unwrap();
         assert_eq!(
-            context.variables.get("namespace", "key_a").unwrap(),
+            context.variables.get(Vars::NAMESPACE, "key_a").unwrap(),
             "val_a"
         );
         assert_eq!(
-            context.variables.get("namespace", "key_b").unwrap(),
+            context.variables.get(Vars::NAMESPACE, "key_b").unwrap(),
             "val_b"
         );
     }

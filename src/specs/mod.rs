@@ -6,7 +6,7 @@ mod shell;
 
 pub use self::package::PackageManager;
 use self::{
-    dynamic::{Case, Matrix, Namespace},
+    dynamic::{Case, Matrix, Vars},
     link::Link,
     package::Package,
     repo::Repo,
@@ -74,7 +74,7 @@ impl BuildUnit {
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
     Repo(Repo),
-    Namespace(Namespace),
+    Vars(Vars),
     Matrix(Matrix<Vec<BuildSpec>>),
     Case(Case<Vec<BuildSpec>>),
     Link(Vec<Link>),
@@ -107,7 +107,7 @@ impl ResolveInto for BuildSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
             Self::Repo(r) => r.resolve_into(context, output),
-            Self::Namespace(n) => n.resolve_into(context, output),
+            Self::Vars(v) => v.resolve_into(context, output),
             Self::Matrix(m) => m.resolve_into(context, output),
             Self::Case(v) => v.resolve_into(context, output),
             Self::Link(v) => v.resolve_into(context, output),

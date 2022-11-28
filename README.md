@@ -43,9 +43,7 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 - `!repo`
   - `path` local repo directory path
   - `url` remote url for cloning the repo
-- `!namespace` map of substitution values
-  - `name` name of the namespace
-  - `values` variable definitions
+- `!vars` map of substitution values
 - `!matrix` repeat include block for each value
   - `values` values to substitute in the include block
   - `include` build steps to be repeated
@@ -63,7 +61,7 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `aliases` (optional) package aliases for specific package managers
 - `!require` list of package managers to bootstrap
 
-Some build steps (such as `require` and `namespace`) modify the resolver state.
+Some build steps (such as `require` and `vars`) modify the resolver state.
 The order of build steps may change the resolved values.
 
 ### Example

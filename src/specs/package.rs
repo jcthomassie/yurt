@@ -326,11 +326,11 @@ mod tests {
 
     #[test]
     fn package_name_substitution() {
-        let spec: Package = serde_yaml::from_str("name: ${{ namespace.key }}").unwrap();
+        let spec: Package = serde_yaml::from_str("name: ${{ vars.key }}").unwrap();
         let mut context = get_context(&[]);
         context
             .variables
-            .push("namespace", [("key", "value")].into_iter());
+            .push("vars", [("key", "value")].into_iter());
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
