@@ -149,14 +149,16 @@ impl VarStack {
     }
 
     pub fn get<N: AsRef<str>, K: AsRef<str>>(&self, namespace: N, variable: K) -> Result<String> {
-        let key = Self::key(namespace.as_ref(), variable.as_ref());
-        match self.get_raw(&key) {
-            Some(value) => Ok(value.clone()),
-            None if namespace.as_ref() == Self::ENV_NAMESPACE => env::var(variable.as_ref())
-                .with_context(|| {
-                    format!("Failed to get environment variable: {}", variable.as_ref())
-                }),
-            None => Err(anyhow!("Variable {} is undefined", key)),
+        let var = variable.as_ref();
+        match namespace.as_ref() {
+            Self::ENV_NAMESPACE => env::var(var)
+                .with_context(|| format!("Failed to get environment variable: {}", var)),
+            other => {
+                let key = Self::key(other, var);
+                self.get_raw(&key)
+                    .cloned()
+                    .with_context(|| format!("Variable {} is undefined", &key))
+            }
         }
     }
 
