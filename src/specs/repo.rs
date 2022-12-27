@@ -13,12 +13,12 @@ pub struct Repo {
 impl Repo {
     pub fn open(&self) -> Result<Repository> {
         Repository::open(&self.path)
-            .with_context(|| format!("Failed to open git repository: {:?}", self))
+            .with_context(|| format!("Failed to open git repository: {self:?}"))
     }
 
     pub fn clone(&self) -> Result<Repository> {
         Repository::clone_recurse(&self.url, &self.path)
-            .with_context(|| format!("Failed to clone git repository: {:?}", self))
+            .with_context(|| format!("Failed to clone git repository: {self:?}"))
     }
 
     pub fn require(&self) -> Result<Repository> {

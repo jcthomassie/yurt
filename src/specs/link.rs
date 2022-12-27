@@ -63,7 +63,7 @@ impl Link {
                     fs::create_dir_all(dir)?;
                 }
                 symlink::symlink_auto(&self.tail, &self.head)
-                    .with_context(|| format!("Failed to apply symlink: {}", self))
+                    .with_context(|| format!("Failed to apply symlink: {self}"))
             }
             Status::NullTail => Err(anyhow!("Link tail does not exist")),
             Status::InvalidHead(e) => Err(e.context("Invalid link head")),
@@ -81,7 +81,7 @@ impl Link {
                 } else {
                     symlink::remove_symlink_dir(&self.head)
                 }
-                .with_context(|| format!("Failed to remove symlink: {}", self))
+                .with_context(|| format!("Failed to remove symlink: {self}"))
             }
             _ => Ok(()),
         }
@@ -93,7 +93,7 @@ impl Link {
             Status::InvalidHead(_) | Status::InvalidTail(_) => {
                 info!("Removing {:?}", &self.head);
                 fs::remove_file(&self.head)
-                    .with_context(|| format!("Failed to clean link head: {}", self))
+                    .with_context(|| format!("Failed to clean link head: {self}"))
             }
             _ => Ok(()),
         }

@@ -136,9 +136,9 @@ impl PackageManager {
             Self::Brew => self.call_bool(&["list", package]),
             Self::Cargo => Shell::default().run_bool(
                 if cfg!(windows) {
-                    format!("cargo install --list | findstr /b /l /c:{}", package)
+                    format!("cargo install --list | findstr /b /l /c:{package}")
                 } else {
-                    format!("cargo install --list | grep '^{} v'", package)
+                    format!("cargo install --list | grep '^{package} v'")
                 }
                 .as_str(),
             ),

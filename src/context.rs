@@ -151,8 +151,9 @@ impl VarStack {
     pub fn get<N: AsRef<str>, K: AsRef<str>>(&self, namespace: N, variable: K) -> Result<String> {
         let var = variable.as_ref();
         match namespace.as_ref() {
-            Self::ENV_NAMESPACE => env::var(var)
-                .with_context(|| format!("Failed to get environment variable: {}", var)),
+            Self::ENV_NAMESPACE => {
+                env::var(var).with_context(|| format!("Failed to get environment variable: {var}"))
+            }
             other => {
                 let key = Self::key(other, var);
                 self.get_raw(&key)
