@@ -14,7 +14,7 @@ edition = "2021"
 anyhow = "1.0.66"
 clap = { version = "4.0.23", features = ["cargo"] }
 dirs = "4.0.0"
-env_logger = "0.9.3"
+env_logger = "0.10.0"
 git2 = "0.15.0"
 indexmap = { version = "1.9.1", features = ["serde"] }
 lazy_static = "1.4.0"
