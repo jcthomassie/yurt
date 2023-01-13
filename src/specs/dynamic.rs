@@ -14,7 +14,6 @@ enum Condition {
     Bool(bool),
     Locale(LocaleSpec),
     Command(ShellCommand),
-    Operator(Operator),
 }
 
 impl Condition {
@@ -23,7 +22,6 @@ impl Condition {
             Self::Bool(literal) => Ok(*literal),
             Self::Locale(spec) => Ok(spec.is_local(context)),
             Self::Command(command) => command.run_bool(),
-            Self::Operator(op) => op.evaluate(context),
         }
     }
 }
@@ -33,7 +31,7 @@ impl Condition {
 enum Operator {
     All(Vec<Condition>),
     Any(Vec<Condition>),
-    Not(Box<Condition>),
+    Not(Condition),
 }
 
 impl Operator {
@@ -50,7 +48,7 @@ impl Operator {
                     Self::Not(_) => unreachable!(),
                 })
             }
-            Self::Not(c) => (*c).evaluate(context).map(Not::not),
+            Self::Not(c) => c.evaluate(context).map(Not::not),
         }
     }
 }
