@@ -122,7 +122,7 @@ fn main() -> Result<()> {
             Some(("update", _)) => r.update(),
             _ => unreachable!(),
         })
-        .with_context(|| format!("Subcommand failed: {:?}", matches.subcommand_name()));
+        .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
     debug!("Runtime: {:?}", timer.elapsed());
     result
 }
