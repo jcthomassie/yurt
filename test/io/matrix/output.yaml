@@ -1,4 +1,4 @@
-version: 0.5.0
+version: '>=0.5.0'
 build:
 - !link
   - head: dir_a/head_1

@@ -3,18 +3,25 @@ use crate::{
     specs::{BuildSpec, BuildUnit, ResolveInto},
 };
 
-use anyhow::{Context as _, Result};
+use anyhow::{bail, Context as _, Result};
 use clap::{crate_version, ArgMatches};
-use log::{info, warn};
+use lazy_static::lazy_static;
+use log::info;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, env, fs::File, io::BufReader, path::Path};
+
+lazy_static! {
+    static ref VERSION: Version = Version::parse(crate_version!()).unwrap();
+    static ref DEFAULT_VERSION_REQ: VersionReq = VersionReq::parse(crate_version!()).unwrap();
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
     context: Context,
-    version: Option<String>,
+    version: VersionReq,
     build: Vec<BuildUnit>,
 }
 
@@ -133,7 +140,7 @@ impl ResolvedConfig {
             });
         }
         Config {
-            version: self.version,
+            version: Some(self.version),
             build,
         }
     }
@@ -164,7 +171,7 @@ impl TryFrom<&ArgMatches> for ResolvedConfig {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    version: Option<String>,
+    version: Option<VersionReq>,
     build: Vec<BuildSpec>,
 }
 
@@ -186,27 +193,17 @@ impl Config {
             })
     }
 
-    #[inline]
-    fn version_matches(&self, strict: bool) -> bool {
-        match self.version {
-            Some(ref v) => v == crate_version!(),
-            None => !strict,
-        }
-    }
-
     fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
-        if !self.version_matches(false) {
-            warn!(
-                "Config version mismatch: {} | {}",
-                self.version.as_deref().unwrap_or("None"),
-                crate_version!()
-            );
-        }
+        let version = match self.version {
+            Some(req) if req.matches(&VERSION) => req,
+            Some(req) => bail!("Version requirement not satisfied: {} ({})", req, *VERSION),
+            None => DEFAULT_VERSION_REQ.clone(),
+        };
         // Resolve build
         Ok(ResolvedConfig {
-            version: self.version,
             build: self.build.resolve_into_new(&mut context)?,
+            version,
             context,
         })
     }
@@ -234,22 +231,6 @@ pub mod tests {
 
     mod yaml {
         use super::*;
-
-        #[test]
-        fn version_check() {
-            let mut cfg = Config {
-                version: None,
-                build: Vec::new(),
-            };
-            assert!(!cfg.version_matches(true));
-            assert!(cfg.version_matches(false));
-            cfg.version = Some("9.9.9".to_string());
-            assert!(!cfg.version_matches(true));
-            assert!(!cfg.version_matches(false));
-            cfg.version = Some(crate_version!().to_string());
-            assert!(cfg.version_matches(true));
-            assert!(cfg.version_matches(false));
-        }
 
         mod io {
             use super::*;
@@ -323,6 +304,7 @@ pub mod tests {
             test_case!(empty);
             test_case!(no_build);
             test_case!(unknown_key);
+            test_case!(version_mismatch);
         }
     }
 }

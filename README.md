@@ -36,7 +36,7 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 
 ### Fields
 
-`version` yurt version for compatibility check
+`version` yurt version for compatibility check (uses [semver](https://docs.rs/semver/latest/semver/index.html))
 
 `build`
 
@@ -68,7 +68,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: 0.5.0
+version: "~0.5.0"
 build:
   # Require dotfile repo
   - !repo
