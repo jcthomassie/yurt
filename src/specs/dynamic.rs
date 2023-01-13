@@ -14,6 +14,7 @@ enum Condition {
     Bool(bool),
     Locale(LocaleSpec),
     Command(ShellCommand),
+    Operator(Operator),
 }
 
 impl Condition {
@@ -22,6 +23,34 @@ impl Condition {
             Self::Bool(literal) => Ok(*literal),
             Self::Locale(spec) => Ok(spec.is_local(context)),
             Self::Command(command) => command.run_bool(),
+            Self::Operator(op) => op.evaluate(context),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(rename_all(deserialize = "snake_case"))]
+enum Operator {
+    All(Vec<Condition>),
+    Any(Vec<Condition>),
+    Not(Box<Condition>),
+}
+
+impl Operator {
+    fn evaluate(&self, context: &Context) -> Result<bool> {
+        match self {
+            Self::All(conds) | Self::Any(conds) => {
+                let evaluated = conds
+                    .iter()
+                    .map(|c| c.evaluate(context))
+                    .collect::<Result<Vec<bool>>>()?;
+                Ok(match self {
+                    Self::All(_) => evaluated.into_iter().all(|b| b),
+                    Self::Any(_) => evaluated.into_iter().any(|b| b),
+                    Self::Not(_) => unreachable!(),
+                })
+            }
+            Self::Not(c) => (*c).evaluate(context).map(Not::not),
         }
     }
 }
@@ -156,6 +185,32 @@ mod tests {
     fn bool_condition() {
         yaml_condition!("true", Condition::Bool(true), true);
         yaml_condition!("false", Condition::Bool(false), false);
+    }
+
+    macro_rules! yaml_operator {
+        ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
+            let op: Operator = serde_yaml::from_str($yaml).expect("Deserialization failed");
+            assert!(matches!(op, $enum_pattern));
+            assert_eq!(op.evaluate(&get_context(&[])).unwrap(), $evaluation);
+        };
+    }
+
+    #[test]
+    fn operator_all() {
+        yaml_operator!("!all [ true, true, true ]", Operator::All(_), true);
+        yaml_operator!("!all [ true, true, false ]", Operator::All(_), false);
+    }
+
+    #[test]
+    fn operator_any() {
+        yaml_operator!("!any [ false, false, false ]", Operator::Any(_), false);
+        yaml_operator!("!any [ false, false, true ]", Operator::Any(_), true);
+    }
+
+    #[test]
+    fn operator_not() {
+        yaml_operator!("!not false", Operator::Not(_), true);
+        yaml_operator!("!not true", Operator::Not(_), false);
     }
 
     #[test]
