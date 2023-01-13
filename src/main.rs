@@ -32,13 +32,22 @@ pub fn yurt_command() -> Command {
         .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
         .subcommand(Command::new("clean").about("Clean link target conflicts"))
         .subcommand(
-            Command::new("show").about("Show the resolved build").arg(
-                Arg::new("non-trivial")
-                    .help("Hide trivial build units")
-                    .short('n')
-                    .long("non-trivial")
-                    .num_args(0),
-            ),
+            Command::new("show")
+                .about("Show the resolved build")
+                .arg(
+                    Arg::new("non-trivial")
+                        .help("Hide trivial build units")
+                        .short('n')
+                        .long("non-trivial")
+                        .num_args(0),
+                )
+                .arg(
+                    Arg::new("context")
+                        .help("Print the build context")
+                        .short('c')
+                        .long("context")
+                        .num_args(0),
+                ),
         )
         .arg(
             Arg::new("yaml")
@@ -115,7 +124,7 @@ fn main() -> Result<()> {
     let result = ResolvedConfig::try_from(&matches)
         .context("Failed to resolve build")
         .and_then(|r| match matches.subcommand() {
-            Some(("show", s)) => r.show(s.get_flag("non-trivial")),
+            Some(("show", s)) => r.show(s.get_flag("non-trivial"), s.get_flag("context")),
             Some(("install", s)) => r.install(s.get_flag("clean")),
             Some(("uninstall", _)) => r.uninstall(),
             Some(("clean", _)) => r.clean(),

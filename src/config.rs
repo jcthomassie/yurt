@@ -67,10 +67,13 @@ impl ResolvedConfig {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
-    /// Pretty-print the complete build; optionally filter out trivial units
-    pub fn show(&self, nontrivial: bool) -> Result<()> {
+    /// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
+    pub fn show(&self, nontrivial: bool, context: bool) -> Result<()> {
+        if context {
+            println!("{:#?}", self.context);
+        };
         print!(
-            "{}",
+            "---\n{}",
             match nontrivial {
                 true => self.clone().nontrivial(),
                 false => self.clone(),
