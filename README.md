@@ -78,18 +78,18 @@ build:
   # Specify package managers
   - !case
     - !positive
-        condition: { distro: ubuntu }
+        condition: !locale { distro: ubuntu }
         include:
           - !require
             - apt
             - apt-get
     - !positive
-        condition: { platform: windows }
+        condition: !locale { platform: windows }
         include:
           - !require
             - choco
     - !negative
-        condition: { platform: windows }
+        condition: !locale { platform: windows }
         include:
           - !require
             - brew

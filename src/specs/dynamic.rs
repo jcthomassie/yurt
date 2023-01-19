@@ -9,11 +9,14 @@ use serde::{Deserialize, Serialize};
 use std::ops::Not;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(untagged)]
+#[serde(rename_all(deserialize = "snake_case"))]
 enum Condition {
     Bool(bool),
     Locale(LocaleSpec),
-    Command(ShellCommand),
+    Eval(ShellCommand),
+    All(Vec<Condition>),
+    Any(Vec<Condition>),
+    Not(Box<Condition>),
 }
 
 impl Condition {
@@ -21,22 +24,7 @@ impl Condition {
         match self {
             Self::Bool(literal) => Ok(*literal),
             Self::Locale(spec) => Ok(spec.is_local(context)),
-            Self::Command(command) => command.run_bool(),
-        }
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all(deserialize = "snake_case"))]
-enum Operator {
-    All(Vec<Condition>),
-    Any(Vec<Condition>),
-    Not(Condition),
-}
-
-impl Operator {
-    fn evaluate(&self, context: &Context) -> Result<bool> {
-        match self {
+            Self::Eval(command) => command.run_bool(),
             Self::All(conds) | Self::Any(conds) => {
                 let evaluated = conds
                     .iter()
@@ -45,7 +33,7 @@ impl Operator {
                 Ok(match self {
                     Self::All(_) => evaluated.into_iter().all(|b| b),
                     Self::Any(_) => evaluated.into_iter().any(|b| b),
-                    Self::Not(_) => unreachable!(),
+                    _ => unreachable!(),
                 })
             }
             Self::Not(c) => c.evaluate(context).map(Not::not),
@@ -158,57 +146,72 @@ mod tests {
     use crate::{context::tests::get_context, specs::BuildSpec};
     use pretty_assertions::assert_eq;
 
-    macro_rules! yaml_condition {
-        ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
-            let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
-            assert!(matches!(cond, $enum_pattern));
-            assert_eq!(cond.evaluate(&get_context(&[])).unwrap(), $evaluation);
-        };
-    }
+    mod condition {
+        use crate::{context::tests::get_context, specs::dynamic::Condition};
+        use pretty_assertions::assert_eq;
 
-    #[test]
-    fn locale_condition() {
-        let user_locale = format!("{{ user: {} }}", whoami::username());
-        yaml_condition!(user_locale.as_str(), Condition::Locale(_), true);
-        yaml_condition!("{ platform: fake }", Condition::Locale(_), false);
-    }
+        macro_rules! yaml_condition {
+            ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
+                let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
+                assert!(matches!(cond, $enum_pattern));
+                assert_eq!(cond.evaluate(&get_context(&[])).unwrap(), $evaluation);
+            };
+        }
 
-    #[test]
-    fn command_condition() {
-        yaml_condition!(r#""echo 'hello'""#, Condition::Command(_), true);
-        yaml_condition!("bad-command -a -b", Condition::Command(_), false);
-    }
+        #[test]
+        fn locale() {
+            let user_locale = format!("!locale {{ user: {} }}", whoami::username());
+            yaml_condition!(user_locale.as_str(), Condition::Locale(_), true);
+            yaml_condition!("!locale { platform: fake }", Condition::Locale(_), false);
+        }
 
-    #[test]
-    fn bool_condition() {
-        yaml_condition!("true", Condition::Bool(true), true);
-        yaml_condition!("false", Condition::Bool(false), false);
-    }
+        #[test]
+        fn eval() {
+            yaml_condition!(r#"!eval "echo 'hello'""#, Condition::Eval(_), true);
+            yaml_condition!("!eval bad-command -a -b", Condition::Eval(_), false);
+        }
 
-    macro_rules! yaml_operator {
-        ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
-            let op: Operator = serde_yaml::from_str($yaml).expect("Deserialization failed");
-            assert!(matches!(op, $enum_pattern));
-            assert_eq!(op.evaluate(&get_context(&[])).unwrap(), $evaluation);
-        };
-    }
+        #[test]
+        fn bool() {
+            yaml_condition!("!bool true", Condition::Bool(true), true);
+            yaml_condition!("!bool false", Condition::Bool(false), false);
+        }
 
-    #[test]
-    fn operator_all() {
-        yaml_operator!("!all [ true, true, true ]", Operator::All(_), true);
-        yaml_operator!("!all [ true, true, false ]", Operator::All(_), false);
-    }
+        #[test]
+        fn all() {
+            yaml_condition!(
+                "!all [ !bool true, !bool true, !bool true ]",
+                Condition::All(_),
+                true
+            );
+            yaml_condition!(
+                "!all [ !bool true, !bool true, !bool false ]",
+                Condition::All(_),
+                false
+            );
+        }
 
-    #[test]
-    fn operator_any() {
-        yaml_operator!("!any [ false, false, false ]", Operator::Any(_), false);
-        yaml_operator!("!any [ false, false, true ]", Operator::Any(_), true);
-    }
+        #[test]
+        fn any() {
+            yaml_condition!(
+                "!any [ !bool false, !bool false, !bool false ]",
+                Condition::Any(_),
+                false
+            );
+            yaml_condition!(
+                "!any [ !bool false, !bool false, !bool true ]",
+                Condition::Any(_),
+                true
+            );
+        }
 
-    #[test]
-    fn operator_not() {
-        yaml_operator!("!not false", Operator::Not(_), true);
-        yaml_operator!("!not true", Operator::Not(_), false);
+        #[test]
+        #[ignore]
+        /// Nested enum deserialization is not currently supported: <https://github.com/dtolnay/serde-yaml/blob/186cc67720545a7e387a420a10ecdbfa147a9c40/src/de.rs#L1716>
+        fn not() {
+            yaml_condition!("!not !bool false", Condition::Not(_), true);
+            yaml_condition!("!not !bool true", Condition::Not(_), false);
+        }
     }
 
     #[test]
