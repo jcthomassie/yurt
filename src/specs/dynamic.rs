@@ -42,28 +42,18 @@ impl Condition {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all(deserialize = "snake_case"))]
-enum CaseBranch<T> {
-    Positive { condition: Condition, include: T },
-    Negative { condition: Condition, include: T },
-    Default { include: T },
+struct CaseBranch<T> {
+    condition: Option<Condition>,
+    when: Option<bool>,
+    include: T,
 }
 
 impl<T> CaseBranch<T> {
     fn evaluate(&self, context: &Context) -> Result<bool> {
-        match self {
-            Self::Positive { condition, .. } => condition.evaluate(context),
-            Self::Negative { condition, .. } => condition.evaluate(context).map(Not::not),
-            Self::Default { .. } => Ok(true),
-        }
-    }
-
-    fn unpack(self) -> T {
-        match self {
-            Self::Positive { include, .. }
-            | Self::Negative { include, .. }
-            | Self::Default { include } => include,
-        }
+        self.condition
+            .as_ref()
+            .map_or(Ok(true), |c| c.evaluate(context))
+            .map(|b| b == self.when.unwrap_or(true))
     }
 }
 
@@ -77,7 +67,7 @@ where
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         for case in self.0 {
             if case.evaluate(context)? {
-                return case.unpack().resolve_into(context, output);
+                return case.include.resolve_into(context, output);
             };
         }
         Ok(())
@@ -217,8 +207,9 @@ mod tests {
     #[test]
     fn positive_match() {
         let context = get_context(&[]);
-        let case = CaseBranch::Positive {
-            condition: Condition::Bool(true),
+        let case = CaseBranch {
+            condition: Some(Condition::Bool(true)),
+            when: Some(true),
             include: "something",
         };
         assert!(case.evaluate(&context).unwrap());
@@ -227,8 +218,9 @@ mod tests {
     #[test]
     fn positive_non_match() {
         let context = get_context(&[]);
-        let case = CaseBranch::Positive {
-            condition: Condition::Bool(false),
+        let case = CaseBranch {
+            condition: Some(Condition::Bool(false)),
+            when: Some(true),
             include: "something",
         };
         assert!(!case.evaluate(&context).unwrap());
@@ -237,8 +229,9 @@ mod tests {
     #[test]
     fn negative_match() {
         let context = get_context(&[]);
-        let case = CaseBranch::Negative {
-            condition: Condition::Bool(false),
+        let case = CaseBranch {
+            condition: Some(Condition::Bool(false)),
+            when: Some(false),
             include: "something",
         };
         assert!(case.evaluate(&context).unwrap());
@@ -247,8 +240,9 @@ mod tests {
     #[test]
     fn negative_non_match() {
         let context = get_context(&[]);
-        let case = CaseBranch::Negative {
-            condition: Condition::Bool(true),
+        let case = CaseBranch {
+            condition: Some(Condition::Bool(true)),
+            when: Some(false),
             include: "something",
         };
         assert!(!case.evaluate(&context).unwrap());
