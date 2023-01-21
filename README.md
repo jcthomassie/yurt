@@ -68,7 +68,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: "~0.5.0"
+version: "~0.6.0"
 build:
   # Require dotfile repo
   - !repo
