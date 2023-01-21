@@ -2,40 +2,40 @@
 version: '>=0.5.0'
 build:
   - !case
-    - !positive
-        condition:
-          user: not_user
-        include:
+    - condition: !all
+        - !locale { user: user_a }
+        - !locale { user: user_b }
+      include:
+      - !install
+        - name: not_package
+    # Default case
+    - include:
+      # Nested conditional
+      - !case
+        - condition: !all
+            - !locale { user: user_a }
+            - !locale { user: user_b }
+          include:
+            - !require
+              - choco
+        # Negative case
+        - condition: !bool false
+          when: false
+          include:
+            - !install
+              - name: package_0
+      - !install
+        - name: package_1
+          managers: [ apt, apt-get ]
+          aliases: { apt: package_1-alias }
+  - !case
+    - condition: !eval bad-command
+      when: false
+      include:
+        - !install
+          - name: package_2
+    # Break on first match
+    - condition: !bool true
+      include:
         - !install
           - name: not_package
-    - !default
-        include:
-        # Nested conditional
-        - !case
-          - !positive
-              condition:
-                user: not_user
-              include:
-                - !require
-                  - choco
-          - !negative
-              condition: false
-              include:
-                - !install
-                  - name: package_0
-        - !install
-          - name: package_1
-            managers: [ apt, apt-get ]
-            aliases: { apt: package_1-alias }
-  - !case
-    - !negative
-        condition: bad-command
-        include:
-          - !install
-            - name: package_2
-    # Break on first match
-    - !positive
-        condition: true
-        include:
-          - !install
-            - name: not_package

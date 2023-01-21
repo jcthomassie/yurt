@@ -77,26 +77,22 @@ build:
 
   # Specify package managers
   - !case
-    - !positive
-        condition: { distro: ubuntu }
-        include:
-          - !require
-            - apt
-            - apt-get
-    - !positive
-        condition: { platform: windows }
-        include:
-          - !require
-            - choco
-    - !negative
-        condition: { platform: windows }
-        include:
-          - !require
-            - brew
-          # Run a command with a specific shell
-          - !run
-              shell: /usr/bin/bash
-              command: brew bundle --file ${{ dotfiles.path }}/.brewfile
+    - condition: !locale { distro: ubuntu }
+      include:
+        - !require
+          - apt
+          - apt-get
+    - condition: !locale { platform: windows }
+      include:
+        - !require
+          - choco
+    - include:
+        - !require
+          - brew
+        # Run a command with a specific shell
+        - !run
+            shell: /usr/bin/bash
+            command: brew bundle --file ${{ dotfiles.path }}/.brewfile
 
   # Run a command with the system default shell
   - !run |
