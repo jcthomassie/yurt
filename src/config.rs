@@ -234,49 +234,63 @@ pub mod tests {
 
     mod yaml {
         use super::*;
+        use std::fs::read_to_string;
+        use std::path::PathBuf;
 
-        mod io {
-            use super::*;
-            use std::fs::read_to_string;
-            use std::path::{Path, PathBuf};
+        struct TestData {
+            input_path: PathBuf,
+            output_path: PathBuf,
+            args_path: PathBuf,
+        }
 
-            fn get_test_path(parts: &[&str]) -> PathBuf {
-                [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
+        impl TestData {
+            fn new(parts: &[&str]) -> Self {
+                let dir: PathBuf = [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
                     .concat()
                     .iter()
-                    .collect()
+                    .collect();
+                Self {
+                    input_path: dir.join("input.yaml"),
+                    output_path: dir.join("output.yaml"),
+                    args_path: dir.join("args"),
+                }
             }
 
-            fn get_resolved(dir: &Path) -> ResolvedConfig {
-                let input = dir
-                    .join("input.yaml")
-                    .into_os_string()
-                    .into_string()
-                    .unwrap();
-                let mut args = vec!["yurt".to_string(), "--yaml".to_string(), input];
-                let arg_path = dir.join("args");
-                if arg_path.is_file() {
+            fn get_arg_matches(&self) -> ArgMatches {
+                let mut args = vec![
+                    "yurt".to_string(),
+                    "--yaml".to_string(),
+                    self.input_path.to_str().unwrap().to_owned(),
+                ];
+                if self.args_path.is_file() {
                     args.extend(
-                        read_to_string(dir.join("args"))
+                        read_to_string(&self.args_path)
                             .unwrap()
                             .split(' ')
                             .map(String::from),
                     );
                 }
-                ResolvedConfig::try_from(&yurt_command().get_matches_from(args))
-                    .expect("Failed to resolve input build")
+                yurt_command().get_matches_from(args)
             }
+
+            fn get_output_yaml(&self) -> String {
+                read_to_string(&self.output_path).expect("Failed to read output comparison")
+            }
+        }
+
+        mod io {
+            use super::*;
 
             macro_rules! test_case {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let dir = get_test_path(&["io", stringify!($name)]);
-                        let resolved = get_resolved(&dir);
-                        let raw_output = read_to_string(&dir.join("output.yaml"))
-                            .expect("Failed to read output");
-                        let yaml = resolved.into_yaml().unwrap();
-                        pretty_assertions::assert_eq!(yaml, raw_output)
+                        let test = TestData::new(&["io", stringify!($name)]);
+                        let resolved_yaml = ResolvedConfig::try_from(&test.get_arg_matches())
+                            .expect("Failed to resolve input build")
+                            .into_yaml()
+                            .expect("Failed to generate resolved yaml");
+                        pretty_assertions::assert_eq!(resolved_yaml, test.get_output_yaml())
                     }
                 };
             }
@@ -292,14 +306,14 @@ pub mod tests {
         }
 
         mod invalid_parse {
-            use super::Config;
+            use super::*;
 
             macro_rules! test_case {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let path = concat!("../test/invalid/parse/", stringify!($name), ".yaml");
-                        assert!(Config::from_path(path).is_err());
+                        let test = TestData::new(&["invalid", "parse", stringify!($name)]);
+                        assert!(Config::try_from(&test.get_arg_matches()).is_err());
                     }
                 };
             }
@@ -307,6 +321,23 @@ pub mod tests {
             test_case!(empty);
             test_case!(no_build);
             test_case!(unknown_key);
+        }
+
+        mod invalid_resolve {
+            use super::*;
+
+            macro_rules! test_case {
+                ($name:ident) => {
+                    #[test]
+                    fn $name() {
+                        let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
+                        let args = test.get_arg_matches();
+                        assert!(Config::try_from(&args).is_ok());
+                        assert!(ResolvedConfig::try_from(&args).is_err());
+                    }
+                };
+            }
+
             test_case!(version_mismatch);
         }
     }

@@ -2,7 +2,6 @@
 version: 0.5.0
 something: invalid
 build:
-  include:
   - !link
     - tail: t
       head: h
