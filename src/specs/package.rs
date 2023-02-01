@@ -1,5 +1,5 @@
 use crate::specs::{
-    shell::{Cmd, Shell},
+    shell::{command, Shell},
     BuildUnit, Context, Resolve,
 };
 
@@ -90,7 +90,7 @@ pub enum PackageManager {
     Yum,
 }
 
-impl Cmd for PackageManager {
+impl PackageManager {
     fn name(&self) -> &str {
         match self {
             Self::Apt => "apt",
@@ -102,18 +102,16 @@ impl Cmd for PackageManager {
             Self::Yum => "yum",
         }
     }
-}
 
-impl PackageManager {
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         info!("Installing package `{}` with `{}`", package, self.name());
         match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                "sudo".call(&[self.name(), "install", "-y", package])
+                command::call("sudo", &[self.name(), "install", "-y", package])
             }
-            Self::Cargo => self.call(&["install", package]),
-            _ => self.call(&["install", "-y", package]),
+            Self::Cargo => command::call(self.name(), &["install", package]),
+            _ => command::call(self.name(), &["install", "-y", package]),
         }
     }
 
@@ -122,18 +120,18 @@ impl PackageManager {
         info!("Uninstalling package `{}` from `{}`", package, self.name());
         match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                "sudo".call(&[self.name(), "remove", "-y", package])
+                command::call("sudo", &[self.name(), "remove", "-y", package])
             }
-            Self::Cargo => self.call(&["uninstall", package]),
-            _ => self.call(&["uninstall", "-y", package]),
+            Self::Cargo => command::call(self.name(), &["uninstall", package]),
+            _ => command::call(self.name(), &["uninstall", "-y", package]),
         }
     }
 
     /// Check if a package is installed
     pub fn has(self, package: &str) -> bool {
         let res = match self {
-            Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
-            Self::Brew => self.call_bool(&["list", package]),
+            Self::Apt | Self::AptGet => command::call_bool("dpkg", &["-l", package]),
+            Self::Brew => command::call_bool(self.name(), &["list", package]),
             Self::Cargo => Shell::default().run_bool(
                 if cfg!(windows) {
                     format!("cargo install --list | findstr /b /l /c:{package}")
@@ -142,7 +140,7 @@ impl PackageManager {
                 }
                 .as_str(),
             ),
-            Self::Pkg => self.call_bool(&["info", package]),
+            Self::Pkg => command::call_bool(self.name(), &["info", package]),
             _ => Ok(false),
         };
         match res {
@@ -201,7 +199,7 @@ fn which_has(cmd: &str) -> bool {
     let name = "which";
     #[cfg(windows)]
     let name = "where";
-    match name.call_bool(&[cmd]) {
+    match command::call_bool(name, &[cmd]) {
         Ok(has) => has,
         Err(e) => {
             warn!("'{}' failed for {}: {}", name, cmd, e);
