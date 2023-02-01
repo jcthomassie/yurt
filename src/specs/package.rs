@@ -132,7 +132,7 @@ impl PackageManager {
         let res = match self {
             Self::Apt | Self::AptGet => command::call_bool("dpkg", &["-l", package]),
             Self::Brew => command::call_bool(self.name(), &["list", package]),
-            Self::Cargo => Shell::default().run_bool(
+            Self::Cargo => Shell::default().exec_bool(
                 if cfg!(windows) {
                     format!("cargo install --list | findstr /b /l /c:{package}")
                 } else {
@@ -156,11 +156,11 @@ impl PackageManager {
     pub fn bootstrap(self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
-            Self::Brew => Shell::from("bash").remote_script(&[
+            Self::Brew => Shell::from("bash").exec_remote(&[
                 "-fsSL",
                 "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
             ]),
-            Self::Cargo => Shell::from("sh").remote_script(&[
+            Self::Cargo => Shell::from("sh").exec_remote(&[
                 "--proto",
                 "'=https'",
                 "--tlsv1.2",

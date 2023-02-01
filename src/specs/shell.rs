@@ -113,14 +113,14 @@ impl Shell {
         }
     }
 
-    pub fn run(&self, command: &str) -> Result<()> {
+    pub fn exec(&self, command: &str) -> Result<()> {
         match self.kind {
             ShellKind::Cmd => command::call(&self.command, &["/C", command]),
             _ => command::call(&self.command, &["-c", command]),
         }
     }
 
-    pub fn run_bool(&self, command: &str) -> Result<bool> {
+    pub fn exec_bool(&self, command: &str) -> Result<bool> {
         match self.kind {
             ShellKind::Cmd => command::call_bool(&self.command, &["/C", command]),
             _ => command::call_bool(&self.command, &["-c", command]),
@@ -129,7 +129,7 @@ impl Shell {
 
     /// Use curl to fetch remote script and pipe into shell
     #[inline]
-    pub fn remote_script(&self, curl_args: &[&str]) -> Result<()> {
+    pub fn exec_remote(&self, curl_args: &[&str]) -> Result<()> {
         command::pipe("curl", curl_args, &self.command, &[]).map(drop)
     }
 }
@@ -180,12 +180,12 @@ pub struct ShellCommand {
 }
 
 impl ShellCommand {
-    pub fn run(&self) -> Result<()> {
-        self.shell.run(&self.command)
+    pub fn exec(&self) -> Result<()> {
+        self.shell.exec(&self.command)
     }
 
-    pub fn run_bool(&self) -> Result<bool> {
-        self.shell.run_bool(&self.command)
+    pub fn exec_bool(&self) -> Result<bool> {
+        self.shell.exec_bool(&self.command)
     }
 }
 
@@ -259,14 +259,14 @@ mod tests {
     }
 
     #[test]
-    fn shell_run_success() {
-        Shell::default().run("echo 'hello world!'").unwrap();
+    fn shell_exec_success() {
+        Shell::default().exec("echo 'hello world!'").unwrap();
     }
 
     #[test]
-    fn shell_run_failure() {
+    fn shell_exec_failure() {
         assert!(Shell::default()
-            .run("made_up_command with parameters")
+            .exec("made_up_command with parameters")
             .is_err());
     }
 
@@ -280,14 +280,14 @@ mod tests {
     #[test]
     fn shell_command_success() {
         ShellCommand::from("echo 'hello world!'".to_string())
-            .run()
+            .exec()
             .unwrap();
     }
 
     #[test]
     fn shell_command_failure() {
         assert!(ShellCommand::from("made_up_command -a -b".to_string())
-            .run()
+            .exec()
             .is_err());
     }
 

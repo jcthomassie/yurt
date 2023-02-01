@@ -24,7 +24,7 @@ impl Condition {
         match self {
             Self::Bool(literal) => Ok(*literal),
             Self::Locale(spec) => Ok(spec.is_local(context)),
-            Self::Eval(command) => command.run_bool(),
+            Self::Eval(command) => command.exec_bool(),
             Self::All(conds) | Self::Any(conds) => {
                 let evaluated = conds
                     .iter()
