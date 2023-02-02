@@ -107,21 +107,13 @@ impl PackageManager {
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         info!("Installing package `{}` with `{}`", package, self.name());
-        let mut cmd = match self {
-            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                let mut c = Command::new("sudo");
-                c.args([self.name(), "install", "-y", package]);
-                c
-            }
+        let mut cmd = Command::new(self.name());
+        match self {
             Self::Cargo => {
-                let mut c = Command::new(self.name());
-                c.args(["install", package]);
-                c
+                cmd.args(["install", package]);
             }
             _ => {
-                let mut c = Command::new(self.name());
-                c.args(["install", "-y", package]);
-                c
+                cmd.args(["install", "-y", package]);
             }
         };
         command::call(&mut cmd)
@@ -130,21 +122,16 @@ impl PackageManager {
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!("Uninstalling package `{}` from `{}`", package, self.name());
-        let mut cmd = match self {
+        let mut cmd = Command::new(self.name());
+        match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                let mut c = Command::new("sudo");
-                c.args([self.name(), "remove", "-y", package]);
-                c
+                cmd.args(["remove", "-y", package]);
             }
             Self::Cargo => {
-                let mut c = Command::new(self.name());
-                c.args(["uninstall", package]);
-                c
+                cmd.args(["uninstall", package]);
             }
-            _ => {
-                let mut c = Command::new(self.name());
-                c.args(["uninstall", "-y", package]);
-                c
+            Self::Choco | Self::Brew => {
+                cmd.args(["uninstall", "-y", package]);
             }
         };
         command::call(&mut cmd)
