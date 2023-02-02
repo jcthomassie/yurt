@@ -2,7 +2,7 @@ use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::{env, ffi::OsStr, path::Path};
+use std::{env, ffi::OsStr, path::Path, process::Command};
 
 pub mod command {
     use anyhow::{anyhow, Context as _, Result};
@@ -10,49 +10,37 @@ pub mod command {
     use std::process::{Command, Output, Stdio};
 
     #[inline]
-    fn format(name: &str, args: &[&str]) -> String {
-        format!("{} {}", name, args.join(" "))
-    }
-
-    #[inline]
-    pub fn call_unchecked(name: &str, args: &[&str]) -> Result<Output> {
-        debug!("Calling command: `{}`", format(name, args));
-        Command::new(name)
-            .args(args)
+    pub fn call_unchecked(command: &mut Command) -> Result<Output> {
+        debug!("Calling command: `{:?}`", command);
+        command
             .output()
-            .with_context(|| format!("Failed to run command: `{}`", format(name, args)))
+            .with_context(|| format!("Failed to run command: `{command:?}`"))
     }
 
     #[inline]
-    pub fn call_bool(name: &str, args: &[&str]) -> Result<bool> {
-        call_unchecked(name, args).map(|out| out.status.success())
+    pub fn call_bool(command: &mut Command) -> Result<bool> {
+        call_unchecked(command).map(|out| out.status.success())
     }
 
     #[inline]
-    pub fn call(name: &str, args: &[&str]) -> Result<()> {
-        call_bool(name, args).and_then(|success| {
+    pub fn call(command: &mut Command) -> Result<()> {
+        call_bool(command).and_then(|success| {
             success
                 .then_some(())
-                .with_context(|| anyhow!("Command exited with error: `{}`", format(name, args)))
+                .with_context(|| anyhow!("Command exited with error: `{:?}`", command))
         })
     }
 
-    pub fn pipe(name_a: &str, args_a: &[&str], name_b: &str, args_b: &[&str]) -> Result<Output> {
-        debug!(
-            "Calling command: `{} | {}`",
-            format(name_a, args_a),
-            format(name_b, args_b)
-        );
-        let mut proc_a = Command::new(name_a)
-            .args(args_a)
+    pub fn pipe(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<Output> {
+        debug!("Calling command: `{:?} | {:?}`", cmd_a, cmd_b);
+        let mut proc_a = cmd_a
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .context("Failed to spawn primary pipe command")?;
         let pipe = proc_a.stdout.take().context("Failed to create pipe")?;
-        let proc_b = Command::new(name_b)
-            .args(args_b)
+        let proc_b = cmd_b
             .stdin(pipe)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -63,13 +51,7 @@ pub mod command {
             Ok(out) => Err(anyhow!("{}", String::from_utf8_lossy(&out.stderr))),
             Err(e) => Err(anyhow!(e)),
         }
-        .with_context(|| {
-            format!(
-                "Failed command: `{} | {}`",
-                format(name_a, args_a),
-                format(name_b, args_b)
-            )
-        })
+        .with_context(|| format!("Failed command: `{cmd_a:?} | {cmd_b:?}`"))
     }
 }
 
@@ -113,24 +95,33 @@ impl Shell {
         }
     }
 
+    #[inline]
+    fn _exec(&self, command: &str) -> Command {
+        let mut cmd = Command::new(&self.command);
+        cmd.arg(match self.kind {
+            ShellKind::Cmd => "/C",
+            _ => "-c",
+        })
+        .arg(command);
+        cmd
+    }
+
     pub fn exec(&self, command: &str) -> Result<()> {
-        match self.kind {
-            ShellKind::Cmd => command::call(&self.command, &["/C", command]),
-            _ => command::call(&self.command, &["-c", command]),
-        }
+        command::call(&mut self._exec(command))
     }
 
     pub fn exec_bool(&self, command: &str) -> Result<bool> {
-        match self.kind {
-            ShellKind::Cmd => command::call_bool(&self.command, &["/C", command]),
-            _ => command::call_bool(&self.command, &["-c", command]),
-        }
+        command::call_bool(&mut self._exec(command))
     }
 
     /// Use curl to fetch remote script and pipe into shell
     #[inline]
     pub fn exec_remote(&self, curl_args: &[&str]) -> Result<()> {
-        command::pipe("curl", curl_args, &self.command, &[]).map(drop)
+        command::pipe(
+            Command::new("curl").args(curl_args),
+            &mut Command::new(&self.command),
+        )
+        .map(drop)
     }
 }
 
@@ -294,9 +285,12 @@ mod tests {
     #[test]
     fn pipe_success() {
         assert!(if cfg!(windows) {
-            command::pipe("cmd", &["/c"], "cmd", &["/c"])
+            command::pipe(Command::new("cmd").arg("/c"), Command::new("cmd").arg("/c"))
         } else {
-            command::pipe("echo", &["hello"], "echo", &["world"])
+            command::pipe(
+                Command::new("echo").arg("hello"),
+                Command::new("echo").arg("world"),
+            )
         }
         .expect("Pipe returned error")
         .status
@@ -305,30 +299,34 @@ mod tests {
 
     #[test]
     fn pipe_failure() {
-        assert!(command::pipe("fuck", &["this"], "doesn't", &["work"]).is_err());
+        assert!(command::pipe(
+            Command::new("fuck").arg("this"),
+            Command::new("doesn't").arg("work")
+        )
+        .is_err());
     }
 
     #[test]
     #[cfg(unix)]
     fn str_command_success() {
-        let out = command::call_unchecked("echo", &["hello world!"]).unwrap();
+        let out = command::call_unchecked(Command::new("echo").arg("hello world!")).unwrap();
         assert!(out.status.success());
         assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
     }
 
     #[test]
     fn str_command_failure() {
-        assert!(command::call_unchecked("made_up_command", &[]).is_err());
+        assert!(command::call_unchecked(&mut Command::new("made_up_command")).is_err());
     }
 
     #[test]
     #[cfg(unix)]
     fn str_command_bool_success() {
-        assert!(command::call_bool("echo", &["hello world!"]).unwrap());
+        assert!(command::call_bool(Command::new("echo").arg("hello world!")).unwrap());
     }
 
     #[test]
     fn str_command_bool_failure() {
-        assert!(command::call_bool("made_up_command", &[]).is_err());
+        assert!(command::call_bool(&mut Command::new("made_up_command")).is_err());
     }
 }

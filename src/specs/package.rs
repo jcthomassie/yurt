@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum};
 
@@ -106,32 +107,56 @@ impl PackageManager {
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         info!("Installing package `{}` with `{}`", package, self.name());
-        match self {
+        let mut cmd = match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                command::call("sudo", &[self.name(), "install", "-y", package])
+                let mut c = Command::new("sudo");
+                c.args([self.name(), "install", "-y", package]);
+                c
             }
-            Self::Cargo => command::call(self.name(), &["install", package]),
-            _ => command::call(self.name(), &["install", "-y", package]),
-        }
+            Self::Cargo => {
+                let mut c = Command::new(self.name());
+                c.args(["install", package]);
+                c
+            }
+            _ => {
+                let mut c = Command::new(self.name());
+                c.args(["install", "-y", package]);
+                c
+            }
+        };
+        command::call(&mut cmd)
     }
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!("Uninstalling package `{}` from `{}`", package, self.name());
-        match self {
+        let mut cmd = match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                command::call("sudo", &[self.name(), "remove", "-y", package])
+                let mut c = Command::new("sudo");
+                c.args([self.name(), "remove", "-y", package]);
+                c
             }
-            Self::Cargo => command::call(self.name(), &["uninstall", package]),
-            _ => command::call(self.name(), &["uninstall", "-y", package]),
-        }
+            Self::Cargo => {
+                let mut c = Command::new(self.name());
+                c.args(["uninstall", package]);
+                c
+            }
+            _ => {
+                let mut c = Command::new(self.name());
+                c.args(["uninstall", "-y", package]);
+                c
+            }
+        };
+        command::call(&mut cmd)
     }
 
     /// Check if a package is installed
     pub fn has(self, package: &str) -> bool {
         let res = match self {
-            Self::Apt | Self::AptGet => command::call_bool("dpkg", &["-l", package]),
-            Self::Brew => command::call_bool(self.name(), &["list", package]),
+            Self::Apt | Self::AptGet => {
+                command::call_bool(Command::new("dpkg").args(["-l", package]))
+            }
+            Self::Brew => command::call_bool(Command::new(self.name()).args(["list", package])),
             Self::Cargo => Shell::default().exec_bool(
                 if cfg!(windows) {
                     format!("cargo install --list | findstr /b /l /c:{package}")
@@ -140,7 +165,7 @@ impl PackageManager {
                 }
                 .as_str(),
             ),
-            Self::Pkg => command::call_bool(self.name(), &["info", package]),
+            Self::Pkg => command::call_bool(Command::new(self.name()).args(["info", package])),
             _ => Ok(false),
         };
         match res {
@@ -199,7 +224,7 @@ fn which_has(cmd: &str) -> bool {
     let name = "which";
     #[cfg(windows)]
     let name = "where";
-    match command::call_bool(name, &[cmd]) {
+    match command::call_bool(Command::new(name).arg(cmd)) {
         Ok(has) => has,
         Err(e) => {
             warn!("'{}' failed for {}: {}", name, cmd, e);
