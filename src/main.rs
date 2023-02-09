@@ -63,6 +63,13 @@ pub fn yurt_command() -> Command {
                 .conflicts_with("yaml"),
         )
         .arg(
+            Arg::new("quiet")
+                .help("Swallow subprocess stdout")
+                .short('q')
+                .long("quiet")
+                .num_args(0),
+        )
+        .arg(
             Arg::new("log")
                 .help("Logging level")
                 .short('l')
