@@ -12,7 +12,6 @@ mod specs;
 use self::{config::ResolvedConfig, specs::BuildUnit};
 use anyhow::{bail, Context, Result};
 use clap::{builder::PossibleValuesParser, command, Arg, Command};
-use log::debug;
 use std::{env, time::Instant};
 
 #[inline]
@@ -109,6 +108,60 @@ pub fn yurt_command() -> Command {
         )
 }
 
+/// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
+fn show(config: ResolvedConfig, nontrivial: bool, context: bool) -> Result<()> {
+    if context {
+        println!("{:#?}", config.context);
+    };
+    print!(
+        "---\n{}",
+        match nontrivial {
+            true => config.nontrivial(),
+            false => config,
+        }
+        .into_yaml()?
+    );
+    Ok(())
+}
+
+/// Eliminate elements that will conflict with installation
+fn clean(config: ResolvedConfig) -> Result<()> {
+    log::info!("Cleaning link heads...");
+    for unit in config.build {
+        match unit {
+            BuildUnit::Link(link) => link.clean()?,
+            _ => continue,
+        }
+    }
+    Ok(())
+}
+
+fn install(config: ResolvedConfig, clean: bool) -> Result<()> {
+    log::info!("Installing...");
+    for unit in config.build {
+        match unit {
+            BuildUnit::Repo(repo) => drop(repo.require()?),
+            BuildUnit::Link(link) => link.link(clean)?,
+            BuildUnit::Run(cmd) => cmd.exec()?,
+            BuildUnit::Install(package) => package.install()?,
+            BuildUnit::Require(manager) => manager.require()?,
+        }
+    }
+    Ok(())
+}
+
+fn uninstall(config: ResolvedConfig) -> Result<()> {
+    log::info!("Uninstalling...");
+    for unit in config.build {
+        match unit {
+            BuildUnit::Link(link) => link.unlink()?,
+            BuildUnit::Install(package) => package.uninstall()?,
+            _ => continue,
+        }
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     if whoami::username() == "root" {
         bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
@@ -128,14 +181,14 @@ fn main() -> Result<()> {
     let result = ResolvedConfig::try_from(&matches)
         .context("Failed to resolve build")
         .and_then(|r| match matches.subcommand() {
-            Some(("show", s)) => r.show(s.get_flag("non-trivial"), s.get_flag("context")),
-            Some(("install", s)) => r.install(s.get_flag("clean")),
-            Some(("uninstall", _)) => r.uninstall(),
-            Some(("clean", _)) => r.clean(),
-            Some(("update", _)) => r.update(),
+            Some(("show", s)) => show(r, s.get_flag("non-trivial"), s.get_flag("context")),
+            Some(("install", s)) => install(r, s.get_flag("clean")),
+            Some(("uninstall", _)) => uninstall(r),
+            Some(("clean", _)) => clean(r),
+            Some(("update", _)) => todo!("update is not yet supported"),
             _ => unreachable!(),
         })
         .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
-    debug!("Runtime: {:?}", timer.elapsed());
+    log::debug!("Runtime: {:?}", timer.elapsed());
     result
 }

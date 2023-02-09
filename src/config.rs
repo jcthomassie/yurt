@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{bail, Context as _, Result};
 use clap::{crate_version, ArgMatches};
 use lazy_static::lazy_static;
-use log::info;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, env, fs::File, io::BufReader, path::Path};
@@ -20,9 +19,9 @@ lazy_static! {
 #[derive(Debug, Clone)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
-    context: Context,
+    pub context: Context,
+    pub build: Vec<BuildUnit>,
     version: VersionReq,
-    build: Vec<BuildUnit>,
 }
 
 impl ResolvedConfig {
@@ -37,7 +36,7 @@ impl ResolvedConfig {
         }
     }
 
-    fn nontrivial(self) -> Self {
+    pub fn nontrivial(self) -> Self {
         self.filter(|unit| match unit {
             BuildUnit::Repo(repo) => !repo.is_available(),
             BuildUnit::Link(link) => !link.is_valid(),
@@ -58,72 +57,13 @@ impl ResolvedConfig {
     }
 
     #[inline]
-    fn include(self, units: &HashSet<String>) -> Self {
+    pub fn include(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| Self::_include(unit, units))
     }
 
     #[inline]
-    fn exclude(self, units: &HashSet<String>) -> Self {
+    pub fn exclude(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
-    }
-
-    /// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
-    pub fn show(&self, nontrivial: bool, context: bool) -> Result<()> {
-        if context {
-            println!("{:#?}", self.context);
-        };
-        print!(
-            "---\n{}",
-            match nontrivial {
-                true => self.clone().nontrivial(),
-                false => self.clone(),
-            }
-            .into_yaml()?
-        );
-        Ok(())
-    }
-
-    /// Eliminate elements that will conflict with installation
-    pub fn clean(&self) -> Result<()> {
-        info!("Cleaning link heads...");
-        for unit in &self.build {
-            match unit {
-                BuildUnit::Link(link) => link.clean()?,
-                _ => continue,
-            }
-        }
-        Ok(())
-    }
-
-    pub fn install(&self, clean: bool) -> Result<()> {
-        info!("Installing...");
-        for unit in &self.build {
-            match unit {
-                BuildUnit::Repo(repo) => drop(repo.require()?),
-                BuildUnit::Link(link) => link.link(clean)?,
-                BuildUnit::Run(cmd) => cmd.exec()?,
-                BuildUnit::Install(package) => package.install()?,
-                BuildUnit::Require(manager) => manager.require()?,
-            }
-        }
-        Ok(())
-    }
-
-    pub fn uninstall(&self) -> Result<()> {
-        info!("Uninstalling...");
-        for unit in &self.build {
-            match unit {
-                BuildUnit::Link(link) => link.unlink()?,
-                BuildUnit::Install(package) => package.uninstall()?,
-                _ => continue,
-            }
-        }
-        Ok(())
-    }
-
-    #[allow(clippy::unused_self)]
-    pub fn update(&self) -> Result<()> {
-        todo!()
     }
 
     fn into_config(self) -> Config {
@@ -148,7 +88,7 @@ impl ResolvedConfig {
         }
     }
 
-    fn into_yaml(self) -> Result<String> {
+    pub fn into_yaml(self) -> Result<String> {
         serde_yaml::to_string(&self.into_config()).context("Failed to serialize config")
     }
 }
