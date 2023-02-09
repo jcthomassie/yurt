@@ -225,115 +225,140 @@ enum ShellCommandSpec {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    mod command {
+        #[allow(clippy::wildcard_imports)]
+        use super::super::*;
 
-    fn check_shell(input: &str, expected: ShellKind) {
-        let shell = Shell::from(input);
-        assert_eq!(shell.kind, expected);
-        assert_eq!(shell.command.as_str(), input);
-    }
-
-    #[test]
-    fn shell_kind_match() {
-        check_shell("zsh", ShellKind::Zsh);
-        check_shell("longer/path/bash", ShellKind::Bash);
-        check_shell("some/other/shell/nonsense", ShellKind::Other);
-        check_shell("", ShellKind::Empty);
-    }
-
-    #[test]
-    #[cfg(windows)]
-    fn shell_kind_match_windows() {
-        check_shell(r#"c:\windows\path\cmd.exe"#, ShellKind::Cmd);
-        check_shell(r#"c:\windows\path\pwsh"#, ShellKind::Powershell);
-    }
-
-    #[test]
-    fn shell_from_env() {
-        let shell = Shell::from_env();
-        match env::var("SHELL") {
-            // Other shells should be added as needed
-            Ok(_) => assert_ne!(shell.kind, ShellKind::Empty),
-            Err(_) => assert_eq!(shell, Shell::default()),
+        #[test]
+        #[cfg(unix)]
+        fn call_unchecked_success() {
+            let out = command::call_unchecked(Command::new("echo").arg("hello world!")).unwrap();
+            assert!(out.status.success());
+            assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
         }
-    }
 
-    #[test]
-    fn shell_exec_success() {
-        Shell::default().exec("echo 'hello world!'").unwrap();
-    }
+        #[test]
+        fn call_unchecked_failure() {
+            assert!(command::call_unchecked(&mut Command::new("made_up_command")).is_err());
+        }
 
-    #[test]
-    fn shell_exec_failure() {
-        assert!(Shell::default()
-            .exec("made_up_command with parameters")
-            .is_err());
-    }
+        #[test]
+        #[cfg(unix)]
+        fn call_bool_success() {
+            assert!(command::call_bool(Command::new("echo").arg("hello world!")).unwrap());
+        }
 
-    #[test]
-    fn shell_command_from_str() {
-        let cmd = ShellCommand::from("echo 'hello world!'".to_string());
-        assert_eq!(cmd.shell, Shell::from_env());
-        assert_eq!(cmd.command, "echo 'hello world!'");
-    }
+        #[test]
+        fn call_bool_failure() {
+            assert!(command::call_bool(&mut Command::new("made_up_command")).is_err());
+        }
 
-    #[test]
-    fn shell_command_success() {
-        ShellCommand::from("echo 'hello world!'".to_string())
-            .exec()
-            .unwrap();
-    }
-
-    #[test]
-    fn shell_command_failure() {
-        assert!(ShellCommand::from("made_up_command -a -b".to_string())
-            .exec()
-            .is_err());
-    }
-
-    #[test]
-    fn pipe_success() {
-        if cfg!(windows) {
-            command::pipe(Command::new("cmd").arg("/c"), Command::new("cmd").arg("/c"))
-        } else {
-            command::pipe(
-                Command::new("echo").arg("hello world"),
+        #[test]
+        #[cfg(unix)]
+        fn pipe_unchecked_success() {
+            let out = command::pipe_unchecked(
+                Command::new("echo").arg("hello world!"),
                 Command::new("xargs").args(["-L", "1", "echo"]),
             )
+            .unwrap();
+            assert!(out.status.success());
+            assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
         }
-        .expect("Pipe returned error");
+
+        #[test]
+        fn pipe_success() {
+            #[cfg(windows)]
+            {
+                command::pipe(Command::new("cmd").arg("/c"), Command::new("cmd").arg("/c"))
+                    .expect("Pipe returned error");
+            }
+
+            #[cfg(not(windows))]
+            {
+                command::pipe(
+                    Command::new("echo").arg("hello world"),
+                    Command::new("xargs").args(["-L", "1", "echo"]),
+                )
+                .expect("Pipe returned error");
+            }
+        }
+
+        #[test]
+        fn pipe_failure() {
+            assert!(command::pipe(
+                Command::new("fuck").arg("this"),
+                Command::new("doesn't").arg("work")
+            )
+            .is_err());
+        }
     }
 
-    #[test]
-    fn pipe_failure() {
-        assert!(command::pipe(
-            Command::new("fuck").arg("this"),
-            Command::new("doesn't").arg("work")
-        )
-        .is_err());
-    }
+    mod shell {
+        #[allow(clippy::wildcard_imports)]
+        use super::super::*;
 
-    #[test]
-    #[cfg(unix)]
-    fn str_command_success() {
-        let out = command::call_unchecked(Command::new("echo").arg("hello world!")).unwrap();
-        assert!(out.status.success());
-        assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
-    }
+        fn check_shell(input: &str, expected: ShellKind) {
+            let shell = Shell::from(input);
+            assert_eq!(shell.kind, expected);
+            assert_eq!(shell.command.as_str(), input);
+        }
 
-    #[test]
-    fn str_command_failure() {
-        assert!(command::call_unchecked(&mut Command::new("made_up_command")).is_err());
-    }
+        #[test]
+        fn shell_kind_match() {
+            check_shell("zsh", ShellKind::Zsh);
+            check_shell("longer/path/bash", ShellKind::Bash);
+            check_shell("some/other/shell/nonsense", ShellKind::Other);
+            check_shell("", ShellKind::Empty);
+        }
 
-    #[test]
-    #[cfg(unix)]
-    fn str_command_bool_success() {
-        assert!(command::call_bool(Command::new("echo").arg("hello world!")).unwrap());
-    }
+        #[test]
+        #[cfg(windows)]
+        fn shell_kind_match_windows() {
+            check_shell(r#"c:\windows\path\cmd.exe"#, ShellKind::Cmd);
+            check_shell(r#"c:\windows\path\pwsh"#, ShellKind::Powershell);
+        }
 
-    #[test]
-    fn str_command_bool_failure() {
-        assert!(command::call_bool(&mut Command::new("made_up_command")).is_err());
+        #[test]
+        fn from_env() {
+            let shell = Shell::from_env();
+            match env::var("SHELL") {
+                // Other shells should be added as needed
+                Ok(_) => assert_ne!(shell.kind, ShellKind::Empty),
+                Err(_) => assert_eq!(shell, Shell::default()),
+            }
+        }
+
+        #[test]
+        fn exec_success() {
+            Shell::default().exec("echo 'hello world!'").unwrap();
+        }
+
+        #[test]
+        fn exec_failure() {
+            assert!(Shell::default()
+                .exec("made_up_command with parameters")
+                .is_err());
+        }
+
+        #[test]
+        fn command_from_str() {
+            let cmd = ShellCommand::from("echo 'hello world!'".to_string());
+            assert_eq!(cmd.shell, Shell::from_env());
+            assert_eq!(cmd.command, "echo 'hello world!'");
+        }
+
+        #[test]
+        fn command_success() {
+            ShellCommand::from("echo 'hello world!'".to_string())
+                .exec()
+                .unwrap();
+        }
+
+        #[test]
+        fn command_failure() {
+            assert!(ShellCommand::from("made_up_command -a -b".to_string())
+                .exec()
+                .is_err());
+        }
     }
 }
