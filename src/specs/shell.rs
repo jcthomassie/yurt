@@ -22,11 +22,12 @@ pub mod command {
         call_unchecked(command).map(|out| out.status.success())
     }
 
-    #[inline]
     pub fn call(command: &mut Command) -> Result<()> {
-        call_bool(command).and_then(|success| {
-            success
+        call_unchecked(command).and_then(|out| {
+            out.status
+                .success()
                 .then_some(())
+                .with_context(|| anyhow!("stderr: {}", String::from_utf8_lossy(&out.stderr)))
                 .with_context(|| anyhow!("Command exited with error: `{:?}`", command))
         })
     }
