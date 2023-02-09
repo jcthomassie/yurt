@@ -101,7 +101,7 @@ impl ResolvedConfig {
             match unit {
                 BuildUnit::Repo(repo) => drop(repo.require()?),
                 BuildUnit::Link(link) => link.link(clean)?,
-                BuildUnit::Run(cmd) => cmd.run()?,
+                BuildUnit::Run(cmd) => cmd.exec()?,
                 BuildUnit::Install(package) => package.install()?,
                 BuildUnit::Require(manager) => manager.require()?,
             }

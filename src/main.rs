@@ -10,7 +10,7 @@ mod context;
 mod specs;
 
 use self::{config::ResolvedConfig, specs::BuildUnit};
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use clap::{builder::PossibleValuesParser, command, Arg, Command};
 use log::debug;
 use std::{env, time::Instant};
@@ -110,6 +110,10 @@ pub fn yurt_command() -> Command {
 }
 
 fn main() -> Result<()> {
+    if whoami::username() == "root" {
+        bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
+    }
+
     let matches = yurt_command()
         .subcommand_required(true)
         .arg_required_else_help(true)

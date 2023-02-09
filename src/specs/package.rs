@@ -1,5 +1,5 @@
 use crate::specs::{
-    shell::{Cmd, Shell},
+    shell::{command, Shell},
     BuildUnit, Context, Resolve,
 };
 
@@ -7,6 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
 use log::{info, warn};
 use serde::{Deserialize, Serialize};
+use std::process::Command;
 
 pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum};
 
@@ -90,7 +91,7 @@ pub enum PackageManager {
     Yum,
 }
 
-impl Cmd for PackageManager {
+impl PackageManager {
     fn name(&self) -> &str {
         match self {
             Self::Apt => "apt",
@@ -102,39 +103,48 @@ impl Cmd for PackageManager {
             Self::Yum => "yum",
         }
     }
-}
 
-impl PackageManager {
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
         info!("Installing package `{}` with `{}`", package, self.name());
+        let mut cmd = Command::new(self.name());
         match self {
-            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                "sudo".call(&[self.name(), "install", "-y", package])
+            Self::Cargo => {
+                cmd.args(["install", package]);
             }
-            Self::Cargo => self.call(&["install", package]),
-            _ => self.call(&["install", "-y", package]),
-        }
+            _ => {
+                cmd.args(["install", "-y", package]);
+            }
+        };
+        command::call(&mut cmd)
     }
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
         info!("Uninstalling package `{}` from `{}`", package, self.name());
+        let mut cmd = Command::new(self.name());
         match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                "sudo".call(&[self.name(), "remove", "-y", package])
+                cmd.args(["remove", "-y", package]);
             }
-            Self::Cargo => self.call(&["uninstall", package]),
-            _ => self.call(&["uninstall", "-y", package]),
-        }
+            Self::Cargo => {
+                cmd.args(["uninstall", package]);
+            }
+            Self::Choco | Self::Brew => {
+                cmd.args(["uninstall", "-y", package]);
+            }
+        };
+        command::call(&mut cmd)
     }
 
     /// Check if a package is installed
     pub fn has(self, package: &str) -> bool {
         let res = match self {
-            Self::Apt | Self::AptGet => "dpkg".call_bool(&["-l", package]),
-            Self::Brew => self.call_bool(&["list", package]),
-            Self::Cargo => Shell::default().run_bool(
+            Self::Apt | Self::AptGet => {
+                command::call_bool(Command::new("dpkg").args(["-l", package]))
+            }
+            Self::Brew => command::call_bool(Command::new(self.name()).args(["list", package])),
+            Self::Cargo => Shell::default().exec_bool(
                 if cfg!(windows) {
                     format!("cargo install --list | findstr /b /l /c:{package}")
                 } else {
@@ -142,7 +152,7 @@ impl PackageManager {
                 }
                 .as_str(),
             ),
-            Self::Pkg => self.call_bool(&["info", package]),
+            Self::Pkg => command::call_bool(Command::new(self.name()).args(["info", package])),
             _ => Ok(false),
         };
         match res {
@@ -158,11 +168,11 @@ impl PackageManager {
     pub fn bootstrap(self) -> Result<()> {
         info!("Bootstrapping {}", self.name());
         match self {
-            Self::Brew => Shell::from("bash").remote_script(&[
+            Self::Brew => Shell::from("bash").exec_remote(&[
                 "-fsSL",
                 "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
             ]),
-            Self::Cargo => Shell::from("sh").remote_script(&[
+            Self::Cargo => Shell::from("sh").exec_remote(&[
                 "--proto",
                 "'=https'",
                 "--tlsv1.2",
@@ -201,7 +211,7 @@ fn which_has(cmd: &str) -> bool {
     let name = "which";
     #[cfg(windows)]
     let name = "where";
-    match name.call_bool(&[cmd]) {
+    match command::call_bool(Command::new(name).arg(cmd)) {
         Ok(has) => has,
         Err(e) => {
             warn!("'{}' failed for {}: {}", name, cmd, e);
