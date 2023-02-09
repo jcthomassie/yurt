@@ -28,7 +28,10 @@ pub mod command {
                 .success()
                 .then_some(())
                 .with_context(|| anyhow!("stderr: {}", String::from_utf8_lossy(&out.stderr)))
-                .with_context(|| anyhow!("Command exited with error: `{:?}`", command))
+                .with_context(|| match out.status.code() {
+                    Some(c) => anyhow!("Command exited with status code {c}: `{:?}`", command),
+                    None => anyhow!("Command terminated by signal: `{:?}`", command),
+                })
         })
     }
 

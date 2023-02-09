@@ -111,7 +111,7 @@ pub fn yurt_command() -> Command {
 
 fn main() -> Result<()> {
     if whoami::username() == "root" {
-        bail!("Running as root user is not allowed. Use `sudo -u some-other-user` instead.");
+        bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
     }
 
     let matches = yurt_command()
