@@ -9,7 +9,18 @@ pub mod command {
     use log::debug;
     use std::process::{Command, Output, Stdio};
 
-    #[inline]
+    fn check_output(output: &Output, command_tag: impl std::fmt::Debug) -> Result<()> {
+        output
+            .status
+            .success()
+            .then_some(())
+            .with_context(|| anyhow!("stderr: {}", String::from_utf8_lossy(&output.stderr)))
+            .with_context(|| match output.status.code() {
+                Some(c) => anyhow!("Command exited with status code {c}: `{command_tag:?}`"),
+                None => anyhow!("Command terminated by signal: `{command_tag:?}`"),
+            })
+    }
+
     pub fn call_unchecked(command: &mut Command) -> Result<Output> {
         debug!("Calling command: `{:?}`", command);
         command
@@ -22,21 +33,13 @@ pub mod command {
         call_unchecked(command).map(|out| out.status.success())
     }
 
+    #[inline]
     pub fn call(command: &mut Command) -> Result<()> {
-        call_unchecked(command).and_then(|out| {
-            out.status
-                .success()
-                .then_some(())
-                .with_context(|| anyhow!("stderr: {}", String::from_utf8_lossy(&out.stderr)))
-                .with_context(|| match out.status.code() {
-                    Some(c) => anyhow!("Command exited with status code {c}: `{:?}`", command),
-                    None => anyhow!("Command terminated by signal: `{:?}`", command),
-                })
-        })
+        call_unchecked(command).and_then(|out| check_output(&out, command))
     }
 
-    pub fn pipe(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<Output> {
-        debug!("Calling command: `{:?} | {:?}`", cmd_a, cmd_b);
+    pub fn pipe_unchecked(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<Output> {
+        debug!("Calling piped command: `{:?} | {:?}`", cmd_a, cmd_b);
         let mut proc_a = cmd_a
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -50,12 +53,15 @@ pub mod command {
             .stderr(Stdio::piped())
             .spawn()
             .context("Failed to spawn secondary pipe command")?;
-        match proc_b.wait_with_output() {
-            Ok(out) if out.status.success() => Ok(out),
-            Ok(out) => Err(anyhow!("{}", String::from_utf8_lossy(&out.stderr))),
-            Err(e) => Err(anyhow!(e)),
-        }
-        .with_context(|| format!("Failed command: `{cmd_a:?} | {cmd_b:?}`"))
+        proc_b
+            .wait_with_output()
+            .with_context(|| format!("Failed to run piped command: `{cmd_a:?} | {cmd_b:?}`"))
+    }
+
+    #[inline]
+    pub fn pipe(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<()> {
+        pipe_unchecked(cmd_a, cmd_b)
+            .and_then(|out| check_output(&out, format!("{cmd_a:?} | {cmd_b:?}")))
     }
 }
 
@@ -125,7 +131,6 @@ impl Shell {
             Command::new("curl").args(curl_args),
             &mut Command::new(&self.command),
         )
-        .map(drop)
     }
 }
 
@@ -288,17 +293,15 @@ mod tests {
 
     #[test]
     fn pipe_success() {
-        assert!(if cfg!(windows) {
+        if cfg!(windows) {
             command::pipe(Command::new("cmd").arg("/c"), Command::new("cmd").arg("/c"))
         } else {
             command::pipe(
-                Command::new("echo").arg("hello"),
-                Command::new("echo").arg("world"),
+                Command::new("echo").arg("hello world"),
+                Command::new("xargs").args(["-L", "1", "echo"]),
             )
         }
-        .expect("Pipe returned error")
-        .status
-        .success());
+        .expect("Pipe returned error");
     }
 
     #[test]
