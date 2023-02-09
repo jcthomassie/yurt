@@ -11,7 +11,7 @@ mod specs;
 
 use self::{config::ResolvedConfig, specs::BuildUnit};
 use anyhow::{bail, Context, Result};
-use clap::{builder::PossibleValuesParser, command, Arg, Command};
+use clap::{builder::PossibleValuesParser, command, Arg, ArgMatches, Command};
 use std::{env, time::Instant};
 
 #[inline]
@@ -116,7 +116,11 @@ pub fn yurt_command() -> Command {
 }
 
 /// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
-fn show(config: ResolvedConfig, nontrivial: bool, context: bool) -> Result<()> {
+fn show(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+    let nontrivial = sub_args.get_flag("non-trivial");
+    let context = sub_args.get_flag("context");
+
     if context {
         println!("{:#?}", config.context);
     };
@@ -126,13 +130,16 @@ fn show(config: ResolvedConfig, nontrivial: bool, context: bool) -> Result<()> {
             true => config.nontrivial(),
             false => config,
         }
-        .into_yaml()?
+        .into_config()
+        .yaml()?
     );
     Ok(())
 }
 
 /// Eliminate elements that will conflict with installation
-fn clean(config: ResolvedConfig) -> Result<()> {
+fn clean(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+
     log::info!("Cleaning link heads...");
     for unit in config.build {
         match unit {
@@ -143,7 +150,10 @@ fn clean(config: ResolvedConfig) -> Result<()> {
     Ok(())
 }
 
-fn install(config: ResolvedConfig, clean: bool) -> Result<()> {
+fn install(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+    let clean = sub_args.get_flag("clean");
+
     log::info!("Installing...");
     for unit in config.build {
         match unit {
@@ -157,7 +167,9 @@ fn install(config: ResolvedConfig, clean: bool) -> Result<()> {
     Ok(())
 }
 
-fn uninstall(config: ResolvedConfig) -> Result<()> {
+fn uninstall(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+
     log::info!("Uninstalling...");
     for unit in config.build {
         match unit {
@@ -169,11 +181,16 @@ fn uninstall(config: ResolvedConfig) -> Result<()> {
     Ok(())
 }
 
+fn update(_args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
+    todo!("update is not yet supported")
+}
+
 fn main() -> Result<()> {
     if whoami::username() == "root" {
         bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
     }
 
+    let timer = Instant::now();
     let matches = yurt_command()
         .subcommand_required(true)
         .arg_required_else_help(true)
@@ -184,18 +201,15 @@ fn main() -> Result<()> {
     }
     env_logger::init();
 
-    let timer = Instant::now();
-    let result = ResolvedConfig::try_from(&matches)
-        .context("Failed to resolve build")
-        .and_then(|r| match matches.subcommand() {
-            Some(("show", s)) => show(r, s.get_flag("non-trivial"), s.get_flag("context")),
-            Some(("install", s)) => install(r, s.get_flag("clean")),
-            Some(("uninstall", _)) => uninstall(r),
-            Some(("clean", _)) => clean(r),
-            Some(("update", _)) => todo!("update is not yet supported"),
-            _ => unreachable!(),
-        })
-        .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
+    let result = match matches.subcommand() {
+        Some(("show", s)) => show(&matches, s),
+        Some(("install", s)) => install(&matches, s),
+        Some(("uninstall", s)) => uninstall(&matches, s),
+        Some(("clean", s)) => clean(&matches, s),
+        Some(("update", s)) => update(&matches, s),
+        _ => unreachable!(),
+    }
+    .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
     log::debug!("Runtime: {:?}", timer.elapsed());
     result
 }

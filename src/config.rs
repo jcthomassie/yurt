@@ -66,7 +66,7 @@ impl ResolvedConfig {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
-    fn into_config(self) -> Config {
+    pub fn into_config(self) -> Config {
         let mut build: Vec<BuildSpec> = Vec::new();
         for unit in self.build {
             if let Some(spec) = build.last_mut() {
@@ -86,10 +86,6 @@ impl ResolvedConfig {
             version: Some(self.version),
             build,
         }
-    }
-
-    pub fn into_yaml(self) -> Result<String> {
-        serde_yaml::to_string(&self.into_config()).context("Failed to serialize config")
     }
 }
 
@@ -136,7 +132,7 @@ impl Config {
             })
     }
 
-    fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => req,
@@ -145,10 +141,17 @@ impl Config {
         };
         // Resolve build
         Ok(ResolvedConfig {
-            build: self.build.resolve_into_new(&mut context)?,
+            build: self
+                .build
+                .resolve_into_new(&mut context)
+                .context("Failed to resolve build")?,
             version,
             context,
         })
+    }
+
+    pub fn yaml(&self) -> Result<String> {
+        serde_yaml::to_string(&self).context("Failed to serialize config")
     }
 }
 
@@ -228,7 +231,8 @@ pub mod tests {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let resolved_yaml = ResolvedConfig::try_from(&test.get_arg_matches())
                             .expect("Failed to resolve input build")
-                            .into_yaml()
+                            .into_config()
+                            .yaml()
                             .expect("Failed to generate resolved yaml");
                         pretty_assertions::assert_eq!(resolved_yaml, test.get_output_yaml())
                     }
