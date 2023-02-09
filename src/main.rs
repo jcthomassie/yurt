@@ -141,13 +141,10 @@ fn clean(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
     let config = ResolvedConfig::try_from(args)?;
 
     log::info!("Cleaning link heads...");
-    for unit in config.build {
-        match unit {
-            BuildUnit::Link(link) => link.clean()?,
-            _ => continue,
-        }
-    }
-    Ok(())
+    config.for_each_unit(|unit| match unit {
+        BuildUnit::Link(link) => link.clean(),
+        _ => Ok(()),
+    })
 }
 
 fn install(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
@@ -155,30 +152,24 @@ fn install(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
     let clean = sub_args.get_flag("clean");
 
     log::info!("Installing...");
-    for unit in config.build {
-        match unit {
-            BuildUnit::Repo(repo) => drop(repo.require()?),
-            BuildUnit::Link(link) => link.link(clean)?,
-            BuildUnit::Run(cmd) => cmd.exec()?,
-            BuildUnit::Install(package) => package.install()?,
-            BuildUnit::Require(manager) => manager.require()?,
-        }
-    }
-    Ok(())
+    config.for_each_unit(|unit| match unit {
+        BuildUnit::Repo(repo) => repo.require().map(drop),
+        BuildUnit::Link(link) => link.link(clean),
+        BuildUnit::Run(cmd) => cmd.exec(),
+        BuildUnit::Install(package) => package.install(),
+        BuildUnit::Require(manager) => manager.require(),
+    })
 }
 
 fn uninstall(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
     let config = ResolvedConfig::try_from(args)?;
 
     log::info!("Uninstalling...");
-    for unit in config.build {
-        match unit {
-            BuildUnit::Link(link) => link.unlink()?,
-            BuildUnit::Install(package) => package.uninstall()?,
-            _ => continue,
-        }
-    }
-    Ok(())
+    config.for_each_unit(|unit| match unit {
+        BuildUnit::Link(link) => link.unlink(),
+        BuildUnit::Install(package) => package.uninstall(),
+        _ => Ok(()),
+    })
 }
 
 fn update(_args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {

@@ -20,7 +20,7 @@ lazy_static! {
 pub struct ResolvedConfig {
     // Members should be treated as immutable
     pub context: Context,
-    pub build: Vec<BuildUnit>,
+    build: Vec<BuildUnit>,
     version: VersionReq,
 }
 
@@ -64,6 +64,13 @@ impl ResolvedConfig {
     #[inline]
     pub fn exclude(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
+    }
+
+    pub fn for_each_unit<F>(self, f: F) -> Result<()>
+    where
+        F: FnMut(BuildUnit) -> Result<()>,
+    {
+        self.build.into_iter().try_for_each(f)
     }
 
     pub fn into_config(self) -> Config {
