@@ -57,12 +57,12 @@ impl ResolvedConfig {
     }
 
     #[inline]
-    pub fn include(self, units: &HashSet<String>) -> Self {
+    fn include(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| Self::_include(unit, units))
     }
 
     #[inline]
-    pub fn exclude(self, units: &HashSet<String>) -> Self {
+    fn exclude(self, units: &HashSet<String>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
