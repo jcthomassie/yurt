@@ -3,14 +3,19 @@
     clippy::derive_partial_eq_without_eq,
     clippy::match_bool,
     clippy::module_name_repetitions,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::too_many_lines
 )]
 mod config;
 mod context;
 mod specs;
 
-use self::{config::ResolvedConfig, specs::BuildUnit};
-use anyhow::{bail, Context, Result};
+use self::{
+    config::{Config, ResolvedConfig},
+    context::Context,
+    specs::BuildUnit,
+};
+use anyhow::{bail, Context as _, Result};
 use clap::{builder::PossibleValuesParser, command, Arg, ArgMatches, Command};
 use std::{env, time::Instant};
 
@@ -34,11 +39,19 @@ pub fn yurt_command() -> Command {
             Command::new("show")
                 .about("Show the resolved build")
                 .arg(
+                    Arg::new("raw")
+                        .help("Show unresolved config")
+                        .short('r')
+                        .long("raw")
+                        .num_args(0),
+                )
+                .arg(
                     Arg::new("non-trivial")
                         .help("Hide trivial build units")
                         .short('n')
                         .long("non-trivial")
-                        .num_args(0),
+                        .num_args(0)
+                        .conflicts_with("raw"),
                 )
                 .arg(
                     Arg::new("context")
@@ -117,22 +130,26 @@ pub fn yurt_command() -> Command {
 
 /// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
 fn show(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
-    let config = ResolvedConfig::try_from(args)?;
+    let show_context = sub_args.get_flag("context");
+    let show_raw = sub_args.get_flag("raw");
     let nontrivial = sub_args.get_flag("non-trivial");
-    let context = sub_args.get_flag("context");
 
-    if context {
-        println!("{:#?}", config.context);
-    };
-    print!(
-        "---\n{}",
-        match nontrivial {
-            true => config.nontrivial(),
-            false => config,
+    let config = if show_raw {
+        if show_context {
+            println!("{:#?}\n---", Context::from(args));
+        };
+        Config::try_from(args)?
+    } else {
+        let mut res = ResolvedConfig::try_from(args)?;
+        if nontrivial {
+            res = res.nontrivial();
         }
-        .into_config()
-        .yaml()?
-    );
+        if show_context {
+            println!("{:#?}\n---", res.context);
+        };
+        res.into_config()
+    };
+    print!("{}", config.yaml()?);
     Ok(())
 }
 
