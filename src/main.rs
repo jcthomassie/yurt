@@ -86,6 +86,10 @@ pub struct YurtArgs {
 #[derive(Subcommand, Debug)]
 enum YurtAction {
     /// Show the resolved build
+    #[command(group(
+        ArgGroup::new("modifier")
+            .args(["raw", "nontrivial"])
+    ))]
     Show {
         /// Print unresolved config
         #[arg(long, short)]
