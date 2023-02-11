@@ -1,14 +1,21 @@
 use crate::{
     context::Context,
-    specs::{BuildSpec, BuildUnit, ResolveInto},
+    specs::{BuildSpec, BuildUnit, BuildUnitKind, ResolveInto},
+    YurtArgs,
 };
 
 use anyhow::{bail, Context as _, Result};
-use clap::{crate_version, ArgMatches};
+use clap::crate_version;
 use lazy_static::lazy_static;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashSet, env, fs::File, io::BufReader, path::Path};
+use std::{
+    collections::HashSet,
+    env,
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
+};
 
 lazy_static! {
     static ref VERSION: Version = Version::parse(crate_version!()).unwrap();
@@ -46,23 +53,23 @@ impl ResolvedConfig {
         })
     }
 
-    fn _include(unit: &BuildUnit, units: &HashSet<String>) -> bool {
+    fn _include(unit: &BuildUnit, units: &HashSet<BuildUnitKind>) -> bool {
         match unit {
-            BuildUnit::Repo(_) => units.contains("repo"),
-            BuildUnit::Link(_) => units.contains("link"),
-            BuildUnit::Install(_) => units.contains("install"),
-            BuildUnit::Require(_) => units.contains("require"),
-            BuildUnit::Run(_) => units.contains("run"),
+            BuildUnit::Repo(_) => units.contains(&BuildUnitKind::Repo),
+            BuildUnit::Link(_) => units.contains(&BuildUnitKind::Link),
+            BuildUnit::Install(_) => units.contains(&BuildUnitKind::Install),
+            BuildUnit::Require(_) => units.contains(&BuildUnitKind::Require),
+            BuildUnit::Run(_) => units.contains(&BuildUnitKind::Run),
         }
     }
 
     #[inline]
-    fn include(self, units: &HashSet<String>) -> Self {
+    fn include(self, units: &HashSet<BuildUnitKind>) -> Self {
         self.filter(|unit| Self::_include(unit, units))
     }
 
     #[inline]
-    fn exclude(self, units: &HashSet<String>) -> Self {
+    fn exclude(self, units: &HashSet<BuildUnitKind>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
@@ -96,17 +103,17 @@ impl ResolvedConfig {
     }
 }
 
-impl TryFrom<&ArgMatches> for ResolvedConfig {
+impl TryFrom<&YurtArgs> for ResolvedConfig {
     type Error = anyhow::Error;
 
-    fn try_from(args: &ArgMatches) -> Result<Self> {
+    fn try_from(args: &YurtArgs) -> Result<Self> {
         Config::try_from(args)
             .and_then(|c| c.resolve(Context::from(args)))
             .map(|r| {
-                if let Some(units) = args.get_many::<String>("include") {
-                    r.include(&units.cloned().collect())
-                } else if let Some(units) = args.get_many::<String>("exclude") {
-                    r.exclude(&units.cloned().collect())
+                if let Some(ref units) = args.include {
+                    r.include(&units.iter().copied().collect())
+                } else if let Some(ref units) = args.exclude {
+                    r.exclude(&units.iter().copied().collect())
                 } else {
                     r
                 }
@@ -162,16 +169,18 @@ impl Config {
     }
 }
 
-impl TryFrom<&ArgMatches> for Config {
+impl TryFrom<&YurtArgs> for Config {
     type Error = anyhow::Error;
 
-    fn try_from(args: &ArgMatches) -> Result<Self> {
-        if let Some(url) = args.get_one::<String>("yaml-url") {
+    fn try_from(args: &YurtArgs) -> Result<Self> {
+        if let Some(ref url) = args.yaml_url {
             Self::from_url(url)
         } else {
-            Self::from_path(match args.get_one::<String>("yaml") {
-                Some(path) => path.clone(),
-                None => env::var("YURT_BUILD_FILE").context("Build file not specified")?,
+            Self::from_path(match args.yaml {
+                Some(ref path) => path.clone(),
+                None => env::var("YURT_BUILD_FILE")
+                    .map(PathBuf::from)
+                    .context("Build file not specified")?,
             })
         }
     }
@@ -180,10 +189,10 @@ impl TryFrom<&ArgMatches> for Config {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::yurt_command;
 
     mod yaml {
         use super::*;
+        use clap::Parser;
         use std::fs::read_to_string;
         use std::path::PathBuf;
 
@@ -206,7 +215,7 @@ pub mod tests {
                 }
             }
 
-            fn get_arg_matches(&self) -> ArgMatches {
+            fn get_args(&self) -> YurtArgs {
                 let mut args = vec![
                     "yurt".to_string(),
                     "--yaml".to_string(),
@@ -220,7 +229,8 @@ pub mod tests {
                             .map(String::from),
                     );
                 }
-                yurt_command().get_matches_from(args)
+                args.push("show".to_string());
+                YurtArgs::try_parse_from(args).expect("Failed to parse args")
             }
 
             fn get_output_yaml(&self) -> String {
@@ -236,7 +246,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
-                        let resolved_yaml = ResolvedConfig::try_from(&test.get_arg_matches())
+                        let resolved_yaml = ResolvedConfig::try_from(&test.get_args())
                             .expect("Failed to resolve input build")
                             .into_config()
                             .yaml()
@@ -264,7 +274,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "parse", stringify!($name)]);
-                        assert!(Config::try_from(&test.get_arg_matches()).is_err());
+                        assert!(Config::try_from(&test.get_args()).is_err());
                     }
                 };
             }
@@ -282,7 +292,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
-                        let args = test.get_arg_matches();
+                        let args = test.get_args();
                         assert!(Config::try_from(&args).is_ok());
                         assert!(ResolvedConfig::try_from(&args).is_err());
                     }

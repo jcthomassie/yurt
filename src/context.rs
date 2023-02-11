@@ -1,7 +1,7 @@
 use crate::specs::PackageManager;
+use crate::YurtArgs;
 
 use anyhow::{anyhow, Context as _, Result};
-use clap::ArgMatches;
 use indexmap::IndexSet;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
@@ -21,18 +21,9 @@ pub struct Context {
 }
 
 impl Context {
-    /// Replace '~' with home directory and resolve variables
-    pub fn parse_path(&self, input: &str) -> Result<String> {
-        self.variables
-            .parse_str(input)
-            .map(|s| s.replace('~', &self.home_dir))
-    }
-}
-
-impl From<&ArgMatches> for Context {
-    fn from(args: &ArgMatches) -> Self {
+    pub fn new(locale: Locale) -> Self {
         Self {
-            locale: Locale::from(args),
+            locale,
             managers: IndexSet::new(),
             variables: VarStack(HashMap::new()),
             home_dir: dirs::home_dir()
@@ -41,6 +32,25 @@ impl From<&ArgMatches> for Context {
                 .unwrap_or("~")
                 .to_string(),
         }
+    }
+
+    /// Replace '~' with home directory and resolve variables
+    pub fn parse_path(&self, input: &str) -> Result<String> {
+        self.variables
+            .parse_str(input)
+            .map(|s| s.replace('~', &self.home_dir))
+    }
+}
+
+impl Default for Context {
+    fn default() -> Self {
+        Context::new(Locale::default())
+    }
+}
+
+impl From<&YurtArgs> for Context {
+    fn from(args: &YurtArgs) -> Self {
+        Self::new(Locale::from(args))
     }
 }
 
@@ -52,6 +62,14 @@ pub struct Locale {
 }
 
 impl Locale {
+    pub fn new(user: Option<String>, platform: Option<String>, distro: Option<String>) -> Self {
+        Self {
+            user: user.unwrap_or_else(Self::get_user),
+            platform: platform.unwrap_or_else(Self::get_platform),
+            distro: distro.unwrap_or_else(Self::get_distro),
+        }
+    }
+
     #[inline]
     fn get_user() -> String {
         whoami::username()
@@ -73,19 +91,19 @@ impl Locale {
     }
 }
 
-impl From<&ArgMatches> for Locale {
-    fn from(args: &ArgMatches) -> Self {
-        Self {
-            user: args
-                .get_one::<String>("user")
-                .map_or_else(Self::get_user, String::from),
-            platform: args
-                .get_one::<String>("platform")
-                .map_or_else(Self::get_platform, String::from),
-            distro: args
-                .get_one::<String>("distro")
-                .map_or_else(Self::get_distro, String::from),
-        }
+impl Default for Locale {
+    fn default() -> Self {
+        Locale::new(None, None, None)
+    }
+}
+
+impl From<&YurtArgs> for Locale {
+    fn from(args: &YurtArgs) -> Self {
+        Self::new(
+            args.override_user.clone(),
+            args.override_platform.clone(),
+            args.override_distro.clone(),
+        )
     }
 }
 
@@ -205,40 +223,40 @@ impl VarStack {
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::yurt_command;
+    use crate::YurtArgs;
+    use clap::Parser;
     use pretty_assertions::assert_eq;
 
     #[inline]
-    pub fn get_context(args: &[&str]) -> Context {
-        Context::from(&yurt_command().get_matches_from(args))
+    fn parse_locale(args: &[&str]) -> Locale {
+        Locale::from(&YurtArgs::try_parse_from(args).expect("Failed to parse args"))
     }
 
     #[test]
     fn override_user() {
-        let locale = get_context(&["yurt", "--override-user", "yurt-test-user"]).locale;
+        let locale = parse_locale(&["yurt", "--override-user", "yurt-test-user", "show"]);
         assert_eq!(locale.user, "yurt-test-user");
     }
 
     #[test]
     fn override_distro() {
-        let locale = get_context(&["yurt", "--override-distro", "yurt-test-distro"]).locale;
+        let locale = parse_locale(&["yurt", "--override-distro", "yurt-test-distro", "show"]);
         assert_eq!(locale.distro, "yurt-test-distro");
     }
 
     #[test]
     fn override_platform() {
-        let locale = get_context(&["yurt", "--override-platform", "yurt-test-platform"]).locale;
+        let locale = parse_locale(&["yurt", "--override-platform", "yurt-test-platform", "show"]);
         assert_eq!(locale.platform, "yurt-test-platform");
     }
 
     #[test]
     fn locale_matching() {
-        let context = get_context(&[
-            "yurt",
-            "--override-user=u",
-            "--override-distro=d",
-            "--override-platform=p",
-        ]);
+        let context = Context::new(Locale::new(
+            Some("u".to_string()),
+            Some("p".to_string()),
+            Some("d".to_string()),
+        ));
         let cases = [
             ("{}", true),
             ("{ user: u }", true),
@@ -258,7 +276,7 @@ pub mod tests {
 
     #[test]
     fn path_variable_sub() {
-        let mut context = get_context(&[]);
+        let mut context = Context::default();
         context
             .variables
             .push("name", [("var_1", "val_1"), ("var_2", "val_2")].into_iter());
@@ -274,7 +292,7 @@ pub mod tests {
 
     #[test]
     fn variable_sub_invalid() {
-        let mut context = get_context(&[]);
+        let mut context = Context::default();
         context.variables.push("a", [("b", "c")].into_iter());
         assert!(context.variables.parse_str("${{ a.b.c }}").is_err());
         assert!(context.variables.parse_str("${{ . }}").is_err());

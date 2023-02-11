@@ -13,129 +13,110 @@ mod specs;
 use self::{
     config::{Config, ResolvedConfig},
     context::Context,
-    specs::BuildUnit,
+    specs::{BuildUnit, BuildUnitKind},
 };
 use anyhow::{bail, Context as _, Result};
-use clap::{builder::PossibleValuesParser, command, Arg, ArgMatches, Command};
-use std::{env, time::Instant};
+use clap::{command, ArgGroup, Parser, Subcommand};
+use std::{env, path::PathBuf, time::Instant};
 
-#[inline]
-pub fn yurt_command() -> Command {
-    command!()
-        .subcommand(
-            Command::new("install")
-                .about("Install the resolved build")
-                .arg(
-                    Arg::new("clean")
-                        .help("Clean link target conflicts")
-                        .short('c')
-                        .long("clean")
-                        .num_args(0),
-                ),
-        )
-        .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
-        .subcommand(Command::new("clean").about("Clean link target conflicts"))
-        .subcommand(
-            Command::new("show")
-                .about("Show the resolved build")
-                .arg(
-                    Arg::new("raw")
-                        .help("Show unresolved config")
-                        .short('r')
-                        .long("raw")
-                        .num_args(0),
-                )
-                .arg(
-                    Arg::new("non-trivial")
-                        .help("Hide trivial build units")
-                        .short('n')
-                        .long("non-trivial")
-                        .num_args(0)
-                        .conflicts_with("raw"),
-                )
-                .arg(
-                    Arg::new("context")
-                        .help("Print the build context")
-                        .short('c')
-                        .long("context")
-                        .num_args(0),
-                ),
-        )
-        .arg(
-            Arg::new("yaml")
-                .help("YAML build file path")
-                .short('y')
-                .long("yaml")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("yaml-url")
-                .help("YAML build file URL")
-                .long("yaml-url")
-                .num_args(1)
-                .conflicts_with("yaml"),
-        )
-        .arg(
-            Arg::new("quiet")
-                .help("Swallow subprocess stdout")
-                .short('q')
-                .long("quiet")
-                .num_args(0),
-        )
-        .arg(
-            Arg::new("log")
-                .help("Logging level")
-                .short('l')
-                .long("log")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("exclude")
-                .help("Exclude build types")
-                .short('E')
-                .long("exclude")
-                .value_delimiter(',')
-                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
-                .hide_possible_values(true),
-        )
-        .arg(
-            Arg::new("include")
-                .help("Include build types")
-                .short('I')
-                .long("include")
-                .value_delimiter(',')
-                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
-                .hide_possible_values(true)
-                .conflicts_with("exclude"),
-        )
-        .arg(
-            Arg::new("user")
-                .help("Override target user name")
-                .long("override-user")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("platform")
-                .help("Override target platform")
-                .long("override-platform")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("distro")
-                .help("Override target distro")
-                .long("override-distro")
-                .num_args(1),
-        )
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+#[command(arg_required_else_help(true))]
+#[command(group(
+    ArgGroup::new("yaml_file")
+        .args(["yaml", "yaml_url"])
+))]
+#[command(group(
+    ArgGroup::new("filter")
+        .args(["include", "exclude"])
+))]
+pub struct YurtArgs {
+    /// YAML build file path
+    #[arg(long, short, value_name = "FILE")]
+    yaml: Option<PathBuf>,
+
+    /// YAML build file URL
+    #[arg(long, value_name = "URL")]
+    yaml_url: Option<String>,
+
+    /// Logging level
+    #[arg(long, short)]
+    log: Option<String>,
+
+    /// Swallow subprocess stdout
+    #[arg(long, short)]
+    quiet: bool,
+
+    /// Override target username
+    #[arg(long, value_name = "USER")]
+    override_user: Option<String>,
+
+    /// Override target platform
+    #[arg(long, value_name = "PLATFORM")]
+    override_platform: Option<String>,
+
+    /// Override target distro
+    #[arg(long, value_name = "DISTRO")]
+    override_distro: Option<String>,
+
+    /// Include only the specified build unit types
+    #[arg(
+        value_enum,
+        long,
+        short = 'I',
+        value_delimiter = ',',
+        value_name = "TYPE"
+    )]
+    include: Option<Vec<BuildUnitKind>>,
+
+    /// Exclude the specified build unit types
+    #[arg(
+        value_enum,
+        long,
+        short = 'E',
+        value_delimiter = ',',
+        value_name = "TYPE"
+    )]
+    exclude: Option<Vec<BuildUnitKind>>,
+
+    #[command(subcommand)]
+    action: YurtAction,
 }
 
-/// Print the resolved build as YAML; optionally filter out trivial units, optionally print context
-fn show(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
-    let show_context = sub_args.get_flag("context");
-    let show_raw = sub_args.get_flag("raw");
-    let nontrivial = sub_args.get_flag("non-trivial");
+#[derive(Subcommand, Debug)]
+enum YurtAction {
+    /// Show the resolved build
+    Show {
+        /// Print unresolved config
+        #[arg(long, short)]
+        raw: bool,
 
-    let config = if show_raw {
-        if show_context {
+        /// Hide trivial build units
+        #[arg(long, short)]
+        nontrivial: bool,
+
+        /// Print the build context
+        #[arg(long, short)]
+        context: bool,
+    },
+
+    /// Install the resolved build
+    Install {
+        /// Clean link target conflicts
+        #[arg(long, short)]
+        clean: bool,
+    },
+
+    /// Uninstall the resolved build
+    Uninstall,
+
+    /// Clean link target conflicts
+    Clean,
+}
+
+fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<()> {
+    let config = if raw {
+        if context {
             println!("{:#?}\n---", Context::from(args));
         };
         Config::try_from(args)?
@@ -144,7 +125,7 @@ fn show(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
         if nontrivial {
             res = res.nontrivial();
         }
-        if show_context {
+        if context {
             println!("{:#?}\n---", res.context);
         };
         res.into_config()
@@ -153,8 +134,7 @@ fn show(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
     Ok(())
 }
 
-/// Eliminate elements that will conflict with installation
-fn clean(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
+fn clean(args: &YurtArgs) -> Result<()> {
     let config = ResolvedConfig::try_from(args)?;
 
     log::info!("Cleaning link heads...");
@@ -164,9 +144,8 @@ fn clean(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
     })
 }
 
-fn install(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
+fn install(args: &YurtArgs, clean: bool) -> Result<()> {
     let config = ResolvedConfig::try_from(args)?;
-    let clean = sub_args.get_flag("clean");
 
     log::info!("Installing...");
     config.for_each_unit(|unit| match unit {
@@ -178,7 +157,7 @@ fn install(args: &ArgMatches, sub_args: &ArgMatches) -> Result<()> {
     })
 }
 
-fn uninstall(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
+fn uninstall(args: &YurtArgs) -> Result<()> {
     let config = ResolvedConfig::try_from(args)?;
 
     log::info!("Uninstalling...");
@@ -189,35 +168,30 @@ fn uninstall(args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
     })
 }
 
-fn update(_args: &ArgMatches, _sub_args: &ArgMatches) -> Result<()> {
-    todo!("update is not yet supported")
-}
-
 fn main() -> Result<()> {
     if whoami::username() == "root" {
         bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
     }
 
     let timer = Instant::now();
-    let matches = yurt_command()
-        .subcommand_required(true)
-        .arg_required_else_help(true)
-        .get_matches();
+    let args = YurtArgs::parse();
 
-    if let Some(level) = matches.get_one::<&str>("log") {
+    if let Some(level) = &args.log {
         env::set_var("RUST_LOG", level);
     }
     env_logger::init();
 
-    let result = match matches.subcommand() {
-        Some(("show", s)) => show(&matches, s),
-        Some(("install", s)) => install(&matches, s),
-        Some(("uninstall", s)) => uninstall(&matches, s),
-        Some(("clean", s)) => clean(&matches, s),
-        Some(("update", s)) => update(&matches, s),
-        _ => unreachable!(),
+    let result = match args.action {
+        YurtAction::Show {
+            raw,
+            nontrivial,
+            context,
+        } => show(&args, raw, nontrivial, context),
+        YurtAction::Clean => clean(&args),
+        YurtAction::Install { clean } => install(&args, clean),
+        YurtAction::Uninstall => uninstall(&args),
     }
-    .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
+    .with_context(|| format!("Action failed: {:?}", args.action));
     log::debug!("Runtime: {:?}", timer.elapsed());
     result
 }

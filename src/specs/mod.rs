@@ -66,8 +66,13 @@ pub enum BuildUnit {
     Require(PackageManager),
 }
 
-impl BuildUnit {
-    pub const ALL_NAMES: &'static [&'static str] = &["repo", "link", "run", "install", "require"];
+#[derive(clap::ValueEnum, Debug, Copy, Clone, Hash, Eq, PartialEq)]
+pub enum BuildUnitKind {
+    Repo,
+    Link,
+    Run,
+    Install,
+    Require,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
