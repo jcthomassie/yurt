@@ -6,7 +6,6 @@ use std::{env, ffi::OsStr, path::Path, process::Command};
 
 pub mod command {
     use anyhow::{anyhow, Context as _, Result};
-    use log::debug;
     use std::process::{Command, Output, Stdio};
 
     fn check_output(output: &Output, command_tag: impl std::fmt::Debug) -> Result<()> {
@@ -22,7 +21,7 @@ pub mod command {
     }
 
     pub fn call_unchecked(command: &mut Command) -> Result<Output> {
-        debug!("Calling command: `{:?}`", command);
+        log::debug!("Calling command: `{command:?}`");
         command
             .output()
             .with_context(|| format!("Failed to run command: `{command:?}`"))
@@ -39,7 +38,7 @@ pub mod command {
     }
 
     pub fn pipe_unchecked(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<Output> {
-        debug!("Calling piped command: `{:?} | {:?}`", cmd_a, cmd_b);
+        log::debug!("Calling piped command: `{cmd_a:?} | {cmd_b:?}`");
         let mut proc_a = cmd_a
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

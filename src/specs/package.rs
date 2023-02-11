@@ -5,7 +5,6 @@ use crate::specs::{
 
 use anyhow::{anyhow, bail, Result};
 use indexmap::{IndexMap, IndexSet};
-use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -43,7 +42,7 @@ impl Package {
 
     pub fn install(&self) -> Result<()> {
         if self.is_installed() {
-            info!("Package already installed: {}", self.name);
+            log::info!("Package already installed: {}", self.name);
         } else if let Some((manager, package)) = self.manager_names().next() {
             manager.install(package)?;
         } else {
@@ -106,7 +105,7 @@ impl PackageManager {
 
     /// Install a package
     pub fn install(self, package: &str) -> Result<()> {
-        info!("Installing package `{}` with `{}`", package, self.name());
+        log::info!("Installing package `{}` with `{}`", package, self.name());
         let mut cmd = Command::new(self.name());
         match self {
             Self::Cargo => {
@@ -121,7 +120,7 @@ impl PackageManager {
 
     /// Uninstall a package
     pub fn uninstall(self, package: &str) -> Result<()> {
-        info!("Uninstalling package `{}` from `{}`", package, self.name());
+        log::info!("Uninstalling package `{}` from `{}`", package, self.name());
         let mut cmd = Command::new(self.name());
         match self {
             Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
@@ -158,7 +157,7 @@ impl PackageManager {
         match res {
             Ok(has) => has,
             Err(err) => {
-                warn!("{}", err);
+                log::warn!("{err}");
                 false
             }
         }
@@ -166,7 +165,7 @@ impl PackageManager {
 
     /// Install the package manager and perform setup
     pub fn bootstrap(self) -> Result<()> {
-        info!("Bootstrapping {}", self.name());
+        log::info!("Bootstrapping {}", self.name());
         match self {
             Self::Brew => Shell::from("bash").exec_remote(&[
                 "-fsSL",
@@ -206,15 +205,15 @@ impl Resolve for PackageManager {
 
 /// Check if a command is available locally
 #[inline]
-fn which_has(cmd: &str) -> bool {
+fn which_has(name: &str) -> bool {
     #[cfg(unix)]
-    let name = "which";
+    let mut cmd = Command::new("which");
     #[cfg(windows)]
-    let name = "where";
-    match command::call_bool(Command::new(name).arg(cmd)) {
+    let mut cmd = Command::new("where");
+    match command::call_bool(cmd.arg(name)) {
         Ok(has) => has,
-        Err(e) => {
-            warn!("'{}' failed for {}: {}", name, cmd, e);
+        Err(err) => {
+            log::warn!("{err}");
             false
         }
     }

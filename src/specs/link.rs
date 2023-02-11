@@ -1,7 +1,6 @@
 use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
-use log::info;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
 
@@ -58,7 +57,7 @@ impl Link {
         match self.status() {
             Status::Valid => Ok(()),
             Status::NullHead => {
-                info!("Linking {}", self);
+                log::info!("Linking {self}");
                 if let Some(dir) = self.head.parent() {
                     fs::create_dir_all(dir)?;
                 }
@@ -75,7 +74,7 @@ impl Link {
     pub fn unlink(&self) -> Result<()> {
         match self.status() {
             Status::Valid => {
-                info!("Unlinking {}", self);
+                log::info!("Unlinking {self}");
                 if self.tail.is_file() {
                     symlink::remove_symlink_file(&self.head)
                 } else {
@@ -91,7 +90,7 @@ impl Link {
     pub fn clean(&self) -> Result<()> {
         match self.status() {
             Status::InvalidHead(_) | Status::InvalidTail(_) => {
-                info!("Removing {:?}", &self.head);
+                log::info!("Removing {:?}", &self.head);
                 fs::remove_file(&self.head)
                     .with_context(|| format!("Failed to clean link head: {self}"))
             }

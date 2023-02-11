@@ -43,16 +43,6 @@ impl ResolvedConfig {
         }
     }
 
-    pub fn nontrivial(self) -> Self {
-        self.filter(|unit| match unit {
-            BuildUnit::Repo(repo) => !repo.is_available(),
-            BuildUnit::Link(link) => !link.is_valid(),
-            BuildUnit::Install(package) => !package.is_installed(),
-            BuildUnit::Require(manager) => !manager.is_available(),
-            BuildUnit::Run(_) => true,
-        })
-    }
-
     fn _include(unit: &BuildUnit, units: &HashSet<BuildUnitKind>) -> bool {
         match unit {
             BuildUnit::Repo(_) => units.contains(&BuildUnitKind::Repo),
@@ -71,6 +61,16 @@ impl ResolvedConfig {
     #[inline]
     fn exclude(self, units: &HashSet<BuildUnitKind>) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
+    }
+
+    pub fn nontrivial(self) -> Self {
+        self.filter(|unit| match unit {
+            BuildUnit::Repo(repo) => !repo.is_available(),
+            BuildUnit::Link(link) => !link.is_valid(),
+            BuildUnit::Install(package) => !package.is_installed(),
+            BuildUnit::Require(manager) => !manager.is_available(),
+            BuildUnit::Run(_) => true,
+        })
     }
 
     pub fn for_each_unit<F>(self, f: F) -> Result<()>
