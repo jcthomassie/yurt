@@ -43,9 +43,9 @@ pub struct YurtArgs {
     #[arg(long, short)]
     log: Option<String>,
 
-    /// Swallow subprocess stdout
-    #[arg(long, short)]
-    quiet: bool,
+    /// Allow yurt to run as root user
+    #[arg(long)]
+    root: bool,
 
     /// Override target username
     #[arg(long, value_name = "USER")]
@@ -160,10 +160,6 @@ fn uninstall(args: &YurtArgs) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    if whoami::username() == "root" {
-        bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
-    }
-
     let timer = Instant::now();
     let args = YurtArgs::parse();
 
@@ -171,6 +167,13 @@ fn main() -> Result<()> {
         env::set_var("RUST_LOG", level);
     }
     env_logger::init();
+
+    if !&args.root && whoami::username() == "root" {
+        bail!(
+            "Running as root user requires the `--root` argument. \
+            Use `sudo -u my-username` to run as an elevated non-root user."
+        );
+    }
 
     let result = match args.action {
         YurtAction::Show {
