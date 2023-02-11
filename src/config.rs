@@ -10,7 +10,6 @@ use lazy_static::lazy_static;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashSet,
     env,
     fs::File,
     io::BufReader,
@@ -43,7 +42,7 @@ impl ResolvedConfig {
         }
     }
 
-    fn _include(unit: &BuildUnit, units: &HashSet<BuildUnitKind>) -> bool {
+    fn _include(unit: &BuildUnit, units: &[BuildUnitKind]) -> bool {
         match unit {
             BuildUnit::Repo(_) => units.contains(&BuildUnitKind::Repo),
             BuildUnit::Link(_) => units.contains(&BuildUnitKind::Link),
@@ -54,12 +53,12 @@ impl ResolvedConfig {
     }
 
     #[inline]
-    fn include(self, units: &HashSet<BuildUnitKind>) -> Self {
+    fn include(self, units: &[BuildUnitKind]) -> Self {
         self.filter(|unit| Self::_include(unit, units))
     }
 
     #[inline]
-    fn exclude(self, units: &HashSet<BuildUnitKind>) -> Self {
+    fn exclude(self, units: &[BuildUnitKind]) -> Self {
         self.filter(|unit| !Self::_include(unit, units))
     }
 
@@ -109,14 +108,16 @@ impl TryFrom<&YurtArgs> for ResolvedConfig {
     fn try_from(args: &YurtArgs) -> Result<Self> {
         Config::try_from(args)
             .and_then(|c| c.resolve(Context::from(args)))
-            .map(|r| {
-                if let Some(ref units) = args.include {
-                    r.include(&units.iter().copied().collect())
-                } else if let Some(ref units) = args.exclude {
-                    r.exclude(&units.iter().copied().collect())
-                } else {
-                    r
-                }
+            .map(|r| match args {
+                YurtArgs {
+                    include: Some(units),
+                    ..
+                } => r.include(units),
+                YurtArgs {
+                    exclude: Some(units),
+                    ..
+                } => r.exclude(units),
+                _ => r,
             })
     }
 }
