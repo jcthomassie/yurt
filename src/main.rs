@@ -109,9 +109,6 @@ enum YurtAction {
 
     /// Uninstall the resolved build
     Uninstall,
-
-    /// Clean link target conflicts
-    Clean,
 }
 
 fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<()> {
@@ -132,16 +129,6 @@ fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<(
     };
     print!("{}", config.yaml()?);
     Ok(())
-}
-
-fn clean(args: &YurtArgs) -> Result<()> {
-    let config = ResolvedConfig::try_from(args)?;
-
-    log::info!("Cleaning link heads...");
-    config.for_each_unit(|unit| match unit {
-        BuildUnit::Link(link) => link.clean(),
-        _ => Ok(()),
-    })
 }
 
 fn install(args: &YurtArgs, clean: bool) -> Result<()> {
@@ -187,7 +174,6 @@ fn main() -> Result<()> {
             nontrivial,
             context,
         } => show(&args, raw, nontrivial, context),
-        YurtAction::Clean => clean(&args),
         YurtAction::Install { clean } => install(&args, clean),
         YurtAction::Uninstall => uninstall(&args),
     }
