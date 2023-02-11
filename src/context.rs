@@ -77,7 +77,7 @@ impl Locale {
 
     #[inline]
     fn get_platform() -> String {
-        format!("{:?}", whoami::platform()).to_lowercase()
+        whoami::platform().to_string().to_lowercase()
     }
 
     #[inline]
@@ -85,8 +85,8 @@ impl Locale {
         whoami::distro()
             .split(' ')
             .next()
-            .expect("Failed to determine distro")
-            .to_owned()
+            .unwrap()
+            .to_string()
             .to_lowercase()
     }
 }
