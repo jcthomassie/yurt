@@ -3,139 +3,188 @@
     clippy::derive_partial_eq_without_eq,
     clippy::match_bool,
     clippy::module_name_repetitions,
-    clippy::must_use_candidate
+    clippy::must_use_candidate,
+    clippy::too_many_lines
 )]
 mod config;
 mod context;
 mod specs;
 
-use self::{config::ResolvedConfig, specs::BuildUnit};
-use anyhow::{bail, Context, Result};
-use clap::{builder::PossibleValuesParser, command, Arg, Command};
-use log::debug;
-use std::{env, time::Instant};
+use self::{
+    config::{Config, ResolvedConfig},
+    context::Context,
+    specs::{BuildUnit, BuildUnitKind},
+};
+use anyhow::{bail, Context as _, Result};
+use clap::{command, ArgGroup, Parser, Subcommand};
+use std::{env, path::PathBuf, time::Instant};
 
-#[inline]
-pub fn yurt_command() -> Command {
-    command!()
-        .subcommand(
-            Command::new("install")
-                .about("Install the resolved build")
-                .arg(
-                    Arg::new("clean")
-                        .help("Clean link target conflicts")
-                        .short('c')
-                        .long("clean")
-                        .num_args(0),
-                ),
-        )
-        .subcommand(Command::new("uninstall").about("Uninstall the resolved build"))
-        .subcommand(Command::new("clean").about("Clean link target conflicts"))
-        .subcommand(
-            Command::new("show")
-                .about("Show the resolved build")
-                .arg(
-                    Arg::new("non-trivial")
-                        .help("Hide trivial build units")
-                        .short('n')
-                        .long("non-trivial")
-                        .num_args(0),
-                )
-                .arg(
-                    Arg::new("context")
-                        .help("Print the build context")
-                        .short('c')
-                        .long("context")
-                        .num_args(0),
-                ),
-        )
-        .arg(
-            Arg::new("yaml")
-                .help("YAML build file path")
-                .short('y')
-                .long("yaml")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("yaml-url")
-                .help("YAML build file URL")
-                .long("yaml-url")
-                .num_args(1)
-                .conflicts_with("yaml"),
-        )
-        .arg(
-            Arg::new("log")
-                .help("Logging level")
-                .short('l')
-                .long("log")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("exclude")
-                .help("Exclude build types")
-                .short('E')
-                .long("exclude")
-                .value_delimiter(',')
-                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
-                .hide_possible_values(true),
-        )
-        .arg(
-            Arg::new("include")
-                .help("Include build types")
-                .short('I')
-                .long("include")
-                .value_delimiter(',')
-                .value_parser(PossibleValuesParser::new(BuildUnit::ALL_NAMES))
-                .hide_possible_values(true)
-                .conflicts_with("exclude"),
-        )
-        .arg(
-            Arg::new("user")
-                .help("Override target user name")
-                .long("override-user")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("platform")
-                .help("Override target platform")
-                .long("override-platform")
-                .num_args(1),
-        )
-        .arg(
-            Arg::new("distro")
-                .help("Override target distro")
-                .long("override-distro")
-                .num_args(1),
-        )
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+#[command(arg_required_else_help(true))]
+#[command(group(
+    ArgGroup::new("yaml_file")
+        .args(["yaml", "yaml_url"])
+))]
+#[command(group(
+    ArgGroup::new("filter")
+        .args(["include", "exclude"])
+))]
+pub struct YurtArgs {
+    /// YAML build file path
+    #[arg(long, short, value_name = "FILE")]
+    yaml: Option<PathBuf>,
+
+    /// YAML build file URL
+    #[arg(long, value_name = "URL")]
+    yaml_url: Option<String>,
+
+    /// Logging level
+    #[arg(long, short)]
+    log: Option<String>,
+
+    /// Allow yurt to run as root user
+    #[arg(long)]
+    root: bool,
+
+    /// Override target username
+    #[arg(long, value_name = "USER")]
+    override_user: Option<String>,
+
+    /// Override target platform
+    #[arg(long, value_name = "PLATFORM")]
+    override_platform: Option<String>,
+
+    /// Override target distro
+    #[arg(long, value_name = "DISTRO")]
+    override_distro: Option<String>,
+
+    /// Include only the specified build unit types
+    #[arg(
+        value_enum,
+        long,
+        short = 'I',
+        value_delimiter = ',',
+        value_name = "TYPE"
+    )]
+    include: Option<Vec<BuildUnitKind>>,
+
+    /// Exclude the specified build unit types
+    #[arg(
+        value_enum,
+        long,
+        short = 'E',
+        value_delimiter = ',',
+        value_name = "TYPE"
+    )]
+    exclude: Option<Vec<BuildUnitKind>>,
+
+    #[command(subcommand)]
+    action: YurtAction,
+}
+
+#[derive(Subcommand, Debug)]
+enum YurtAction {
+    /// Show the resolved build
+    #[command(group(
+        ArgGroup::new("modifier")
+            .args(["raw", "nontrivial"])
+    ))]
+    Show {
+        /// Print unresolved config
+        #[arg(long, short)]
+        raw: bool,
+
+        /// Hide trivial build units
+        #[arg(long, short)]
+        nontrivial: bool,
+
+        /// Print the build context
+        #[arg(long, short)]
+        context: bool,
+    },
+
+    /// Install the resolved build
+    Install {
+        /// Clean link target conflicts
+        #[arg(long, short)]
+        clean: bool,
+    },
+
+    /// Uninstall the resolved build
+    Uninstall,
+}
+
+fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<()> {
+    let config = if raw {
+        if context {
+            println!("{:#?}\n---", Context::from(args));
+        };
+        Config::try_from(args)?
+    } else {
+        let mut res = ResolvedConfig::try_from(args)?;
+        if nontrivial {
+            res = res.nontrivial();
+        }
+        if context {
+            println!("{:#?}\n---", res.context);
+        };
+        res.into_config()
+    };
+    print!("{}", config.yaml()?);
+    Ok(())
+}
+
+fn install(args: &YurtArgs, clean: bool) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+
+    log::info!("Installing...");
+    config.for_each_unit(|unit| match unit {
+        BuildUnit::Repo(repo) => repo.require().map(drop),
+        BuildUnit::Link(link) => link.link(clean),
+        BuildUnit::Run(cmd) => cmd.exec(),
+        BuildUnit::Install(package) => package.install(),
+        BuildUnit::Require(manager) => manager.require(),
+    })
+}
+
+fn uninstall(args: &YurtArgs) -> Result<()> {
+    let config = ResolvedConfig::try_from(args)?;
+
+    log::info!("Uninstalling...");
+    config.for_each_unit(|unit| match unit {
+        BuildUnit::Link(link) => link.unlink(),
+        BuildUnit::Install(package) => package.uninstall(),
+        _ => Ok(()),
+    })
 }
 
 fn main() -> Result<()> {
-    if whoami::username() == "root" {
-        bail!("Running as root user is not allowed. Use `sudo -u my-username` instead.");
-    }
+    let timer = Instant::now();
+    let args = YurtArgs::parse();
 
-    let matches = yurt_command()
-        .subcommand_required(true)
-        .arg_required_else_help(true)
-        .get_matches();
-
-    if let Some(level) = matches.get_one::<&str>("log") {
+    if let Some(level) = &args.log {
         env::set_var("RUST_LOG", level);
     }
     env_logger::init();
 
-    let timer = Instant::now();
-    let result = ResolvedConfig::try_from(&matches)
-        .context("Failed to resolve build")
-        .and_then(|r| match matches.subcommand() {
-            Some(("show", s)) => r.show(s.get_flag("non-trivial"), s.get_flag("context")),
-            Some(("install", s)) => r.install(s.get_flag("clean")),
-            Some(("uninstall", _)) => r.uninstall(),
-            Some(("clean", _)) => r.clean(),
-            Some(("update", _)) => r.update(),
-            _ => unreachable!(),
-        })
-        .with_context(|| format!("Subcommand failed: {}", matches.subcommand_name().unwrap()));
-    debug!("Runtime: {:?}", timer.elapsed());
+    if !&args.root && whoami::username() == "root" {
+        bail!(
+            "Running as root user requires the `--root` argument. \
+            Use `sudo -u my-username` to run as an elevated non-root user."
+        );
+    }
+
+    let result = match args.action {
+        YurtAction::Show {
+            raw,
+            nontrivial,
+            context,
+        } => show(&args, raw, nontrivial, context),
+        YurtAction::Install { clean } => install(&args, clean),
+        YurtAction::Uninstall => uninstall(&args),
+    }
+    .with_context(|| format!("Action failed: {:?}", args.action));
+    log::debug!("Runtime: {:?}", timer.elapsed());
     result
 }

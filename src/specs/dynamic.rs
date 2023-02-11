@@ -133,18 +133,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{context::tests::get_context, specs::BuildSpec};
+    use crate::context::Context;
+    use crate::specs::BuildSpec;
     use pretty_assertions::assert_eq;
 
     mod condition {
-        use crate::{context::tests::get_context, specs::dynamic::Condition};
+        use crate::context::Context;
+        use crate::specs::dynamic::Condition;
         use pretty_assertions::assert_eq;
 
         macro_rules! yaml_condition {
             ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
                 let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
                 assert!(matches!(cond, $enum_pattern));
-                assert_eq!(cond.evaluate(&get_context(&[])).unwrap(), $evaluation);
+                assert_eq!(cond.evaluate(&Context::default()).unwrap(), $evaluation);
             };
         }
 
@@ -206,46 +208,42 @@ mod tests {
 
     #[test]
     fn positive_match() {
-        let context = get_context(&[]);
         let case = CaseBranch {
             condition: Some(Condition::Bool(true)),
             when: Some(true),
             include: "something",
         };
-        assert!(case.evaluate(&context).unwrap());
+        assert!(case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
     fn positive_non_match() {
-        let context = get_context(&[]);
         let case = CaseBranch {
             condition: Some(Condition::Bool(false)),
             when: Some(true),
             include: "something",
         };
-        assert!(!case.evaluate(&context).unwrap());
+        assert!(!case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
     fn negative_match() {
-        let context = get_context(&[]);
         let case = CaseBranch {
             condition: Some(Condition::Bool(false)),
             when: Some(false),
             include: "something",
         };
-        assert!(case.evaluate(&context).unwrap());
+        assert!(case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
     fn negative_non_match() {
-        let context = get_context(&[]);
         let case = CaseBranch {
             condition: Some(Condition::Bool(true)),
             when: Some(false),
             include: "something",
         };
-        assert!(!case.evaluate(&context).unwrap());
+        assert!(!case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
@@ -255,7 +253,7 @@ mod tests {
             key_a: val_a
             key_b: val_b
         ").unwrap();
-        let mut context = get_context(&[]);
+        let mut context = Context::default();
         vars.resolve_into_new(&mut context).unwrap();
         assert_eq!(
             context.variables.get(Vars::NAMESPACE, "key_a").unwrap(),
@@ -281,7 +279,7 @@ mod tests {
 
     #[test]
     fn matrix_length_mismatch() {
-        let mut context = get_context(&[]);
+        let mut context = Context::default();
         #[rustfmt::skip]
         let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str("
             values:
@@ -294,7 +292,7 @@ mod tests {
 
     #[test]
     fn matrix_expansion() {
-        let mut context = get_context(&[]);
+        let mut context = Context::default();
         context
             .variables
             .push("outer", [("key", "value")].into_iter());
