@@ -39,19 +39,22 @@ impl Repo {
     }
 
     pub fn pull(&self) -> Result<bool> {
-        log::debug!("Updating repository: {}", self.path);
+        log::info!("Updating repository: {}", self.path);
         let repo = self.require()?;
         let branch = self.branch.as_deref().unwrap_or(DEFAULT_BRANCH);
         let remote = self.remote.as_deref().unwrap_or(DEFAULT_REMOTE);
         // Fetch remote
-        repo.find_remote(remote)?.fetch(&[branch], None, None)?;
+        repo.find_remote(remote)
+            .with_context(|| anyhow!("Failed to find repo remote {remote:?}"))?
+            .fetch(&[branch], None, None)
+            .with_context(|| anyhow!("Failed to fetch remote branch {branch:?}"))?;
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
         // Try fast-forward merge
-        let analysis = repo.merge_analysis(&[&fetch_commit])?;
-        if analysis.0.is_up_to_date() {
+        let (analysis, _) = repo.merge_analysis(&[&fetch_commit])?;
+        if analysis.is_up_to_date() {
             Ok(false)
-        } else if analysis.0.is_fast_forward() {
+        } else if analysis.is_fast_forward() {
             let refname = format!("refs/heads/{branch}");
             let mut reference = repo.find_reference(&refname)?;
             reference.set_target(fetch_commit.id(), "Fast-Forward")?;
