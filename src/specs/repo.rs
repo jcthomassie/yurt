@@ -3,7 +3,7 @@ use crate::{
     specs::{BuildUnit, Resolve},
 };
 use anyhow::{anyhow, Context as _, Result};
-use git2::{build::CheckoutBuilder, Repository};
+use git2::{build::CheckoutBuilder, Cred, RemoteCallbacks, Repository};
 use serde::{Deserialize, Serialize};
 
 const DEFAULT_BRANCH: &str = "main";
@@ -17,36 +17,70 @@ pub struct Repo {
     branch: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     remote: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ssh_key_path: Option<String>,
 }
 
 impl Repo {
+    fn fetch_options(&self) -> git2::FetchOptions {
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(move |_url, user_from_url, allowed| {
+            let user = user_from_url.unwrap_or("git");
+            if allowed.contains(git2::CredentialType::USERNAME) {
+                log::debug!("Using username as git credential");
+                Cred::username(user)
+            } else if let Some(key) = &self.ssh_key_path {
+                log::debug!("Using ssh key as git credential");
+                Cred::ssh_key(user, None, key.as_ref(), None)
+            } else {
+                log::debug!("Using default git credential");
+                Cred::default()
+            }
+        });
+
+        let mut opts = git2::FetchOptions::new();
+        opts.remote_callbacks(callbacks);
+        opts.download_tags(git2::AutotagOption::All);
+        opts
+    }
+
     fn open(&self) -> Result<Repository> {
         Repository::open(&self.path)
             .with_context(|| format!("Failed to open git repository: {self:?}"))
     }
 
-    fn clone_recurse(&self) -> Result<Repository> {
-        Repository::clone_recurse(&self.url, &self.path)
+    fn clone(&self) -> Result<Repository> {
+        log::info!("Cloning repository {} into {}", self.url, self.path);
+        let branch = self.branch.as_deref().unwrap_or(DEFAULT_BRANCH);
+
+        let mut builder = git2::build::RepoBuilder::new();
+        builder.fetch_options(self.fetch_options());
+        builder.branch(branch);
+        builder
+            .clone(&self.url, self.path.as_ref())
             .with_context(|| format!("Failed to clone git repository: {self:?}"))
+        // TODO: init submodules/recurse
     }
 
+    #[inline]
     pub fn require(&self) -> Result<Repository> {
-        self.open().or_else(|_| self.clone_recurse())
+        self.open().or_else(|_| self.clone())
     }
 
+    #[inline]
     pub fn is_available(&self) -> bool {
         self.open().is_ok()
     }
 
     pub fn pull(&self) -> Result<bool> {
         log::info!("Updating repository: {}", self.path);
-        let repo = self.require()?;
+        let repo = self.open()?;
         let branch = self.branch.as_deref().unwrap_or(DEFAULT_BRANCH);
         let remote = self.remote.as_deref().unwrap_or(DEFAULT_REMOTE);
         // Fetch remote
         repo.find_remote(remote)
             .with_context(|| anyhow!("Failed to find repo remote {remote:?}"))?
-            .fetch(&[branch], None, None)
+            .fetch(&[branch], Some(&mut self.fetch_options()), None)
             .with_context(|| anyhow!("Failed to fetch remote branch {branch:?}"))?;
         let fetch_head = repo.find_reference("FETCH_HEAD")?;
         let fetch_commit = repo.reference_to_annotated_commit(&fetch_head)?;
@@ -84,6 +118,10 @@ impl Resolve for Repo {
         let new = Self {
             path: context.parse_path(&self.path)?,
             url: context.parse_str(&self.url)?,
+            ssh_key_path: self
+                .ssh_key_path
+                .map(|key| context.parse_path(&key))
+                .transpose()?,
             ..self
         };
         let new_id = new.name()?;
@@ -110,6 +148,7 @@ mod tests {
             url: "https://github.com/jcthomassie/yurt.git".to_string(),
             branch: Some("main".to_string()),
             remote: Some("origin".to_string()),
+            ssh_key_path: None,
         };
     }
 
