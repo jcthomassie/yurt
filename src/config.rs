@@ -18,7 +18,6 @@ use std::{
 
 lazy_static! {
     static ref VERSION: Version = Version::parse(crate_version!()).unwrap();
-    static ref DEFAULT_VERSION_REQ: VersionReq = VersionReq::parse(crate_version!()).unwrap();
 }
 
 #[allow(dead_code)]
@@ -27,7 +26,7 @@ pub struct ResolvedConfig {
     // Members should be treated as immutable
     pub context: Context,
     build: Vec<BuildUnit>,
-    version: VersionReq,
+    version: Option<VersionReq>,
 }
 
 impl ResolvedConfig {
@@ -96,7 +95,7 @@ impl ResolvedConfig {
             });
         }
         Config {
-            version: Some(self.version),
+            version: self.version,
             build,
         }
     }
@@ -125,6 +124,7 @@ impl TryFrom<&YurtArgs> for ResolvedConfig {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<VersionReq>,
     build: Vec<BuildSpec>,
 }
@@ -150,9 +150,9 @@ impl Config {
     pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
         let version = match self.version {
-            Some(req) if req.matches(&VERSION) => req,
+            Some(req) if req.matches(&VERSION) => Some(req),
             Some(req) => bail!("Version requirement not satisfied: {} ({})", req, *VERSION),
-            None => DEFAULT_VERSION_REQ.clone(),
+            None => None,
         };
         // Resolve build
         Ok(ResolvedConfig {
