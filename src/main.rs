@@ -118,7 +118,13 @@ fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<(
     } else {
         let mut res = ResolvedConfig::try_from(args)?;
         if nontrivial {
-            res = res.nontrivial();
+            res = res.filter(|unit| match unit {
+                BuildUnit::Repo(repo) => !repo.is_available(),
+                BuildUnit::Link(link) => !link.is_valid(),
+                BuildUnit::Install(package) => !package.is_installed(),
+                BuildUnit::Require(manager) => !manager.is_available(),
+                BuildUnit::Hook(hook) => hook.applies(Hook::Install),
+            });
         }
         if context {
             println!("{:#?}\n---", res.context);

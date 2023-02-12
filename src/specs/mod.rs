@@ -58,15 +58,6 @@ where
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum BuildUnit {
-    Repo(Repo),
-    Link(Link),
-    Hook(ShellHook),
-    Install(Package),
-    Require(PackageManager),
-}
-
 #[derive(clap::ValueEnum, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BuildUnitKind {
     Repo,
@@ -76,13 +67,34 @@ pub enum BuildUnitKind {
     Require,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum BuildUnit {
+    Repo(Repo),
+    Link(Link),
+    Hook(ShellHook),
+    Install(Package),
+    Require(PackageManager),
+}
+
+impl BuildUnit {
+    pub fn included_in(&self, units: &[BuildUnitKind]) -> bool {
+        match self {
+            Self::Repo(_) => units.contains(&BuildUnitKind::Repo),
+            Self::Link(_) => units.contains(&BuildUnitKind::Link),
+            Self::Hook(_) => units.contains(&BuildUnitKind::Hook),
+            Self::Install(_) => units.contains(&BuildUnitKind::Install),
+            Self::Require(_) => units.contains(&BuildUnitKind::Require),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
-    Repo(Repo),
     Vars(Vars),
-    Matrix(Matrix<Vec<BuildSpec>>),
     Case(Case<Vec<BuildSpec>>),
+    Matrix(Matrix<Vec<BuildSpec>>),
+    Repo(Repo),
     Link(Vec<Link>),
     Hook(ShellHook),
     Install(Vec<Package>),
@@ -90,17 +102,17 @@ pub enum BuildSpec {
 }
 
 impl BuildSpec {
-    pub fn absorb(self: &mut BuildSpec, unit: &BuildUnit) -> bool {
+    pub fn absorb(&mut self, unit: &BuildUnit) -> bool {
         match (self, unit) {
-            (BuildSpec::Link(a), BuildUnit::Link(b)) => {
+            (Self::Link(a), BuildUnit::Link(b)) => {
                 a.push(b.clone());
                 true
             }
-            (BuildSpec::Install(a), BuildUnit::Install(b)) => {
+            (Self::Install(a), BuildUnit::Install(b)) => {
                 a.push(b.clone());
                 true
             }
-            (BuildSpec::Require(a), BuildUnit::Require(b)) => {
+            (Self::Require(a), BuildUnit::Require(b)) => {
                 a.push(*b);
                 true
             }
@@ -109,13 +121,25 @@ impl BuildSpec {
     }
 }
 
+impl From<BuildUnit> for BuildSpec {
+    fn from(unit: BuildUnit) -> BuildSpec {
+        match unit {
+            BuildUnit::Repo(repo) => Self::Repo(repo),
+            BuildUnit::Link(link) => Self::Link(vec![link]),
+            BuildUnit::Hook(hook) => Self::Hook(hook),
+            BuildUnit::Install(package) => Self::Install(vec![package]),
+            BuildUnit::Require(manager) => Self::Require(vec![manager]),
+        }
+    }
+}
+
 impl ResolveInto for BuildSpec {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
         match self {
-            Self::Repo(r) => r.resolve_into(context, output),
             Self::Vars(v) => v.resolve_into(context, output),
-            Self::Matrix(m) => m.resolve_into(context, output),
             Self::Case(v) => v.resolve_into(context, output),
+            Self::Matrix(m) => m.resolve_into(context, output),
+            Self::Repo(r) => r.resolve_into(context, output),
             Self::Link(v) => v.resolve_into(context, output),
             Self::Hook(s) => s.resolve_into(context, output),
             Self::Install(v) => v.resolve_into(context, output),

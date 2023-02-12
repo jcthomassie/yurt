@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    specs::{BuildSpec, BuildUnit, BuildUnitKind, Hook, ResolveInto},
+    specs::{BuildSpec, BuildUnit, ResolveInto},
     YurtArgs,
 };
 
@@ -31,7 +31,7 @@ pub struct ResolvedConfig {
 
 impl ResolvedConfig {
     #[inline]
-    fn filter<P>(self, predicate: P) -> Self
+    pub fn filter<P>(self, predicate: P) -> Self
     where
         P: FnMut(&BuildUnit) -> bool,
     {
@@ -41,36 +41,7 @@ impl ResolvedConfig {
         }
     }
 
-    fn _include(unit: &BuildUnit, units: &[BuildUnitKind]) -> bool {
-        match unit {
-            BuildUnit::Repo(_) => units.contains(&BuildUnitKind::Repo),
-            BuildUnit::Link(_) => units.contains(&BuildUnitKind::Link),
-            BuildUnit::Install(_) => units.contains(&BuildUnitKind::Install),
-            BuildUnit::Require(_) => units.contains(&BuildUnitKind::Require),
-            BuildUnit::Hook(_) => units.contains(&BuildUnitKind::Hook),
-        }
-    }
-
     #[inline]
-    fn include(self, units: &[BuildUnitKind]) -> Self {
-        self.filter(|unit| Self::_include(unit, units))
-    }
-
-    #[inline]
-    fn exclude(self, units: &[BuildUnitKind]) -> Self {
-        self.filter(|unit| !Self::_include(unit, units))
-    }
-
-    pub fn nontrivial(self) -> Self {
-        self.filter(|unit| match unit {
-            BuildUnit::Repo(repo) => !repo.is_available(),
-            BuildUnit::Link(link) => !link.is_valid(),
-            BuildUnit::Install(package) => !package.is_installed(),
-            BuildUnit::Require(manager) => !manager.is_available(),
-            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
-        })
-    }
-
     pub fn for_each_unit<F>(self, f: F) -> Result<()>
     where
         F: FnMut(BuildUnit) -> Result<()>,
@@ -86,13 +57,7 @@ impl ResolvedConfig {
                     continue;
                 }
             }
-            build.push(match unit {
-                BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
-                BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
-                BuildUnit::Hook(hook) => BuildSpec::Hook(hook),
-                BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
-                BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
-            });
+            build.push(unit.into());
         }
         Config {
             version: self.version,
@@ -111,11 +76,11 @@ impl TryFrom<&YurtArgs> for ResolvedConfig {
                 YurtArgs {
                     include: Some(units),
                     ..
-                } => r.include(units),
+                } => r.filter(|unit| unit.included_in(units)),
                 YurtArgs {
                     exclude: Some(units),
                     ..
-                } => r.exclude(units),
+                } => r.filter(|unit| !unit.included_in(units)),
                 _ => r,
             })
     }
