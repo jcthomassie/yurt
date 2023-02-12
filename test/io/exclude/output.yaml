@@ -1,4 +1,6 @@
 build:
-- !run
-  shell: usr/bin/my-shell
-  command: something
+- !hook
+  on: []
+  exec:
+    shell: custom-shell
+    command: something

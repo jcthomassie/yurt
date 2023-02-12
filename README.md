@@ -52,9 +52,11 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
   - `negative` if the spec does not match the local spec
   - `default` if none of the preceeding conditions are met
 - `!link` list of symlinks to be applied
-- `!run` shell command to run on install
-  - `shell` shell to run the command with
-  - `command` command to run
+- `!hook` shell command to run on specified actions
+  - `on` actions to run the hook on
+  - `exec`
+    - `shell` shell to run the command with
+    - `command` command to run
 - `!install` list of packages to install
   - `name` package name
   - `managers` (optional) list of package managers that provide the package
@@ -68,7 +70,7 @@ The order of build steps may change the resolved values.
 
 ```yaml
 ---
-version: "~0.6.0"
+version: "~0.7.0-dev"
 build:
   # Require dotfile repo
   - !repo
@@ -90,13 +92,18 @@ build:
         - !require
           - brew
         # Run a command with a specific shell
-        - !run
-            shell: /usr/bin/bash
-            command: brew bundle --file ${{ dotfiles.path }}/.brewfile
+        - !hook
+            on: [ install ]
+            exec:
+              shell: /usr/bin/bash
+              command: brew bundle --file ${{ dotfiles.path }}/.brewfile
 
   # Run a command with the system default shell
-  - !run |
-      echo "hello world"
+  - !hook
+      on: [ install, uninstall ]
+      exec: |
+        echo "doing something"
+        echo "doing another thing"
 
   # Install packages
   - !install

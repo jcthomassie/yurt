@@ -188,15 +188,6 @@ impl ShellCommand {
     }
 }
 
-impl Resolve for ShellCommand {
-    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
-        Ok(BuildUnit::Run(Self {
-            command: context.variables.parse_str(&self.command)?,
-            ..self
-        }))
-    }
-}
-
 impl From<String> for ShellCommand {
     fn from(command: String) -> Self {
         Self {
@@ -220,6 +211,48 @@ impl From<ShellCommandSpec> for ShellCommand {
 enum ShellCommandSpec {
     String(String),
     Struct { shell: Shell, command: String },
+}
+
+#[derive(Deserialize, Serialize, Copy, Clone, Debug, PartialEq)]
+#[serde(rename_all = "kebab-case")]
+pub enum Hook {
+    Install,
+    Uninstall,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub struct ShellHook {
+    on: Vec<Hook>,
+    exec: ShellCommand,
+}
+
+impl ShellHook {
+    #[inline]
+    pub fn applies(&self, hook: Hook) -> bool {
+        self.on.contains(&hook)
+    }
+
+    #[inline]
+    pub fn exec(&self) -> Result<()> {
+        self.exec.exec()
+    }
+
+    #[inline]
+    pub fn exec_for(&self, hook: Hook) -> Result<()> {
+        self.applies(hook).then(|| self.exec()).unwrap_or(Ok(()))
+    }
+}
+
+impl Resolve for ShellHook {
+    fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
+        Ok(BuildUnit::Hook(Self {
+            exec: ShellCommand {
+                command: context.variables.parse_str(&self.exec.command)?,
+                ..self.exec
+            },
+            ..self
+        }))
+    }
 }
 
 #[cfg(test)]

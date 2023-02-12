@@ -7,7 +7,7 @@ mod specs;
 use self::{
     config::{Config, ResolvedConfig},
     context::Context,
-    specs::{BuildUnit, BuildUnitKind},
+    specs::{BuildUnit, BuildUnitKind, Hook},
 };
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
@@ -136,7 +136,7 @@ fn install(args: &YurtArgs, clean: bool) -> Result<()> {
     config.for_each_unit(|unit| match unit {
         BuildUnit::Repo(repo) => repo.require().map(drop),
         BuildUnit::Link(link) => link.link(clean),
-        BuildUnit::Run(cmd) => cmd.exec(),
+        BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
         BuildUnit::Install(package) => package.install(),
         BuildUnit::Require(manager) => manager.require(),
     })
@@ -148,6 +148,7 @@ fn uninstall(args: &YurtArgs) -> Result<()> {
     log::info!("Uninstalling...");
     config.for_each_unit(|unit| match unit {
         BuildUnit::Link(link) => link.unlink(),
+        BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
         BuildUnit::Install(package) => package.uninstall(),
         _ => Ok(()),
     })

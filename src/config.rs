@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    specs::{BuildSpec, BuildUnit, BuildUnitKind, ResolveInto},
+    specs::{BuildSpec, BuildUnit, BuildUnitKind, Hook, ResolveInto},
     YurtArgs,
 };
 
@@ -47,7 +47,7 @@ impl ResolvedConfig {
             BuildUnit::Link(_) => units.contains(&BuildUnitKind::Link),
             BuildUnit::Install(_) => units.contains(&BuildUnitKind::Install),
             BuildUnit::Require(_) => units.contains(&BuildUnitKind::Require),
-            BuildUnit::Run(_) => units.contains(&BuildUnitKind::Run),
+            BuildUnit::Hook(_) => units.contains(&BuildUnitKind::Hook),
         }
     }
 
@@ -67,7 +67,7 @@ impl ResolvedConfig {
             BuildUnit::Link(link) => !link.is_valid(),
             BuildUnit::Install(package) => !package.is_installed(),
             BuildUnit::Require(manager) => !manager.is_available(),
-            BuildUnit::Run(_) => true,
+            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
         })
     }
 
@@ -89,7 +89,7 @@ impl ResolvedConfig {
             build.push(match unit {
                 BuildUnit::Repo(repo) => BuildSpec::Repo(repo),
                 BuildUnit::Link(link) => BuildSpec::Link(vec![link]),
-                BuildUnit::Run(cmd) => BuildSpec::Run(cmd),
+                BuildUnit::Hook(hook) => BuildSpec::Hook(hook),
                 BuildUnit::Install(package) => BuildSpec::Install(vec![package]),
                 BuildUnit::Require(manager) => BuildSpec::Require(vec![manager]),
             });

@@ -1,8 +1,7 @@
 ---
 build:
-  - !run
-      shell: /usr/bin/bash
-      command: my-command
+  - !require
+    - cargo
   - !link
     - head: a
       tail: b

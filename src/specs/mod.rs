@@ -5,12 +5,13 @@ mod repo;
 mod shell;
 
 pub use self::package::PackageManager;
+pub use self::shell::Hook;
 use self::{
     dynamic::{Case, Matrix, Vars},
     link::Link,
     package::Package,
     repo::Repo,
-    shell::ShellCommand,
+    shell::ShellHook,
 };
 
 use crate::context::Context;
@@ -57,20 +58,20 @@ where
     }
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum BuildUnit {
     Repo(Repo),
     Link(Link),
-    Run(ShellCommand),
+    Hook(ShellHook),
     Install(Package),
     Require(PackageManager),
 }
 
-#[derive(clap::ValueEnum, Debug, Copy, Clone, Hash, Eq, PartialEq)]
+#[derive(clap::ValueEnum, Debug, Copy, Clone, Eq, PartialEq)]
 pub enum BuildUnitKind {
     Repo,
     Link,
-    Run,
+    Hook,
     Install,
     Require,
 }
@@ -83,7 +84,7 @@ pub enum BuildSpec {
     Matrix(Matrix<Vec<BuildSpec>>),
     Case(Case<Vec<BuildSpec>>),
     Link(Vec<Link>),
-    Run(ShellCommand),
+    Hook(ShellHook),
     Install(Vec<Package>),
     Require(Vec<PackageManager>),
 }
@@ -116,7 +117,7 @@ impl ResolveInto for BuildSpec {
             Self::Matrix(m) => m.resolve_into(context, output),
             Self::Case(v) => v.resolve_into(context, output),
             Self::Link(v) => v.resolve_into(context, output),
-            Self::Run(s) => s.resolve_into(context, output),
+            Self::Hook(s) => s.resolve_into(context, output),
             Self::Install(v) => v.resolve_into(context, output),
             Self::Require(v) => v.resolve_into(context, output),
         }
