@@ -46,6 +46,7 @@ impl Condition {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct CaseBranch<T> {
     condition: Condition,
+    #[serde(skip_serializing_if = "Option::is_none")]
     when: Option<bool>,
     include: T,
 }
