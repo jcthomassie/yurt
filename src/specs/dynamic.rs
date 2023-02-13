@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::ops::Not;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-#[serde(rename_all(deserialize = "snake_case"))]
+#[serde(rename_all = "snake_case")]
 enum Condition {
     Bool(bool),
     Locale(LocaleSpec),
