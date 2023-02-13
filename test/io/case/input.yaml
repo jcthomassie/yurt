@@ -8,7 +8,8 @@ build:
       - !install
         - name: not_package
     # Default case
-    - include:
+    - condition: !default
+      include:
       # Nested conditional
       - !case
         - condition: !all

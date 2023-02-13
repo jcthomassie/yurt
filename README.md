@@ -47,10 +47,9 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 - `!matrix` repeat include block for each value
   - `values` values to substitute in the include block
   - `include` build steps to be repeated
-- `!case` list of conditional build steps
-  - `positive` if the spec matches the local spec
-  - `negative` if the spec does not match the local spec
-  - `default` if none of the preceeding conditions are met
+- `!case` list of conditional steps; breaks after first match
+  - `condition` criteria for the case to be accepted
+  - `include` build steps to include if the condition is met
 - `!link` list of symlinks to be applied
 - `!hook` shell command to run on specified actions
   - `on` actions to run the hook on
@@ -88,7 +87,8 @@ build:
       include:
         - !require
           - choco
-    - include:
+    - condition: !default
+      include:
         - !require
           - brew
         # Run a command with a specific shell

@@ -17,6 +17,7 @@ enum Condition {
     All(Vec<Condition>),
     Any(Vec<Condition>),
     Not(Box<Condition>),
+    Default,
 }
 
 impl Condition {
@@ -37,13 +38,14 @@ impl Condition {
                 })
             }
             Self::Not(c) => c.evaluate(context).map(Not::not),
+            Self::Default => Ok(true),
         }
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct CaseBranch<T> {
-    condition: Option<Condition>,
+    condition: Condition,
     when: Option<bool>,
     include: T,
 }
@@ -51,8 +53,7 @@ struct CaseBranch<T> {
 impl<T> CaseBranch<T> {
     fn evaluate(&self, context: &Context) -> Result<bool> {
         self.condition
-            .as_ref()
-            .map_or(Ok(true), |c| c.evaluate(context))
+            .evaluate(context)
             .map(|b| b == self.when.unwrap_or(true))
     }
 }
@@ -209,7 +210,7 @@ mod tests {
     #[test]
     fn positive_match() {
         let case = CaseBranch {
-            condition: Some(Condition::Bool(true)),
+            condition: Condition::Bool(true),
             when: Some(true),
             include: "something",
         };
@@ -219,7 +220,7 @@ mod tests {
     #[test]
     fn positive_non_match() {
         let case = CaseBranch {
-            condition: Some(Condition::Bool(false)),
+            condition: Condition::Bool(false),
             when: Some(true),
             include: "something",
         };
@@ -229,7 +230,7 @@ mod tests {
     #[test]
     fn negative_match() {
         let case = CaseBranch {
-            condition: Some(Condition::Bool(false)),
+            condition: Condition::Bool(false),
             when: Some(false),
             include: "something",
         };
@@ -239,7 +240,7 @@ mod tests {
     #[test]
     fn negative_non_match() {
         let case = CaseBranch {
-            condition: Some(Condition::Bool(true)),
+            condition: Condition::Bool(true),
             when: Some(false),
             include: "something",
         };
