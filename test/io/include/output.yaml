@@ -2,5 +2,5 @@ build:
 - !require
   - cargo
 - !link
-  - head: a
-    tail: b
+  - source: a
+    target: b

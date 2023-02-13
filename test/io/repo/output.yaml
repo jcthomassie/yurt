@@ -3,5 +3,5 @@ build:
   path: /home/dotfiles
   url: https://github.com/user/dotfiles.git
 - !link
-  - head: /dotfiles
-    tail: /home/dotfiles
+  - source: /dotfiles
+    target: /home/dotfiles

@@ -1,8 +1,8 @@
 build:
 - !link
-  - head: dir_a/head_1
-    tail: dir_a/tail_1
-  - head: dir_b/head_2
-    tail: dir_b/tail_2
-  - head: dir_c/head_3
-    tail: dir_c/tail_3
+  - source: dir_a/source_1
+    target: dir_a/target_1
+  - source: dir_b/source_2
+    target: dir_b/target_2
+  - source: dir_c/source_3
+    target: dir_c/target_3

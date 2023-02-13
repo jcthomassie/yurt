@@ -6,7 +6,7 @@ build:
         shell: custom-shell
         command: something
   - !link
-    - head: a
-      tail: b
+    - source: a
+      target: b
   - !install
     - name: p
