@@ -85,7 +85,7 @@ enum YurtAction {
             .args(["raw", "nontrivial"])
     ))]
     Show {
-        /// Print unresolved config
+        /// Print unresolved config/context
         #[arg(long, short)]
         raw: bool,
 
@@ -109,11 +109,18 @@ enum YurtAction {
     Uninstall,
 }
 
-fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<()> {
+fn show_context(args: &YurtArgs, raw: bool) -> Result<()> {
+    let context = if raw {
+        Context::from(args)
+    } else {
+        ResolvedConfig::try_from(args)?.context
+    };
+    println!("{context:#?}");
+    Ok(())
+}
+
+fn show_build(args: &YurtArgs, raw: bool, nontrivial: bool) -> Result<()> {
     let config = if raw {
-        if context {
-            println!("{:#?}\n---", Context::from(args));
-        };
         Config::try_from(args)?
     } else {
         let mut res = ResolvedConfig::try_from(args)?;
@@ -126,9 +133,6 @@ fn show(args: &YurtArgs, raw: bool, nontrivial: bool, context: bool) -> Result<(
                 BuildUnit::Hook(hook) => hook.applies(Hook::Install),
             });
         }
-        if context {
-            println!("{:#?}\n---", res.context);
-        };
         res.into_config()
     };
     print!("{}", config.yaml()?);
@@ -178,10 +182,11 @@ fn main() -> Result<()> {
 
     let result = match args.action {
         YurtAction::Show {
-            raw,
-            nontrivial,
-            context,
-        } => show(&args, raw, nontrivial, context),
+            raw, context: true, ..
+        } => show_context(&args, raw),
+        YurtAction::Show {
+            raw, nontrivial, ..
+        } => show_build(&args, raw, nontrivial),
         YurtAction::Install { clean } => install(&args, clean),
         YurtAction::Uninstall => uninstall(&args),
     }
