@@ -11,7 +11,12 @@ use self::{
 };
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
-use std::{env, path::PathBuf, time::Instant};
+use std::{
+    env,
+    io::{self, Write},
+    path::PathBuf,
+    time::Instant,
+};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -115,8 +120,7 @@ fn show_context(args: &YurtArgs, raw: bool) -> Result<()> {
     } else {
         ResolvedConfig::try_from(args)?.context
     };
-    println!("{context:#?}");
-    Ok(())
+    writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
 }
 
 fn show_build(args: &YurtArgs, raw: bool, nontrivial: bool) -> Result<()> {
@@ -135,33 +139,7 @@ fn show_build(args: &YurtArgs, raw: bool, nontrivial: bool) -> Result<()> {
         }
         res.into_config()
     };
-    print!("{}", config.yaml()?);
-    Ok(())
-}
-
-fn install(args: &YurtArgs, clean: bool) -> Result<()> {
-    let config = ResolvedConfig::try_from(args)?;
-
-    log::info!("Installing...");
-    config.for_each_unit(|unit| match unit {
-        BuildUnit::Repo(repo) => repo.require().map(drop),
-        BuildUnit::Link(link) => link.link(clean),
-        BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
-        BuildUnit::Install(package) => package.install(),
-        BuildUnit::Require(manager) => manager.require(),
-    })
-}
-
-fn uninstall(args: &YurtArgs) -> Result<()> {
-    let config = ResolvedConfig::try_from(args)?;
-
-    log::info!("Uninstalling...");
-    config.for_each_unit(|unit| match unit {
-        BuildUnit::Link(link) => link.unlink(),
-        BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
-        BuildUnit::Install(package) => package.uninstall(),
-        _ => Ok(()),
-    })
+    writeln!(io::stdout(), "{}", config.yaml()?).context("Failed to write yaml to stdout")
 }
 
 fn main() -> Result<()> {
@@ -172,6 +150,7 @@ fn main() -> Result<()> {
         env::set_var("RUST_LOG", level);
     }
     env_logger::init();
+    log::debug!("{:#?}", &args);
 
     if !&args.root && whoami::username() == "root" {
         bail!(
@@ -180,6 +159,7 @@ fn main() -> Result<()> {
         );
     }
 
+    log::info!("{:?}", &args.action);
     let result = match args.action {
         YurtAction::Show {
             raw, context: true, ..
@@ -187,8 +167,23 @@ fn main() -> Result<()> {
         YurtAction::Show {
             raw, nontrivial, ..
         } => show_build(&args, raw, nontrivial),
-        YurtAction::Install { clean } => install(&args, clean),
-        YurtAction::Uninstall => uninstall(&args),
+        YurtAction::Install { clean } => ResolvedConfig::try_from(&args).and_then(|build| {
+            build.for_each_unit(|unit| match unit {
+                BuildUnit::Repo(repo) => repo.require().map(drop),
+                BuildUnit::Link(link) => link.link(clean),
+                BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
+                BuildUnit::Install(package) => package.install(),
+                BuildUnit::Require(manager) => manager.require(),
+            })
+        }),
+        YurtAction::Uninstall => ResolvedConfig::try_from(&args).and_then(|build| {
+            build.for_each_unit(|unit| match unit {
+                BuildUnit::Link(link) => link.unlink(),
+                BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
+                BuildUnit::Install(package) => package.uninstall(),
+                _ => Ok(()),
+            })
+        }),
     }
     .with_context(|| format!("Action failed: {:?}", args.action));
     log::debug!("Runtime: {:?}", timer.elapsed());
