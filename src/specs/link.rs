@@ -79,8 +79,12 @@ impl Link {
         match self.status() {
             Status::Valid => {
                 log::info!("Unlinking {self}");
-                symlink::remove_symlink_auto(&self.source)
-                    .with_context(|| format!("Failed to remove symlink: {self}"))
+                if self.target.is_file() {
+                    symlink::remove_symlink_file(&self.source)
+                } else {
+                    symlink::remove_symlink_dir(&self.source)
+                }
+                .with_context(|| format!("Failed to remove symlink: {self}"))
             }
             _ => Ok(()),
         }
