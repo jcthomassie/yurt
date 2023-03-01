@@ -136,17 +136,17 @@ impl Shell {
 impl Default for Shell {
     #[cfg(target_os = "windows")]
     fn default() -> Self {
-        Shell::from("cmd")
+        Self::from("cmd")
     }
 
     #[cfg(target_os = "macos")]
     fn default() -> Self {
-        Shell::from("zsh")
+        Self::from("zsh")
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn default() -> Self {
-        Shell::from("sh")
+        Self::from("sh")
     }
 }
 

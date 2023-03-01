@@ -44,7 +44,7 @@ impl Context {
 
 impl Default for Context {
     fn default() -> Self {
-        Context::new(Locale::default())
+        Self::new(Locale::default())
     }
 }
 
@@ -62,7 +62,11 @@ pub struct Locale {
 }
 
 impl Locale {
-    pub fn new(user: Option<String>, platform: Option<String>, distro: Option<String>) -> Self {
+    pub fn with_overrides(
+        user: Option<String>,
+        platform: Option<String>,
+        distro: Option<String>,
+    ) -> Self {
         Self {
             user: user.unwrap_or_else(Self::get_user),
             platform: platform.unwrap_or_else(Self::get_platform),
@@ -93,13 +97,13 @@ impl Locale {
 
 impl Default for Locale {
     fn default() -> Self {
-        Locale::new(None, None, None)
+        Self::with_overrides(None, None, None)
     }
 }
 
 impl From<&YurtArgs> for Locale {
     fn from(args: &YurtArgs) -> Self {
-        Self::new(
+        Self::with_overrides(
             args.override_user.clone(),
             args.override_platform.clone(),
             args.override_distro.clone(),
@@ -120,11 +124,11 @@ pub struct LocaleSpec {
 impl LocaleSpec {
     pub fn is_local(&self, context: &Context) -> bool {
         match self {
-            LocaleSpec { user: Some(u), .. } if u != &context.locale.user => false,
-            LocaleSpec {
+            Self { user: Some(u), .. } if u != &context.locale.user => false,
+            Self {
                 platform: Some(p), ..
             } if p != &context.locale.platform => false,
-            LocaleSpec {
+            Self {
                 distro: Some(d), ..
             } if d != &context.locale.distro => false,
             _ => true,
@@ -252,7 +256,7 @@ pub mod tests {
 
     #[test]
     fn locale_matching() {
-        let context = Context::new(Locale::new(
+        let context = Context::new(Locale::with_overrides(
             Some("u".to_string()),
             Some("p".to_string()),
             Some("d".to_string()),
