@@ -136,6 +136,76 @@ impl LocaleSpec {
     }
 }
 
+mod parse {
+    use anyhow::{anyhow, Result};
+    use lazy_static::lazy_static;
+    use regex::{Captures, Regex};
+
+    lazy_static! {
+        static ref RE_REPLACE: Regex = Regex::new(
+            r"(?x)
+            \$\{\{\s*(?:
+                (?:(?P<namespace>\w+)\.)?(?P<var>\w+)|
+                env:(?P<envvar>\w+)|
+                (?P<invalid>.*)
+            )\s*\}\}"
+        )
+        .unwrap();
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub enum Key {
+        Var(String),                  // ${{ var }}
+        EnvVar(String),               // ${{ env:var }}
+        NamespaceVar(String, String), // ${{ namespace.var }}
+    }
+
+    // Only intended for use in this module
+    impl TryFrom<&Captures<'_>> for Key {
+        type Error = anyhow::Error;
+
+        fn try_from(captures: &Captures) -> anyhow::Result<Self> {
+            let cap_var = captures.name("var");
+            let cap_envvar = captures.name("envvar");
+            let cap_namespace = captures.name("namespace");
+            let cap_invalid = captures.name("invalid");
+
+            if let Some(var) = cap_var {
+                if let Some(name) = cap_namespace {
+                    Ok(Self::NamespaceVar(
+                        name.as_str().to_string(),
+                        var.as_str().to_string(),
+                    ))
+                } else {
+                    Ok(Self::Var(var.as_str().to_string()))
+                }
+            } else if let Some(envvar) = cap_envvar {
+                Ok(Self::EnvVar(envvar.as_str().to_string()))
+            } else if let Some(invalid) = cap_invalid {
+                Err(anyhow!("Invalid substitution: {}", invalid.as_str()))
+            } else {
+                Err(anyhow!("Key was initialized from invalid capture"))
+            }
+        }
+    }
+
+    pub fn replace<F>(input: &str, f: F) -> Result<String>
+    where
+        F: Fn(Key) -> Result<String>,
+    {
+        // Build iterator of replaced values
+        let values: Result<Vec<String>> = RE_REPLACE
+            .captures_iter(input)
+            .map(|caps| Key::try_from(&caps).and_then(&f))
+            .collect();
+        let mut values_iter = values?.into_iter();
+        // Build new string with replacements
+        Ok(RE_REPLACE
+            .replace_all(input, |_: &Captures| values_iter.next().unwrap())
+            .to_string())
+    }
+}
+
 type Key = String;
 
 #[derive(Debug, Clone)]
@@ -230,6 +300,68 @@ pub mod tests {
     use crate::YurtArgs;
     use clap::Parser;
     use pretty_assertions::assert_eq;
+
+    mod parse {
+        use super::super::parse::{replace, Key};
+
+        macro_rules! test_replace {
+            ($name:ident, $f:expr, $input:literal, $output:literal) => {
+                #[test]
+                fn $name() {
+                    let real_output = replace($input, $f).expect("`replace` call returned error");
+                    pretty_assertions::assert_eq!(real_output, $output);
+                }
+            };
+        }
+
+        test_replace!(
+            single_var,
+            |key| match key {
+                Key::Var(key) => Ok(format!("{key}_output")),
+                _ => panic!(),
+            },
+            "${{ key }}",
+            "key_output"
+        );
+
+        test_replace!(
+            single_envvar,
+            |key| match key {
+                Key::EnvVar(key) => Ok(format!("{key}_output")),
+                _ => panic!(),
+            },
+            "${{ env:key }}",
+            "key_output"
+        );
+
+        test_replace!(
+            single_namespacevar,
+            |key| match key {
+                Key::NamespaceVar(ns, key) => Ok(format!("{ns}_{key}_output")),
+                _ => panic!(),
+            },
+            "${{ ns.key }}",
+            "ns_key_output"
+        );
+
+        test_replace!(
+            mixed,
+            |key| match key {
+                Key::Var(key) => Ok(format!("Var_{key}")),
+                Key::EnvVar(key) => Ok(format!("EnvVar_{key}")),
+                Key::NamespaceVar(ns, key) => Ok(format!("NamespaceVar_{ns}.{key}")),
+            },
+            "${{ key1 }} ${{ env:key2 }} ${{ namespace.key3 }}",
+            "Var_key1 EnvVar_key2 NamespaceVar_namespace.key3"
+        );
+
+        test_replace!(
+            no_replacements,
+            |_key| { panic!() },
+            "literal input",
+            "literal input"
+        );
+    }
 
     #[inline]
     fn parse_locale(args: &[&str]) -> Locale {
