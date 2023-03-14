@@ -137,9 +137,10 @@ impl LocaleSpec {
 }
 
 mod parse {
-    use anyhow::{anyhow, Result};
+    use anyhow::{anyhow, Context as _, Result};
     use lazy_static::lazy_static;
     use regex::{Captures, Regex};
+    use std::collections::hash_map::{Entry, HashMap};
 
     lazy_static! {
         static ref RE_REPLACE: Regex = Regex::new(
@@ -153,11 +154,21 @@ mod parse {
         .unwrap();
     }
 
-    #[derive(Debug, PartialEq, Eq)]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Key {
         Var(String),                  // ${{ var }}
         EnvVar(String),               // ${{ env:var }}
         NamespaceVar(String, String), // ${{ namespace.var }}
+    }
+
+    impl Key {
+        pub fn get(&self) -> Result<String> {
+            match self {
+                Self::EnvVar(var) => ::std::env::var(var)
+                    .with_context(|| format!("Failed to get environment variable: {var}")),
+                _ => Err(anyhow!("Failed to get key: {:?}", self)),
+            }
+        }
     }
 
     // Only intended for use in this module
@@ -189,6 +200,48 @@ mod parse {
         }
     }
 
+    pub struct KeyStack(HashMap<Key, Vec<String>>);
+
+    impl KeyStack {
+        pub fn new() -> Self {
+            Self(HashMap::new())
+        }
+
+        /// Replace substitution tags in `input` using currently set values.
+        /// Uses `Key::get()` as a fallback if the key is unset.
+        pub fn replace(&self, input: &str) -> Result<String> {
+            replace(input, |key| match self.get(&key) {
+                Some(val) => Ok(val),
+                None => key.get(),
+            })
+        }
+
+        /// Get the last value for `key` from the stack
+        fn get(&self, key: &Key) -> Option<String> {
+            self.0.get(key).and_then(|vec| vec.last()).cloned()
+        }
+
+        /// Push a new value for `key` onto the stack
+        fn push<V>(&mut self, key: Key, val: V)
+        where
+            V: Into<String>,
+        {
+            self.0.entry(key).or_default().push(val.into());
+        }
+
+        /// Drop the last value for `key` from the stack
+        fn drop(&mut self, key: Key) {
+            if let Entry::Occupied(mut entry) = self.0.entry(key) {
+                let vec = entry.get_mut();
+                let _val = vec.pop();
+                if vec.is_empty() {
+                    entry.remove();
+                }
+            }
+        }
+    }
+
+    // TODO: make private
     pub fn replace<F>(input: &str, f: F) -> Result<String>
     where
         F: Fn(Key) -> Result<String>,
