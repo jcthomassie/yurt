@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::{env, ffi::OsStr, path::Path, process::Command};
 
 pub mod command {
-    use anyhow::{anyhow, Context as _, Result};
+    use anyhow::{Context as _, Result};
     use std::process::{Command, Output, Stdio};
 
     fn check_output(output: &Output, command_tag: impl std::fmt::Debug) -> Result<()> {
@@ -13,10 +13,10 @@ pub mod command {
             .status
             .success()
             .then_some(())
-            .with_context(|| anyhow!("stderr: {}", String::from_utf8_lossy(&output.stderr)))
+            .with_context(|| format!("stderr: {}", String::from_utf8_lossy(&output.stderr)))
             .with_context(|| match output.status.code() {
-                Some(c) => anyhow!("Command exited with status code {c}: `{command_tag:?}`"),
-                None => anyhow!("Command terminated by signal: `{command_tag:?}`"),
+                Some(c) => format!("Command exited with status code {c}: `{command_tag:?}`"),
+                None => format!("Command terminated by signal: `{command_tag:?}`"),
             })
     }
 
