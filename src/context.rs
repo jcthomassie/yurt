@@ -143,13 +143,12 @@ mod parse {
     use std::collections::hash_map::{Entry, HashMap};
 
     lazy_static! {
-        static ref RE_REPLACE: Regex = Regex::new(
-            r"(?x)
-            \$\{\{\s*(?:
+        static ref RE_KEY_WRAPPER: Regex = Regex::new(r"\$\{\{(?P<key>[^{}]*)\}\}").unwrap();
+        static ref RE_KEY: Regex = Regex::new(
+            r"(?x)^\s*(?:
                 (?:(?P<namespace>\w+)\.)?(?P<var>\w+)|
-                env:(?P<envvar>\w+)|
-                (?P<invalid>.*)
-            )\s*\}\}"
+                env:(?P<envvar>\w+)
+            )\s*$"
         )
         .unwrap();
     }
@@ -171,18 +170,15 @@ mod parse {
         }
     }
 
-    // Only intended for use in this module
-    impl TryFrom<&Captures<'_>> for Key {
+    impl TryFrom<&str> for Key {
         type Error = anyhow::Error;
 
-        fn try_from(captures: &Captures) -> anyhow::Result<Self> {
-            let cap_var = captures.name("var");
-            let cap_envvar = captures.name("envvar");
-            let cap_namespace = captures.name("namespace");
-            let cap_invalid = captures.name("invalid");
-
-            if let Some(var) = cap_var {
-                if let Some(name) = cap_namespace {
+        fn try_from(s: &str) -> anyhow::Result<Self> {
+            let captures = RE_KEY
+                .captures(s)
+                .with_context(|| format!("Invalid key format: {s}"))?;
+            if let Some(var) = captures.name("var") {
+                if let Some(name) = captures.name("namespace") {
                     Ok(Self::NamespaceVar(
                         name.as_str().to_string(),
                         var.as_str().to_string(),
@@ -190,12 +186,10 @@ mod parse {
                 } else {
                     Ok(Self::Var(var.as_str().to_string()))
                 }
-            } else if let Some(envvar) = cap_envvar {
+            } else if let Some(envvar) = captures.name("envvar") {
                 Ok(Self::EnvVar(envvar.as_str().to_string()))
-            } else if let Some(invalid) = cap_invalid {
-                Err(anyhow!("Invalid substitution: {}", invalid.as_str()))
             } else {
-                Err(anyhow!("Key was initialized from invalid capture"))
+                unreachable!("RE_KEY regex is malformed")
             }
         }
     }
@@ -247,13 +241,13 @@ mod parse {
         F: Fn(Key) -> Result<String>,
     {
         // Build iterator of replaced values
-        let values: Result<Vec<String>> = RE_REPLACE
+        let values: Result<Vec<String>> = RE_KEY_WRAPPER
             .captures_iter(input)
-            .map(|caps| Key::try_from(&caps).and_then(&f))
+            .map(|caps| Key::try_from(&caps["key"]).and_then(&f))
             .collect();
         let mut values_iter = values?.into_iter();
         // Build new string with replacements
-        Ok(RE_REPLACE
+        Ok(RE_KEY_WRAPPER
             .replace_all(input, |_: &Captures| values_iter.next().unwrap())
             .to_string())
     }
@@ -357,6 +351,39 @@ pub mod tests {
     mod parse {
         use super::super::parse::{replace, Key};
 
+        #[test]
+        fn key_var() {
+            assert_eq!(
+                Key::Var("key_1".to_string()),
+                Key::try_from("key_1").unwrap()
+            );
+        }
+
+        #[test]
+        fn key_envvar() {
+            assert_eq!(
+                Key::EnvVar("key_1".to_string()),
+                Key::try_from("env:key_1").unwrap()
+            );
+        }
+
+        #[test]
+        fn key_namespace() {
+            assert_eq!(
+                Key::NamespaceVar("ns_1".to_string(), "key_1".to_string()),
+                Key::try_from("ns_1.key_1").unwrap()
+            );
+        }
+
+        #[test]
+        fn key_invalid() {
+            assert!(Key::try_from("").is_err());
+            assert!(Key::try_from(" ").is_err());
+            assert!(Key::try_from("key.").is_err());
+            assert!(Key::try_from("key-").is_err());
+            assert!(Key::try_from("{key}").is_err());
+        }
+
         macro_rules! test_replace {
             ($name:ident, $f:expr, $input:literal, $output:literal) => {
                 #[test]
@@ -371,7 +398,7 @@ pub mod tests {
             single_var,
             |key| match key {
                 Key::Var(key) => Ok(format!("{key}_output")),
-                _ => panic!(),
+                _ => panic!("{key:?}"),
             },
             "${{ key }}",
             "key_output"
@@ -381,7 +408,7 @@ pub mod tests {
             single_envvar,
             |key| match key {
                 Key::EnvVar(key) => Ok(format!("{key}_output")),
-                _ => panic!(),
+                _ => panic!("{key:?}"),
             },
             "${{ env:key }}",
             "key_output"
@@ -391,7 +418,7 @@ pub mod tests {
             single_namespacevar,
             |key| match key {
                 Key::NamespaceVar(ns, key) => Ok(format!("{ns}_{key}_output")),
-                _ => panic!(),
+                _ => panic!("{key:?}"),
             },
             "${{ ns.key }}",
             "ns_key_output"
@@ -410,9 +437,16 @@ pub mod tests {
 
         test_replace!(
             no_replacements,
-            |_key| { panic!() },
+            |key| panic!("{key:?}"),
             "literal input",
             "literal input"
+        );
+
+        test_replace!(
+            no_whitespace,
+            |_| Ok("output".to_string()),
+            "${{key}}",
+            "output"
         );
     }
 
