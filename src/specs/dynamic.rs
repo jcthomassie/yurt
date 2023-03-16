@@ -1,5 +1,5 @@
 use crate::{
-    context::{Context, LocaleSpec},
+    context::{parse::Key, Context, LocaleSpec},
     specs::{shell::ShellCommand, BuildUnit, ResolveInto},
 };
 
@@ -85,7 +85,11 @@ impl Vars {
 
 impl ResolveInto for Vars {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
-        context.variables.push(Self::NAMESPACE, self.0.iter());
+        for (key, val) in self.0 {
+            context
+                .variables
+                .push(Key::NamespaceVar(Self::NAMESPACE.to_string(), key), val);
+        }
         Ok(())
     }
 }
@@ -116,17 +120,20 @@ where
     T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
+        let keys = self
+            .values
+            .keys()
+            .map(|key| Key::NamespaceVar(Self::NAMESPACE.to_string(), key.to_string()))
+            .collect::<Vec<_>>();
         for i in 0..self.length()? {
-            let vals = self
-                .values
-                .values()
-                .map(|vec| context.variables.parse_str(&vec[i]))
-                .collect::<Result<Vec<_>>>()?;
-            context
-                .variables
-                .push(Self::NAMESPACE, self.values.keys().zip(vals.iter()));
+            // Add `i`th values to context (with internal replacement)
+            for (key, val) in keys.iter().zip(self.values.values().map(|vec| &vec[i])) {
+                context.variables.push(key.clone(), context.parse_str(val)?);
+            }
             self.include.clone().resolve_into(context, output)?;
-            context.variables.drop(Self::NAMESPACE, self.values.keys());
+            for key in &keys {
+                context.variables.drop(key);
+            }
         }
         Ok(())
     }
@@ -257,14 +264,8 @@ mod tests {
         ").unwrap();
         let mut context = Context::default();
         vars.resolve_into_new(&mut context).unwrap();
-        assert_eq!(
-            context.variables.get(Vars::NAMESPACE, "key_a").unwrap(),
-            "val_a"
-        );
-        assert_eq!(
-            context.variables.get(Vars::NAMESPACE, "key_b").unwrap(),
-            "val_b"
-        );
+        assert_eq!(context.parse_str("${{ vars.key_a }}").unwrap(), "val_a");
+        assert_eq!(context.parse_str("${{ vars.key_b }}").unwrap(), "val_b");
     }
 
     #[test]
@@ -295,9 +296,7 @@ mod tests {
     #[test]
     fn matrix_expansion() {
         let mut context = Context::default();
-        context
-            .variables
-            .push("outer", [("key", "value")].into_iter());
+        context.variables.try_push("outer.key", "value").unwrap();
         #[rustfmt::skip]
         let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
             values:

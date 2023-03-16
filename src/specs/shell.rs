@@ -247,7 +247,7 @@ impl Resolve for ShellHook {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         Ok(BuildUnit::Hook(Self {
             exec: ShellCommand {
-                command: context.variables.parse_str(&self.exec.command)?,
+                command: context.parse_str(&self.exec.command)?,
                 ..self.exec
             },
             ..self
