@@ -305,6 +305,13 @@ pub mod tests {
             assert!(Key::try_from("{key}").is_err());
         }
 
+        #[test]
+        fn key_get_envvar() {
+            assert!(Key::EnvVar("key".to_string()).get().is_err());
+            ::std::env::set_var("key", "value");
+            assert_eq!(Key::EnvVar("key".to_string()).get().unwrap(), "value");
+        }
+
         macro_rules! test_replace {
             ($name:ident, $f:expr, $input:literal, $output:literal) => {
                 #[test]
@@ -422,7 +429,11 @@ pub mod tests {
     fn parse_str() {
         let mut context = Context::default();
         context.variables.try_push("key", "value").unwrap();
+        context.variables.try_push("ns.key", "ns_value").unwrap();
+        ::std::env::set_var("key", "env_value");
         assert_eq!(context.parse_str("${{ key }}").unwrap(), "value");
+        assert_eq!(context.parse_str("${{ ns.key }}").unwrap(), "ns_value");
+        assert_eq!(context.parse_str("${{ env:key }}").unwrap(), "env_value");
     }
 
     #[test]
