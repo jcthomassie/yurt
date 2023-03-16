@@ -158,6 +158,14 @@ pub mod parse {
     }
 
     impl Key {
+        pub fn namespace<N, V>(namespace: N, var: V) -> Self
+        where
+            N: Into<String>,
+            V: Into<String>,
+        {
+            Self::NamespaceVar(namespace.into(), var.into())
+        }
+
         pub fn get(&self) -> Result<String> {
             match self {
                 Self::EnvVar(var) => ::std::env::var(var)

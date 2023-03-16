@@ -88,7 +88,7 @@ impl ResolveInto for Vars {
         for (key, val) in self.0 {
             context
                 .variables
-                .push(Key::NamespaceVar(Self::NAMESPACE.to_string(), key), val);
+                .push(Key::namespace(Self::NAMESPACE, key), val);
         }
         Ok(())
     }
@@ -123,7 +123,7 @@ where
         let keys = self
             .values
             .keys()
-            .map(|key| Key::NamespaceVar(Self::NAMESPACE.to_string(), key.to_string()))
+            .map(|key| Key::namespace(Self::NAMESPACE, key))
             .collect::<Vec<_>>();
         for i in 0..self.length()? {
             // Add `i`th values to context (with internal replacement)

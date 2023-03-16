@@ -47,10 +47,9 @@ impl Resolve for Repo {
             path: context.parse_path(&self.path)?,
             ..self
         };
-        context.variables.push(
-            Key::NamespaceVar(new.name()?.to_string(), "path".to_string()),
-            new.path.clone(),
-        );
+        context
+            .variables
+            .push(Key::namespace(new.name()?, "path"), new.path.clone());
         Ok(BuildUnit::Repo(new))
     }
 }
