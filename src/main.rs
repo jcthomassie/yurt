@@ -1,5 +1,9 @@
 #![warn(clippy::all, clippy::pedantic)]
-#![allow(clippy::match_bool, clippy::module_name_repetitions)]
+#![allow(
+    clippy::match_bool,
+    clippy::module_name_repetitions,
+    clippy::single_match_else
+)]
 mod config;
 mod context;
 mod specs;

@@ -210,6 +210,7 @@ pub mod parse {
         }
 
         /// Convenient wrapper around `push`
+        #[allow(dead_code)]
         pub fn try_push<K, V>(&mut self, key: K, val: V) -> Result<()>
         where
             K: TryInto<Key, Error = anyhow::Error>,
