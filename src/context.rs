@@ -220,10 +220,7 @@ pub mod parse {
         /// Get the last value for `key` from the stack.
         /// Uses `Key::get()` as a fallback if unset.
         pub fn try_get(&self, key: &Key) -> Result<String> {
-            match self.get(key) {
-                Some(val) => Ok(val),
-                None => key.get(),
-            }
+            self.get(key).map_or_else(|| key.get(), Ok)
         }
 
         /// Get the last value for `key` from the stack
