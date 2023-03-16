@@ -29,13 +29,12 @@ impl Context {
     }
 
     pub fn parse_str(&self, input: &str) -> Result<String> {
-        self.variables.replace(input)
+        parse::replace(input, |key| self.variables.try_get(&key))
     }
 
     /// Replace '~' with home directory and resolve variables
     pub fn parse_path(&self, input: &str) -> Result<String> {
-        self.variables
-            .replace(input)
+        parse::replace(input, |key| self.variables.try_get(&key))
             .map(|s| s.replace('~', &self.home_dir))
     }
 }
@@ -200,17 +199,7 @@ pub mod parse {
             Self(HashMap::new())
         }
 
-        /// Replace substitution tags in `input` using currently set values.
-        /// Uses `Key::get()` as a fallback if the key is unset.
-        pub fn replace(&self, input: &str) -> Result<String> {
-            replace(input, |key| match self.get(&key) {
-                Some(val) => Ok(val),
-                None => key.get(),
-            })
-        }
-
-        /// Convenient wrapper around `push`
-        #[allow(dead_code)]
+        #[cfg(test)]
         pub fn try_push<K, V>(&mut self, key: K, val: V) -> Result<()>
         where
             K: TryInto<Key, Error = anyhow::Error>,
@@ -218,6 +207,15 @@ pub mod parse {
         {
             self.push(key.try_into()?, val.into());
             Ok(())
+        }
+
+        /// Get the last value for `key` from the stack.
+        /// Uses `Key::get()` as a fallback if unset.
+        pub fn try_get(&self, key: &Key) -> Result<String> {
+            match self.get(key) {
+                Some(val) => Ok(val),
+                None => key.get(),
+            }
         }
 
         /// Get the last value for `key` from the stack
@@ -241,7 +239,7 @@ pub mod parse {
         }
     }
 
-    // TODO: make private
+    /// Replace keys in `input` by mapping with `f`
     pub fn replace<F>(input: &str, f: F) -> Result<String>
     where
         F: Fn(Key) -> Result<String>,
