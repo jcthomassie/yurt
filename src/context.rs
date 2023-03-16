@@ -414,7 +414,26 @@ pub mod tests {
     }
 
     #[test]
-    fn path_variable_sub() {
+    fn parse_str() {
+        let mut context = Context::default();
+        context.variables.try_push("key", "value").unwrap();
+        assert_eq!(context.parse_str("${{ key }}").unwrap(), "value");
+    }
+
+    #[test]
+    fn parse_str_invalid() {
+        let mut context = Context::default();
+        context.variables.try_push("a.b", "value").unwrap();
+        assert!(context.parse_str("${{ a.b.c }}").is_err());
+        assert!(context.parse_str("${{ . }}").is_err());
+        assert!(context.parse_str("${{ a. }}").is_err());
+        assert!(context.parse_str("${{ .b }}").is_err());
+        assert!(context.parse_str("${{ a.c }}").is_err()); // missing key
+        assert!(context.parse_str("${{ b.a }}").is_err()); // missing namespace
+    }
+
+    #[test]
+    fn parse_path() {
         let mut context = Context::default();
         context.variables.try_push("var_1", "val_1").unwrap();
         context.variables.try_push("var_2", "val_2").unwrap();
