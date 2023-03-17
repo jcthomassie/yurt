@@ -1,4 +1,7 @@
-use crate::specs::{BuildUnit, Context, Resolve};
+use crate::{
+    context::{parse::Key, Context},
+    specs::{BuildUnit, Resolve},
+};
 
 use anyhow::{Context as _, Result};
 use git2::Repository;
@@ -46,7 +49,7 @@ impl Resolve for Repo {
         };
         context
             .variables
-            .push(new.name()?, [("path", &new.path)].into_iter());
+            .push(Key::namespace(new.name()?, "path"), new.path.clone());
         Ok(BuildUnit::Repo(new))
     }
 }
