@@ -119,15 +119,15 @@ pub struct LocaleSpec {
 }
 
 impl LocaleSpec {
-    pub fn is_local(&self, context: &Context) -> bool {
+    pub fn matches(&self, locale: &Locale) -> bool {
         match self {
-            Self { user: Some(u), .. } if u != &context.locale.user => false,
+            Self { user: Some(u), .. } if u != &locale.user => false,
             Self {
                 platform: Some(p), ..
-            } if p != &context.locale.platform => false,
+            } if p != &locale.platform => false,
             Self {
                 distro: Some(d), ..
-            } if d != &context.locale.distro => false,
+            } if d != &locale.distro => false,
             _ => true,
         }
     }
@@ -403,11 +403,11 @@ pub mod tests {
 
     #[test]
     fn locale_matching() {
-        let context = Context::new(Locale::with_overrides(
+        let locale = Locale::with_overrides(
             Some("u".to_string()),
             Some("p".to_string()),
             Some("d".to_string()),
-        ));
+        );
         let cases = [
             ("{}", true),
             ("{ user: u }", true),
@@ -420,8 +420,8 @@ pub mod tests {
             ("{ user: u, distro: d, platform: _ }", false),
         ];
         for (yaml, result) in cases {
-            let locale: LocaleSpec = serde_yaml::from_str(yaml).expect("Deserialization failed");
-            assert_eq!(locale.is_local(&context), result);
+            let spec: LocaleSpec = serde_yaml::from_str(yaml).expect("Deserialization failed");
+            assert_eq!(spec.matches(&locale), result);
         }
     }
 
