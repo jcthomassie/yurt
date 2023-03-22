@@ -119,8 +119,8 @@ build:
 
   # Apply symlinks
   - !link
-    - target: ${{ dotfiles.path }}/.zsh/.zshrc
+    - target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
       source: ~/.zshrc
-    - target: ${{ dotfiles.path }}/.gitconfig
+    - target: ${{ repo#dotfiles.path }}/.gitconfig
       source: ~/.gitconfig
 ```

@@ -1,5 +1,5 @@
 use crate::{
-    context::{parse::Key, Context, LocaleSpec},
+    context::{parse::ObjectKey, Context, LocaleSpec},
     specs::{shell::ShellCommand, BuildUnit, ResolveInto},
 };
 
@@ -79,16 +79,14 @@ where
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Vars(IndexMap<String, String>);
 
-impl Vars {
-    const NAMESPACE: &str = "vars";
+impl ObjectKey for Vars {
+    const OBJECT_NAME: &'static str = "vars";
 }
 
 impl ResolveInto for Vars {
     fn resolve_into(self, context: &mut Context, _output: &mut Vec<BuildUnit>) -> Result<()> {
         for (key, val) in self.0 {
-            context
-                .variables
-                .push(Key::namespace(Self::NAMESPACE, key), val);
+            context.variables.push(Self::object_key(key), val);
         }
         Ok(())
     }
@@ -101,8 +99,6 @@ pub struct Matrix<T> {
 }
 
 impl<T> Matrix<T> {
-    const NAMESPACE: &str = "matrix";
-
     fn length(&self) -> Result<usize> {
         let mut counts = self.values.values().map(Vec::len);
         match counts.next() {
@@ -115,16 +111,16 @@ impl<T> Matrix<T> {
     }
 }
 
+impl<T> ObjectKey for Matrix<T> {
+    const OBJECT_NAME: &'static str = "matrix";
+}
+
 impl<T> ResolveInto for Matrix<T>
 where
     T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let keys = self
-            .values
-            .keys()
-            .map(|key| Key::namespace(Self::NAMESPACE, key))
-            .collect::<Vec<_>>();
+        let keys = self.values.keys().map(Self::object_key).collect::<Vec<_>>();
         for i in 0..self.length()? {
             // Add `i`th values to context (with internal replacement)
             for (key, val) in keys.iter().zip(self.values.values().map(|vec| &vec[i])) {

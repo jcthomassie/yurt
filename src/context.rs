@@ -143,8 +143,9 @@ pub mod parse {
         static ref RE_KEY_WRAPPER: Regex = Regex::new(r"\$\{\{(?P<key>[^{}]*)\}\}").unwrap();
         static ref RE_KEY: Regex = Regex::new(
             r"(?x)^\s*(?:
-                (?:(?P<namespace>\w+)\.)?(?P<var>\w+)|
-                env:(?P<envvar>\w+)
+                (?P<var>\w+)|
+                env:(?P<envvar>\w+)|
+                (?P<object>\w+)(?:\#(?P<id>\w+))?\.(?P<attr>\w+)
             )\s*$"
         )
         .unwrap();
@@ -152,20 +153,20 @@ pub mod parse {
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Key {
-        Var(String),                  // ${{ var }}
-        EnvVar(String),               // ${{ env:var }}
-        NamespaceVar(String, String), // ${{ namespace.var }}
+        Var(String),    // ${{ var }}
+        EnvVar(String), // ${{ env:var }}
+        ObjectAttr {
+            object: String,
+            attr: String,
+        }, // ${{ object.attr }}
+        ObjectInstanceAttr {
+            object: String,
+            id: String,
+            attr: String,
+        }, // ${{ object#id.attr }}
     }
 
     impl Key {
-        pub fn namespace<N, V>(namespace: N, var: V) -> Self
-        where
-            N: Into<String>,
-            V: Into<String>,
-        {
-            Self::NamespaceVar(namespace.into(), var.into())
-        }
-
         pub fn get(&self) -> Result<String> {
             match self {
                 Self::EnvVar(var) => ::std::env::var(var)
@@ -182,19 +183,48 @@ pub mod parse {
             let captures = RE_KEY
                 .captures(s)
                 .with_context(|| format!("Invalid key format: {s}"))?;
-            if let Some(var) = captures.name("var") {
-                if let Some(name) = captures.name("namespace") {
-                    Ok(Self::NamespaceVar(
-                        name.as_str().to_string(),
-                        var.as_str().to_string(),
-                    ))
+            let capture = |key: &str| captures.name(key).map(|val| val.as_str().to_string());
+
+            if let Some(var) = capture("var") {
+                Ok(Self::Var(var))
+            } else if let Some(envvar) = capture("envvar") {
+                Ok(Self::EnvVar(envvar))
+            } else if let (Some(object), Some(attr)) = (capture("object"), capture("attr")) {
+                if let Some(id) = capture("id") {
+                    Ok(Self::ObjectInstanceAttr { object, attr, id })
                 } else {
-                    Ok(Self::Var(var.as_str().to_string()))
+                    Ok(Self::ObjectAttr { object, attr })
                 }
-            } else if let Some(envvar) = captures.name("envvar") {
-                Ok(Self::EnvVar(envvar.as_str().to_string()))
             } else {
                 unreachable!("RE_KEY regex is malformed")
+            }
+        }
+    }
+
+    pub trait ObjectKey {
+        const OBJECT_NAME: &'static str;
+
+        /// Create a `Key::ObjectAttr` using `Self::OBJECT_NAME`
+        fn object_key<A>(attr: A) -> Key
+        where
+            A: Into<String>,
+        {
+            Key::ObjectAttr {
+                object: Self::OBJECT_NAME.into(),
+                attr: attr.into(),
+            }
+        }
+
+        /// Create a `Key::ObjectInstanceAttr` using `Self::OBJECT_NAME`
+        fn object_instance_key<A, I>(attr: A, id: I) -> Key
+        where
+            A: Into<String>,
+            I: Into<String>,
+        {
+            Key::ObjectInstanceAttr {
+                object: Self::OBJECT_NAME.into(),
+                id: id.into(),
+                attr: attr.into(),
             }
         }
     }
@@ -281,7 +311,7 @@ pub mod tests {
         }
 
         #[test]
-        fn key_envvar() {
+        fn key_env_var() {
             assert_eq!(
                 Key::EnvVar("key_1".to_string()),
                 Key::try_from("env:key_1").unwrap()
@@ -289,10 +319,25 @@ pub mod tests {
         }
 
         #[test]
-        fn key_namespace() {
+        fn key_object_attr() {
             assert_eq!(
-                Key::NamespaceVar("ns_1".to_string(), "key_1".to_string()),
-                Key::try_from("ns_1.key_1").unwrap()
+                Key::ObjectAttr {
+                    object: "obj_1".to_string(),
+                    attr: "attr_1".to_string()
+                },
+                Key::try_from("obj_1.attr_1").unwrap()
+            );
+        }
+
+        #[test]
+        fn key_object_instance_attr() {
+            assert_eq!(
+                Key::ObjectInstanceAttr {
+                    object: "obj_1".to_string(),
+                    id: "id_1".to_string(),
+                    attr: "attr_1".to_string()
+                },
+                Key::try_from("obj_1#id_1.attr_1").unwrap()
             );
         }
 
@@ -325,7 +370,7 @@ pub mod tests {
         test_replace!(
             single_var,
             |key| match key {
-                Key::Var(key) => Ok(format!("{key}_output")),
+                Key::Var(var) => Ok(format!("{var}_output")),
                 _ => panic!("{key:?}"),
             },
             "${{ key }}",
@@ -333,9 +378,9 @@ pub mod tests {
         );
 
         test_replace!(
-            single_envvar,
+            single_env_var,
             |key| match key {
-                Key::EnvVar(key) => Ok(format!("{key}_output")),
+                Key::EnvVar(var) => Ok(format!("{var}_output")),
                 _ => panic!("{key:?}"),
             },
             "${{ env:key }}",
@@ -343,9 +388,9 @@ pub mod tests {
         );
 
         test_replace!(
-            single_namespacevar,
+            single_object_attr,
             |key| match key {
-                Key::NamespaceVar(ns, key) => Ok(format!("{ns}_{key}_output")),
+                Key::ObjectAttr { object, attr } => Ok(format!("{object}_{attr}_output")),
                 _ => panic!("{key:?}"),
             },
             "${{ ns.key }}",
@@ -355,12 +400,14 @@ pub mod tests {
         test_replace!(
             mixed,
             |key| match key {
-                Key::Var(key) => Ok(format!("Var_{key}")),
-                Key::EnvVar(key) => Ok(format!("EnvVar_{key}")),
-                Key::NamespaceVar(ns, key) => Ok(format!("NamespaceVar_{ns}.{key}")),
+                Key::Var(var) => Ok(format!("Var_{var}")),
+                Key::EnvVar(var) => Ok(format!("EnvVar_{var}")),
+                Key::ObjectAttr { object, attr } => Ok(format!("ObjectAttr_{object}.{attr}")),
+                Key::ObjectInstanceAttr { object, id, attr } =>
+                    Ok(format!("ObjectInstanceAttr_{object}#{id}.{attr}")),
             },
-            "${{ key1 }} ${{ env:key2 }} ${{ namespace.key3 }}",
-            "Var_key1 EnvVar_key2 NamespaceVar_namespace.key3"
+            "${{ key1 }} ${{ env:key2 }} ${{ obj.key3 }} ${{ obj#id.key4 }}",
+            "Var_key1 EnvVar_key2 ObjectAttr_obj.key3 ObjectInstanceAttr_obj#id.key4"
         );
 
         test_replace!(

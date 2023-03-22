@@ -1,5 +1,5 @@
 use crate::{
-    context::{parse::Key, Context},
+    context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
 };
 
@@ -41,15 +41,25 @@ impl Repo {
     }
 }
 
+impl ObjectKey for Repo {
+    const OBJECT_NAME: &'static str = "repo";
+}
+
 impl Resolve for Repo {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         let new = Self {
             path: context.parse_path(&self.path)?,
-            ..self
+            url: context.parse_str(&self.url)?,
         };
-        context
-            .variables
-            .push(Key::namespace(new.name()?, "path"), new.path.clone());
+        let new_id = new.name()?;
+        for (attr, value) in [("path", &new.path), ("url", &new.url)] {
+            context
+                .variables
+                .push(Self::object_key(attr), value.to_string());
+            context
+                .variables
+                .push(Self::object_instance_key(attr, new_id), value.to_string());
+        }
         Ok(BuildUnit::Repo(new))
     }
 }
