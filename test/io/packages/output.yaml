@@ -1,5 +1,0 @@
-build:
-- !install
-  - name: package_a
-  - name: package_b
-  - name: package_c

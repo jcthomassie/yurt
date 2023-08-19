@@ -1,0 +1,17 @@
+---
+source: src/config.rs
+expression: "ResolvedConfig::try_from(&test.get_args()).expect(\"Failed to resolve input build\").into_config()"
+---
+build:
+  - repo:
+      path: /home/repo_1
+      url: "https://github.com/user/repo_1.git"
+  - repo:
+      path: /home/repo_2
+      url: "https://github.com/user/repo_2.git"
+  - link:
+      - source: /repo_1
+        target: /home/repo_1
+      - source: /repo_2
+        target: /home/repo_2
+

@@ -1,0 +1,26 @@
+---
+source: src/config.rs
+expression: "ResolvedConfig::try_from(&test.get_args()).expect(\"Failed to resolve input build\").into_config()"
+---
+build:
+  - install:
+      - name: package_a
+      - name: package_b
+  - require:
+      - cargo
+      - apt
+  - install:
+      - name: package_c
+        managers:
+          - cargo
+      - name: package_d
+        managers:
+          - apt
+      - name: package_e
+      - name: package_f
+        managers:
+          - cargo
+          - apt
+        aliases:
+          cargo: pack-f
+

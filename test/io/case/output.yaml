@@ -1,7 +1,0 @@
-build:
-- !install
-  - name: package_0
-  - name: package_1
-    aliases:
-      apt: package_1-alias
-  - name: package_2

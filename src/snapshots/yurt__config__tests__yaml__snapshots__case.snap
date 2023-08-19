@@ -1,0 +1,12 @@
+---
+source: src/config.rs
+expression: "ResolvedConfig::try_from(&test.get_args()).expect(\"Failed to resolve input build\").into_config()"
+---
+build:
+  - install:
+      - name: package_0
+      - name: package_1
+        aliases:
+          apt: package_1-alias
+      - name: package_2
+

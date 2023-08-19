@@ -1,0 +1,13 @@
+---
+source: src/config.rs
+expression: "ResolvedConfig::try_from(&test.get_args()).expect(\"Failed to resolve input build\").into_config()"
+---
+build:
+  - link:
+      - source: dir_a/source_1
+        target: dir_a/target_1
+      - source: dir_b/source_2
+        target: dir_b/target_2
+      - source: dir_c/source_3
+        target: dir_c/target_3
+

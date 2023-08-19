@@ -1,0 +1,10 @@
+---
+source: src/config.rs
+expression: "ResolvedConfig::try_from(&test.get_args()).expect(\"Failed to resolve input build\").into_config()"
+---
+build:
+  - install:
+      - name: package_a
+      - name: package_b
+      - name: package_c
+

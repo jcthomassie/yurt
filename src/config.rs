@@ -164,7 +164,6 @@ pub mod tests {
 
         struct TestData {
             input_path: PathBuf,
-            output_path: PathBuf,
             args_path: PathBuf,
         }
 
@@ -176,7 +175,6 @@ pub mod tests {
                     .collect();
                 Self {
                     input_path: dir.join("input.yaml"),
-                    output_path: dir.join("output.yaml"),
                     args_path: dir.join("args"),
                 }
             }
@@ -198,26 +196,19 @@ pub mod tests {
                 args.push("show".to_string());
                 YurtArgs::try_parse_from(args).expect("Failed to parse args")
             }
-
-            fn get_output_yaml(&self) -> String {
-                read_to_string(&self.output_path).expect("Failed to read output comparison")
-            }
         }
 
-        mod io {
+        mod snapshots {
             use super::*;
 
             macro_rules! test_case {
                 ($name:ident) => {
                     #[test]
                     fn $name() {
-                        let test = TestData::new(&["io", stringify!($name)]);
-                        let resolved_yaml = ResolvedConfig::try_from(&test.get_args())
+                        let test = TestData::new(&["snapshots", stringify!($name)]);
+                        insta::assert_yaml_snapshot!(ResolvedConfig::try_from(&test.get_args())
                             .expect("Failed to resolve input build")
-                            .into_config()
-                            .yaml()
-                            .expect("Failed to generate resolved yaml");
-                        pretty_assertions::assert_eq!(resolved_yaml, test.get_output_yaml())
+                            .into_config());
                     }
                 };
             }
