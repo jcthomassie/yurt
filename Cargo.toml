@@ -13,10 +13,10 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.69"
 clap = { version = "4.1.4", features = ["cargo", "derive"] }
-dirs = "4.0.0"
+dirs = "5.0.1"
 env_logger = "0.10.0"
-git2 = "0.16.1"
-indexmap = { version = "1.9.2", features = ["serde"] }
+git2 = "0.17.2"
+indexmap = { version = "2.0.0", features = ["serde"] }
 lazy_static = "1.4.0"
 log = "0.4.17"
 regex = "1.7.1"
