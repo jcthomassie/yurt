@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{bail, Context as _, Result};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-use std::ops::Not;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -16,7 +15,8 @@ enum Condition {
     Eval(ShellCommand),
     All(Vec<Condition>),
     Any(Vec<Condition>),
-    Not(Box<Condition>),
+    /// Treated as the negation of !any
+    Not(Vec<Condition>),
     Default,
 }
 
@@ -26,7 +26,7 @@ impl Condition {
             Self::Bool(literal) => Ok(*literal),
             Self::Locale(spec) => Ok(spec.matches(&context.locale)),
             Self::Eval(command) => command.exec_bool(),
-            Self::All(conds) | Self::Any(conds) => {
+            Self::All(conds) | Self::Any(conds) | Self::Not(conds) => {
                 let evaluated = conds
                     .iter()
                     .map(|c| c.evaluate(context))
@@ -34,10 +34,10 @@ impl Condition {
                 Ok(match self {
                     Self::All(_) => evaluated.into_iter().all(|b| b),
                     Self::Any(_) => evaluated.into_iter().any(|b| b),
+                    Self::Not(_) => !evaluated.into_iter().any(|b| b),
                     _ => unreachable!(),
                 })
             }
-            Self::Not(c) => c.evaluate(context).map(Not::not),
             Self::Default => Ok(true),
         }
     }
@@ -190,6 +190,7 @@ mod tests {
 
         #[test]
         fn any() {
+            yaml_condition!("!any [ ]", Condition::Any(_), false);
             yaml_condition!(
                 "!any [ !bool false, !bool false, !bool false ]",
                 Condition::Any(_),
@@ -203,11 +204,11 @@ mod tests {
         }
 
         #[test]
-        #[ignore]
-        /// Nested enum deserialization is not currently supported: <https://github.com/dtolnay/serde-yaml/blob/186cc67720545a7e387a420a10ecdbfa147a9c40/src/de.rs#L1716>
         fn not() {
-            yaml_condition!("!not !bool false", Condition::Not(_), true);
-            yaml_condition!("!not !bool true", Condition::Not(_), false);
+            yaml_condition!("!not [ ]", Condition::Not(_), true);
+            yaml_condition!("!not [ !bool false ]", Condition::Not(_), true);
+            yaml_condition!("!not [ !bool true ]", Condition::Not(_), false);
+            yaml_condition!("!not [ !bool false, !bool true ]", Condition::Not(_), false);
         }
     }
 
