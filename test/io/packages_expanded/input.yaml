@@ -4,7 +4,9 @@ build:
     - name: package_a
     - name: package_b
   # specify managers
-  - !require [ cargo, apt ]
+  - !require
+    - name: cargo
+    - name: apt
   - !install
     - name: package_c
       managers: [ cargo ]

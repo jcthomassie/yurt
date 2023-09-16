@@ -1,61 +1,63 @@
 use crate::context::parse::{self, ObjectKey};
 use crate::specs::{
-    shell::{command, Shell, ShellCommand},
+    shell::{command, ShellCommand},
     BuildUnit, Context, Resolve,
 };
 
-use anyhow::{anyhow, bail, Context as _, Result};
-use indexmap::{IndexMap, IndexSet};
+use anyhow::{anyhow, Context as _, Result};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
-
-pub use PackageManager::{Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
     name: String,
-    #[serde(default = "IndexSet::new")]
-    #[serde(skip_serializing_if = "IndexSet::is_empty")]
-    managers: IndexSet<PackageManager>,
+    #[serde(default = "Vec::new")]
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    managers: Vec<String>,
     #[serde(default = "IndexMap::new")]
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
-    aliases: IndexMap<PackageManager, String>,
+    aliases: IndexMap<String, String>,
 }
 
 impl Package {
-    fn get_name(&self, manager: PackageManager) -> &String {
-        self.aliases.get(&manager).unwrap_or(&self.name)
+    fn alias(&self, manager: &PackageManager) -> &String {
+        self.aliases.get(&manager.name).unwrap_or(&self.name)
     }
 
-    fn manager_names(&self) -> impl Iterator<Item = (PackageManager, &String)> {
+    fn iter_managers<'a>(
+        &'a self,
+        context: &'a Context,
+    ) -> impl Iterator<Item = &'a PackageManager> {
         self.managers
             .iter()
-            .copied()
-            .map(move |manager| (manager, self.get_name(manager)))
+            .filter_map(|manager| context.managers.get(manager.as_str()))
     }
 
-    pub fn is_installed(&self) -> bool {
-        which_has(&self.name)
-            || self
-                .manager_names()
-                .any(|(manager, package)| manager.has(package))
+    pub fn is_installed(&self, context: &Context) -> bool {
+        which_has(&self.name) || self.iter_managers(context).any(|manager| manager.has(self))
     }
 
-    pub fn install(&self) -> Result<()> {
-        if self.is_installed() {
+    pub fn install(&self, context: &Context) -> Result<()> {
+        if self.is_installed(context) {
             log::info!("Package already installed: {}", self.name);
-        } else if let Some((manager, package)) = self.manager_names().next() {
-            manager.install(package)?;
+            Ok(())
         } else {
-            bail!("Package unavailable: {}", self.name);
+            for manager in self.iter_managers(context) {
+                log::info!("Installing {} with {}", self.name, manager.name);
+                match manager.install(self) {
+                    Ok(_) => return Ok(()),
+                    Err(error) => log::error!("{error}"),
+                };
+            }
+            Err(anyhow!("Package unavailable: {}", self.name))
         }
-        Ok(())
     }
 
-    pub fn uninstall(&self) -> Result<()> {
-        for (manager, package) in self.manager_names() {
-            if manager.has(package) {
-                manager.uninstall(package)?;
+    pub fn uninstall(&self, context: &Context) -> Result<()> {
+        for manager in self.iter_managers(context) {
+            if manager.has(self) {
+                manager.uninstall(self)?;
             }
         }
         Ok(())
@@ -67,12 +69,12 @@ impl Resolve for Package {
         Ok(BuildUnit::Install(Self {
             name: context.parse_str(&self.name)?,
             managers: match self.managers.is_empty() {
-                false => context
+                false => self
                     .managers
-                    .intersection(&self.managers)
-                    .copied()
+                    .into_iter()
+                    .filter(|manager| context.managers.contains_key(manager.as_str()))
                     .collect(),
-                true => context.managers.clone(),
+                true => context.managers.keys().map(ToString::to_string).collect(),
             },
             ..self
         }))
@@ -84,7 +86,7 @@ impl ObjectKey for Package {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
-pub struct PackageManagerSpec {
+pub struct PackageManager {
     name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_bootstrap: Option<ShellCommand>,
@@ -96,47 +98,52 @@ pub struct PackageManagerSpec {
     shell_has: Option<ShellCommand>,
 }
 
-impl PackageManagerSpec {
-    fn inject_package(command: &ShellCommand, package: &str) -> Result<ShellCommand> {
+impl PackageManager {
+    fn inject_package(&self, command: &ShellCommand, package: &Package) -> Result<ShellCommand> {
         Ok(ShellCommand {
             shell: command.shell.clone(),
             command: parse::replace(&command.command, |input_key| {
-                (input_key == Package::object_key("name"))
-                    .then(|| package.to_string())
+                (input_key == Package::object_key("alias"))
+                    .then(|| package.alias(self).to_string())
                     .with_context(|| format!("Unexpected key: {input_key:?}"))
             })?,
         })
     }
 
     pub fn bootstrap(&self) -> Result<()> {
+        log::info!("Bootstrapping `{}`", self.name);
         self.shell_bootstrap
             .as_ref()
             .with_context(|| format!("{}.shell_bootstrap is not implemented", self.name))
             .and_then(ShellCommand::exec)
     }
 
-    pub fn install(&self, package: &str) -> Result<()> {
+    pub fn install(&self, package: &Package) -> Result<()> {
         self.shell_install
             .as_ref()
             .with_context(|| format!("{}.shell_install is not implemented", self.name))
-            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| self.inject_package(command, package))
             .and_then(|command| command.exec())
     }
 
-    pub fn uninstall(&self, package: &str) -> Result<()> {
+    pub fn uninstall(&self, package: &Package) -> Result<()> {
         self.shell_uninstall
             .as_ref()
             .with_context(|| format!("{}.shell_uninstall is not implemented", self.name))
-            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| self.inject_package(command, package))
             .and_then(|command| command.exec())
     }
 
-    pub fn has(&self, package: &str) -> Result<bool> {
+    pub fn has(&self, package: &Package) -> bool {
         self.shell_has
             .as_ref()
             .with_context(|| format!("{}.shell_has is not implemented", self.name))
-            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| self.inject_package(command, package))
             .and_then(|command| command.exec_bool())
+            .unwrap_or_else(|error| {
+                log::warn!("{error}");
+                false
+            })
     }
 
     /// Check if package manager is installed
@@ -153,127 +160,9 @@ impl PackageManagerSpec {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Copy, Clone, PartialEq, Eq, Hash)]
-#[serde(rename_all = "kebab-case")]
-pub enum PackageManager {
-    Apt,
-    AptGet,
-    Brew,
-    Cargo,
-    Choco,
-    Pkg,
-    Yum,
-}
-
-impl PackageManager {
-    fn name(&self) -> &str {
-        match self {
-            Self::Apt => "apt",
-            Self::AptGet => "apt-get",
-            Self::Brew => "brew",
-            Self::Cargo => "cargo",
-            Self::Choco => "choco",
-            Self::Pkg => "pkg",
-            Self::Yum => "yum",
-        }
-    }
-
-    /// Install a package
-    pub fn install(self, package: &str) -> Result<()> {
-        log::info!("Installing package `{}` with `{}`", package, self.name());
-        let mut cmd = Command::new(self.name());
-        match self {
-            Self::Cargo => {
-                cmd.args(["install", package]);
-            }
-            _ => {
-                cmd.args(["install", "-y", package]);
-            }
-        };
-        command::call(&mut cmd)
-    }
-
-    /// Uninstall a package
-    pub fn uninstall(self, package: &str) -> Result<()> {
-        log::info!("Uninstalling package `{}` from `{}`", package, self.name());
-        let mut cmd = Command::new(self.name());
-        match self {
-            Self::Apt | Self::AptGet | Self::Pkg | Self::Yum => {
-                cmd.args(["remove", "-y", package]);
-            }
-            Self::Cargo => {
-                cmd.args(["uninstall", package]);
-            }
-            Self::Choco | Self::Brew => {
-                cmd.args(["uninstall", "-y", package]);
-            }
-        };
-        command::call(&mut cmd)
-    }
-
-    /// Check if a package is installed
-    pub fn has(self, package: &str) -> bool {
-        let res = match self {
-            Self::Apt | Self::AptGet => {
-                command::call_bool(Command::new("dpkg").args(["-l", package]))
-            }
-            Self::Brew => command::call_bool(Command::new(self.name()).args(["list", package])),
-            Self::Cargo => Shell::default().exec_bool(
-                if cfg!(windows) {
-                    format!("cargo install --list | findstr /b /l /c:{package}")
-                } else {
-                    format!("cargo install --list | grep '^{package} v'")
-                }
-                .as_str(),
-            ),
-            Self::Pkg => command::call_bool(Command::new(self.name()).args(["info", package])),
-            _ => Ok(false),
-        };
-        match res {
-            Ok(has) => has,
-            Err(err) => {
-                log::warn!("{err}");
-                false
-            }
-        }
-    }
-
-    /// Install the package manager and perform setup
-    pub fn bootstrap(self) -> Result<()> {
-        log::info!("Bootstrapping {}", self.name());
-        match self {
-            Self::Brew => Shell::from("bash").exec_remote(&[
-                "-fsSL",
-                "https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh",
-            ]),
-            Self::Cargo => Shell::from("sh").exec_remote(&[
-                "--proto",
-                "'=https'",
-                "--tlsv1.2",
-                "-sSf",
-                "https://sh.rustup.rs",
-            ]),
-            manager => Err(anyhow!("Bootstrap not supported for {}", manager.name())),
-        }
-    }
-
-    /// Install the package manager if not already installed
-    pub fn require(self) -> Result<()> {
-        if self.is_available() {
-            return Ok(());
-        }
-        self.bootstrap()
-    }
-
-    /// Check if package manager is installed
-    pub fn is_available(self) -> bool {
-        which_has(self.name())
-    }
-}
-
 impl Resolve for PackageManager {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
-        context.managers.insert(self);
+        context.managers.insert(self.name.clone(), self.clone());
         Ok(BuildUnit::Require(self))
     }
 }
@@ -297,45 +186,37 @@ fn which_has(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lazy_static::lazy_static;
 
-    macro_rules! check_missing {
-        ($manager:ident, $mod_name:ident, $expect_fake:expr, $expect_empty:expr) => {
-            mod $mod_name {
-                use super::*;
+    fn package_manager(name: &str) -> PackageManager {
+        PackageManager {
+            name: name.to_string(),
+            shell_bootstrap: None,
+            shell_install: None,
+            shell_uninstall: None,
+            shell_has: None,
+        }
+    }
 
-                #[test]
-                fn fake_package() {
-                    assert_eq!($manager.has("some_missing_package"), $expect_fake);
-                }
-
-                #[test]
-                fn empty_package() {
-                    assert_eq!($manager.has(""), $expect_empty);
-                }
+    lazy_static! {
+        static ref CONTEXT: Context = {
+            let mut c = Context::default();
+            for manager in [
+                package_manager("apt"),
+                package_manager("apt-get"),
+                package_manager("brew"),
+                package_manager("cargo"),
+                package_manager("choco"),
+                package_manager("pkg"),
+                package_manager("yum"),
+            ] {
+                c.managers.insert(manager.name.clone(), manager);
             }
-        };
-
-        ($manager:ident, $mod_name:ident) => {
-            check_missing!($manager, $mod_name, false, false);
+            c
         };
     }
 
-    check_missing!(Apt, apt);
-
-    check_missing!(AptGet, apt_get);
-
-    check_missing!(Brew, brew);
-
-    check_missing!(Cargo, cargo);
-
-    check_missing!(Choco, choco);
-
-    #[cfg(not(target_os = "freebsd"))]
-    check_missing!(Pkg, pkg);
-    #[cfg(target_os = "freebsd")]
-    check_missing!(Pkg, pkg, false, true);
-
-    check_missing!(Yum, yum);
+    // TODO test default package managers
 
     #[test]
     fn which_has_cargo() {
@@ -347,28 +228,22 @@ mod tests {
         assert!(!which_has("some_missing_package"));
     }
 
-    fn all() -> IndexSet<PackageManager> {
-        vec![Apt, AptGet, Brew, Cargo, Choco, Pkg, Yum]
-            .into_iter()
-            .collect()
-    }
-
     #[test]
-    fn get_name_for_manager() {
-        let mut managers = all();
-        let aliased = managers.take(&Brew).unwrap();
+    fn alias_for_manager() {
+        let mut managers = CONTEXT.managers.clone();
+        let aliased = managers.remove("brew").unwrap();
         let package = Package {
             name: "name".to_string(),
-            managers: all(),
+            managers: CONTEXT.managers.keys().cloned().collect(),
             aliases: {
                 let mut map = IndexMap::new();
-                map.insert(aliased, "alias".into());
+                map.insert(aliased.name.clone(), "alias".into());
                 map
             },
         };
-        assert_eq!(package.get_name(aliased), "alias");
-        for manager in managers {
-            assert_eq!(package.get_name(manager), "name");
+        assert_eq!(package.alias(&aliased), "alias");
+        for manager in managers.values() {
+            assert_eq!(package.alias(manager), "name");
         }
     }
 
@@ -376,20 +251,20 @@ mod tests {
     fn check_installed() {
         assert!(Package {
             name: "cargo".to_string(),
-            managers: all(),
+            managers: CONTEXT.managers.keys().cloned().collect(),
             aliases: IndexMap::new(),
         }
-        .is_installed());
+        .is_installed(&CONTEXT));
     }
 
     #[test]
     fn check_not_installed() {
         assert!(!Package {
             name: "some_missing_package".to_string(),
-            managers: all(),
+            managers: CONTEXT.managers.keys().cloned().collect(),
             aliases: IndexMap::new()
         }
-        .is_installed());
+        .is_installed(&CONTEXT));
     }
 
     macro_rules! unpack {
@@ -437,16 +312,15 @@ mod tests {
         ").unwrap();
         // Add partially overlapping managers
         let mut context = Context::default();
-        context.managers.insert(PackageManager::Cargo);
-        context.managers.insert(PackageManager::Brew);
+        context
+            .managers
+            .insert("cargo".to_string(), CONTEXT.managers["cargo"].clone());
+        context
+            .managers
+            .insert("brew".to_string(), CONTEXT.managers["brew"].clone());
         // Overlap remains
         let resolved = spec.resolve(&mut context).unwrap();
         let package = unpack!(@unit_vec resolved, BuildUnit::Install);
-        assert_eq!(
-            package.managers,
-            vec![PackageManager::Brew]
-                .into_iter()
-                .collect::<IndexSet<_>>()
-        );
+        assert_eq!(package.managers, vec!["brew"]);
     }
 }

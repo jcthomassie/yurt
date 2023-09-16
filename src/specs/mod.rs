@@ -113,7 +113,7 @@ impl BuildSpec {
                 true
             }
             (Self::Require(a), BuildUnit::Require(b)) => {
-                a.push(*b);
+                a.push(b.clone());
                 true
             }
             _ => false,

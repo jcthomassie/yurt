@@ -17,7 +17,7 @@ build:
             - !locale { user: user_b }
           include:
             - !require
-              - choco
+              - name: choco
         # Negative case
         - condition: !bool false
           when: false

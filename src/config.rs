@@ -42,11 +42,11 @@ impl ResolvedConfig {
     }
 
     #[inline]
-    pub fn for_each_unit<F>(self, f: F) -> Result<()>
+    pub fn for_each_unit<F>(&self, f: F) -> Result<()>
     where
-        F: FnMut(BuildUnit) -> Result<()>,
+        F: FnMut(&BuildUnit) -> Result<()>,
     {
-        self.build.into_iter().try_for_each(f)
+        self.build.iter().try_for_each(f)
     }
 
     pub fn into_config(self) -> Config {

@@ -1,6 +1,6 @@
 build:
 - !require
-  - cargo
+  - name: cargo
 - !link
   - source: a
     target: b

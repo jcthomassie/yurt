@@ -132,11 +132,13 @@ fn show_build(args: &YurtArgs, raw: bool, nontrivial: bool) -> Result<()> {
         Config::try_from(args)?
     } else {
         let mut res = ResolvedConfig::try_from(args)?;
+        // TODO: get rid of this clone
+        let context = res.context.clone();
         if nontrivial {
             res = res.filter(|unit| match unit {
                 BuildUnit::Repo(repo) => !repo.is_available(),
                 BuildUnit::Link(link) => !link.is_valid(),
-                BuildUnit::Install(package) => !package.is_installed(),
+                BuildUnit::Install(package) => !package.is_installed(&context),
                 BuildUnit::Require(manager) => !manager.is_available(),
                 BuildUnit::Hook(hook) => hook.applies(Hook::Install),
             });
@@ -176,7 +178,7 @@ fn main() -> Result<()> {
                 BuildUnit::Repo(repo) => repo.require().map(drop),
                 BuildUnit::Link(link) => link.link(clean),
                 BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
-                BuildUnit::Install(package) => package.install(),
+                BuildUnit::Install(package) => package.install(&build.context),
                 BuildUnit::Require(manager) => manager.require(),
             })
         }),
@@ -184,7 +186,7 @@ fn main() -> Result<()> {
             build.for_each_unit(|unit| match unit {
                 BuildUnit::Link(link) => link.unlink(),
                 BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
-                BuildUnit::Install(package) => package.uninstall(),
+                BuildUnit::Install(package) => package.uninstall(&build.context),
                 _ => Ok(()),
             })
         }),

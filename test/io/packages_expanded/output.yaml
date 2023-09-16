@@ -3,8 +3,8 @@ build:
   - name: package_a
   - name: package_b
 - !require
-  - cargo
-  - apt
+  - name: cargo
+  - name: apt
 - !install
   - name: package_c
     managers:
