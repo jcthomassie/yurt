@@ -174,8 +174,9 @@ impl From<Shell> for String {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(from = "ShellCommandSpec")]
 pub struct ShellCommand {
-    shell: Shell,
-    command: String,
+    // TODO make attributes private
+    pub shell: Shell,
+    pub command: String,
 }
 
 impl ShellCommand {

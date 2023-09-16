@@ -1,9 +1,10 @@
+use crate::context::parse::{self, ObjectKey};
 use crate::specs::{
-    shell::{command, Shell},
+    shell::{command, Shell, ShellCommand},
     BuildUnit, Context, Resolve,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use indexmap::{IndexMap, IndexSet};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
@@ -75,6 +76,80 @@ impl Resolve for Package {
             },
             ..self
         }))
+    }
+}
+
+impl ObjectKey for Package {
+    const OBJECT_NAME: &'static str = "package";
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
+pub struct PackageManagerSpec {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shell_bootstrap: Option<ShellCommand>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shell_install: Option<ShellCommand>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shell_uninstall: Option<ShellCommand>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    shell_has: Option<ShellCommand>,
+}
+
+impl PackageManagerSpec {
+    fn inject_package(command: &ShellCommand, package: &str) -> Result<ShellCommand> {
+        Ok(ShellCommand {
+            shell: command.shell.clone(),
+            command: parse::replace(&command.command, |input_key| {
+                (input_key == Package::object_key("name"))
+                    .then(|| package.to_string())
+                    .with_context(|| format!("Unexpected key: {input_key:?}"))
+            })?,
+        })
+    }
+
+    pub fn bootstrap(&self) -> Result<()> {
+        self.shell_bootstrap
+            .as_ref()
+            .with_context(|| format!("{}.shell_bootstrap is not implemented", self.name))
+            .and_then(ShellCommand::exec)
+    }
+
+    pub fn install(&self, package: &str) -> Result<()> {
+        self.shell_install
+            .as_ref()
+            .with_context(|| format!("{}.shell_install is not implemented", self.name))
+            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| command.exec())
+    }
+
+    pub fn uninstall(&self, package: &str) -> Result<()> {
+        self.shell_uninstall
+            .as_ref()
+            .with_context(|| format!("{}.shell_uninstall is not implemented", self.name))
+            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| command.exec())
+    }
+
+    pub fn has(&self, package: &str) -> Result<bool> {
+        self.shell_has
+            .as_ref()
+            .with_context(|| format!("{}.shell_has is not implemented", self.name))
+            .and_then(|command| Self::inject_package(command, package))
+            .and_then(|command| command.exec_bool())
+    }
+
+    /// Check if package manager is installed
+    pub fn is_available(&self) -> bool {
+        which_has(&self.name)
+    }
+
+    /// Install the package manager if not already installed
+    pub fn require(&self) -> Result<()> {
+        match self.is_available() {
+            true => Ok(()),
+            false => self.bootstrap(),
+        }
     }
 }
 
