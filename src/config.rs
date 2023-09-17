@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    specs::{BuildSpec, BuildUnit, Hook, ResolveInto},
+    specs::{BuildSpec, BuildUnit, ResolveInto},
     YurtArgs,
 };
 
@@ -30,12 +30,6 @@ pub struct ResolvedConfig<'c> {
 }
 
 impl<'c> ResolvedConfig<'c> {
-    pub fn resolve_from(args: &YurtArgs, context: &'c mut Context) -> Result<Self> {
-        Config::try_from(args)
-            .and_then(|config| config.resolve(context))
-            .map(|resolved| resolved.filter_args(args))
-    }
-
     #[inline]
     pub fn filter<P>(self, predicate: P) -> Self
     where
@@ -45,30 +39,6 @@ impl<'c> ResolvedConfig<'c> {
             build: self.build.into_iter().filter(predicate).collect(),
             ..self
         }
-    }
-
-    pub fn filter_args(self, args: &YurtArgs) -> Self {
-        match args {
-            YurtArgs {
-                include: Some(units),
-                ..
-            } => self.filter(|unit| unit.included_in(units)),
-            YurtArgs {
-                exclude: Some(units),
-                ..
-            } => self.filter(|unit| !unit.included_in(units)),
-            _ => self,
-        }
-    }
-
-    pub fn filter_nontrivial(self, context: &Context) -> Self {
-        self.filter(|unit| match unit {
-            BuildUnit::Repo(repo) => !repo.is_available(),
-            BuildUnit::Link(link) => !link.is_valid(),
-            BuildUnit::Package(package) => !package.is_installed(context),
-            BuildUnit::PackageManager(manager) => !manager.is_available(),
-            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
-        })
     }
 
     #[inline]
@@ -84,6 +54,22 @@ impl<'c> ResolvedConfig<'c> {
             version: self.version,
             build: self.build.into_iter().map(Into::into).collect(),
         }
+    }
+
+    pub fn resolve_from(args: &YurtArgs, context: &'c mut Context) -> Result<Self> {
+        Config::try_from(args)
+            .and_then(|config| config.resolve(context))
+            .map(|resolved| match args {
+                YurtArgs {
+                    include: Some(units),
+                    ..
+                } => resolved.filter(|unit| unit.included_in(units)),
+                YurtArgs {
+                    exclude: Some(units),
+                    ..
+                } => resolved.filter(|unit| !unit.included_in(units)),
+                _ => resolved,
+            })
     }
 }
 
@@ -217,11 +203,8 @@ pub mod tests {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let args = test.get_args();
                         let mut context = Context::from(&args);
-                        let config = Config::try_from(&args).unwrap();
-                        let resolved_yaml = config
-                            .resolve(&mut context)
+                        let resolved_yaml = ResolvedConfig::resolve_from(&args, &mut context)
                             .expect("Failed to resolve input build")
-                            .filter_args(&args)
                             .into_config()
                             .yaml()
                             .expect("Failed to generate resolved yaml");

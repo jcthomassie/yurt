@@ -155,7 +155,15 @@ fn main() -> Result<()> {
                 let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
                 if nontrivial {
                     let context = resolved.context;
-                    resolved.filter_nontrivial(context).into_config()
+                    resolved
+                        .filter(|unit| match unit {
+                            BuildUnit::Repo(repo) => !repo.is_available(),
+                            BuildUnit::Link(link) => !link.is_valid(),
+                            BuildUnit::Package(package) => !package.is_installed(context),
+                            BuildUnit::PackageManager(manager) => !manager.is_available(),
+                            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
+                        })
+                        .into_config()
                 } else {
                     resolved.into_config()
                 }
