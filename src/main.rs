@@ -9,7 +9,7 @@ mod context;
 mod specs;
 
 use self::{
-    config::Config,
+    config::{Config, ResolvedConfig},
     context::Context,
     specs::{BuildUnit, BuildUnitKind, Hook},
 };
@@ -136,14 +136,13 @@ fn main() -> Result<()> {
     }
 
     log::info!("{:?}", &args.action);
-    let mut context = Context::try_from(&args)?;
-    let config = Config::try_from(&args)?;
+    let mut context = Context::from(&args);
     let result = match args.action {
         YurtAction::Show {
             raw, context: true, ..
         } => {
             if !raw {
-                config.resolve(&mut context)?;
+                ResolvedConfig::resolve_from(&args, &mut context)?;
             }
             writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
         }
@@ -151,9 +150,9 @@ fn main() -> Result<()> {
             raw, nontrivial, ..
         } => {
             let config = if raw {
-                config
+                Config::try_from(&args)?
             } else {
-                let resolved = config.resolve(&mut context)?.filter_args(&args);
+                let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
                 if nontrivial {
                     let context = resolved.context;
                     resolved.filter_nontrivial(context).into_config()
@@ -163,9 +162,7 @@ fn main() -> Result<()> {
             };
             writeln!(io::stdout(), "{}", config.yaml()?).context("Failed to write yaml to stdout")
         }
-        YurtAction::Install { clean } => config
-            .resolve(&mut context)
-            .map(|build| build.filter_args(&args))
+        YurtAction::Install { clean } => ResolvedConfig::resolve_from(&args, &mut context)
             .and_then(|build| {
                 build.for_each_unit(|unit| match unit {
                     BuildUnit::Repo(repo) => repo.require().map(drop),
@@ -175,9 +172,7 @@ fn main() -> Result<()> {
                     BuildUnit::PackageManager(manager) => manager.require(),
                 })
             }),
-        YurtAction::Uninstall => config
-            .resolve(&mut context)
-            .map(|build| build.filter_args(&args))
+        YurtAction::Uninstall => ResolvedConfig::resolve_from(&args, &mut context) //
             .and_then(|build| {
                 build.for_each_unit(|unit| match unit {
                     BuildUnit::Link(link) => link.unlink(),

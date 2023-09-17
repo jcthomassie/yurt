@@ -30,6 +30,12 @@ pub struct ResolvedConfig<'c> {
 }
 
 impl<'c> ResolvedConfig<'c> {
+    pub fn resolve_from(args: &YurtArgs, context: &'c mut Context) -> Result<Self> {
+        Config::try_from(args)
+            .and_then(|config| config.resolve(context))
+            .map(|resolved| resolved.filter_args(args))
+    }
+
     #[inline]
     pub fn filter<P>(self, predicate: P) -> Self
     where
@@ -109,7 +115,7 @@ impl Config {
             })
     }
 
-    pub fn resolve(self, context: &mut Context) -> Result<ResolvedConfig<'_>> {
+    fn resolve(self, context: &mut Context) -> Result<ResolvedConfig<'_>> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => Some(req),
@@ -210,7 +216,7 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let args = test.get_args();
-                        let mut context = Context::try_from(&args).unwrap();
+                        let mut context = Context::from(&args);
                         let config = Config::try_from(&args).unwrap();
                         let resolved_yaml = config
                             .resolve(&mut context)
@@ -261,7 +267,7 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
                         let args = test.get_args();
-                        let mut context = Context::try_from(&args).unwrap();
+                        let mut context = Context::from(&args);
                         let config = Config::try_from(&args).unwrap();
                         assert!(config.resolve(&mut context).is_err());
                     }
