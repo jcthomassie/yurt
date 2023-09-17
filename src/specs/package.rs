@@ -6,6 +6,7 @@ use crate::specs::{
 
 use anyhow::{anyhow, Context as _, Result};
 use indexmap::IndexMap;
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
@@ -100,10 +101,13 @@ pub struct PackageManager {
 
 impl PackageManager {
     fn inject_package(&self, command: &ShellCommand, package: &Package) -> Result<ShellCommand> {
+        lazy_static! {
+            static ref PACKAGE_KEY: parse::Key = Package::object_key("alias");
+        }
         Ok(ShellCommand {
             shell: command.shell.clone(),
             command: parse::replace(&command.command, |input_key| {
-                (input_key == Package::object_key("alias"))
+                (input_key == *PACKAGE_KEY)
                     .then(|| package.alias(self).to_string())
                     .with_context(|| format!("Unexpected key: {input_key:?}"))
             })?,

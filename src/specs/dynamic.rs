@@ -3,7 +3,7 @@ use crate::{
     specs::{shell::ShellCommand, BuildUnit, ResolveInto},
 };
 
-use anyhow::{bail, Context as _, Result};
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
@@ -94,21 +94,8 @@ impl ResolveInto for Vars {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
-    values: IndexMap<String, Vec<String>>,
+    values: Vec<IndexMap<String, String>>,
     include: T,
-}
-
-impl<T> Matrix<T> {
-    fn length(&self) -> Result<usize> {
-        let mut counts = self.values.values().map(Vec::len);
-        match counts.next() {
-            Some(first) => counts
-                .all(|next| next == first)
-                .then_some(first)
-                .context("Matrix array size mismatch"),
-            None => bail!("Matrix values must be non-empty"),
-        }
-    }
 }
 
 impl<T> ObjectKey for Matrix<T> {
@@ -120,15 +107,19 @@ where
     T: ResolveInto + Clone,
 {
     fn resolve_into(self, context: &mut Context, output: &mut Vec<BuildUnit>) -> Result<()> {
-        let keys = self.values.keys().map(Self::object_key).collect::<Vec<_>>();
-        for i in 0..self.length()? {
-            // Add `i`th values to context (with internal replacement)
-            for (key, val) in keys.iter().zip(self.values.values().map(|vec| &vec[i])) {
-                context.variables.push(key.clone(), context.parse_str(val)?);
+        if self.values.is_empty() {
+            bail!("Matrix values must be non-empty")
+        }
+        for item in self.values {
+            for (key, val) in item.keys().zip(item.values()) {
+                context.variables.push(
+                    Self::object_key(key),
+                    context.parse_str(val)?, // internal replacement
+                );
             }
             self.include.clone().resolve_into(context, output)?;
-            for key in &keys {
-                context.variables.drop(key);
+            for key in item.into_keys() {
+                context.variables.drop(&Self::object_key(key));
             }
         }
         Ok(())
@@ -140,10 +131,14 @@ mod tests {
     use super::*;
     use crate::context::Context;
     use crate::specs::BuildSpec;
+    use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
 
+    lazy_static! {
+        static ref CONTEXT: Context = Context::default();
+    }
+
     mod condition {
-        use crate::context::Context;
         use crate::specs::dynamic::Condition;
         use pretty_assertions::assert_eq;
 
@@ -151,7 +146,7 @@ mod tests {
             ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
                 let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
                 assert!(matches!(cond, $enum_pattern));
-                assert_eq!(cond.evaluate(&Context::default()).unwrap(), $evaluation);
+                assert_eq!(cond.evaluate(&super::CONTEXT).unwrap(), $evaluation);
             };
         }
 
@@ -219,7 +214,7 @@ mod tests {
             when: Some(true),
             include: "something",
         };
-        assert!(case.evaluate(&Context::default()).unwrap());
+        assert!(case.evaluate(&CONTEXT).unwrap());
     }
 
     #[test]
@@ -229,7 +224,7 @@ mod tests {
             when: Some(true),
             include: "something",
         };
-        assert!(!case.evaluate(&Context::default()).unwrap());
+        assert!(!case.evaluate(&CONTEXT).unwrap());
     }
 
     #[test]
@@ -239,7 +234,7 @@ mod tests {
             when: Some(false),
             include: "something",
         };
-        assert!(case.evaluate(&Context::default()).unwrap());
+        assert!(case.evaluate(&CONTEXT).unwrap());
     }
 
     #[test]
@@ -249,7 +244,7 @@ mod tests {
             when: Some(false),
             include: "something",
         };
-        assert!(!case.evaluate(&Context::default()).unwrap());
+        assert!(!case.evaluate(&CONTEXT).unwrap());
     }
 
     #[test]
@@ -266,27 +261,13 @@ mod tests {
     }
 
     #[test]
-    fn matrix_length() {
+    fn matrix_empty() {
         #[rustfmt::skip]
-        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str("
-            values:
-              a: [1, 2, 3]
-              b: [4, 5, 6]
-            include: [ ]
-        ").unwrap();
-        assert_eq!(matrix.length().unwrap(), 3);
-    }
-
-    #[test]
-    fn matrix_length_mismatch() {
+        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
+            values: []
+            include: []
+        "#).unwrap();
         let mut context = Context::default();
-        #[rustfmt::skip]
-        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str("
-            values:
-              a: [1, 2, 3]
-              b: [4, 5, 6, 7]
-            include: [ ]
-        ").unwrap();
         assert!(matrix.resolve_into_new(&mut context).is_err());
     }
 
@@ -297,13 +278,12 @@ mod tests {
         #[rustfmt::skip]
         let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
             values:
-              inner:
-                - "${{ outer.key }}_a"
-                - "${{ outer.key }}_b"
-                - "${{ outer.key }}_c"
+              - a: "${{ outer.key }}_a"
+              - a: "${{ outer.key }}_b"
+              - a: "${{ outer.key }}_c"
             include:
               - !link
-                  source: ${{ matrix.inner }}
+                  source: ${{ matrix.a }}
                   target: const
         "#).unwrap();
         #[rustfmt::skip]
