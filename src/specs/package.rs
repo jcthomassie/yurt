@@ -36,7 +36,7 @@ impl Package {
     }
 
     pub fn is_installed(&self, context: &Context) -> bool {
-        which_has(&self.name) || self.iter_managers(context).any(|manager| manager.has(self))
+        self.iter_managers(context).any(|manager| manager.has(self)) || which_has(&self.name)
     }
 
     pub fn install(&self, context: &Context) -> Result<()> {
@@ -114,40 +114,54 @@ impl PackageManager {
         })
     }
 
+    fn command<F, T>(
+        &self,
+        command: &Option<ShellCommand>,
+        command_name: &str,
+        command_action: F,
+    ) -> Result<T>
+    where
+        F: Fn(&ShellCommand) -> Result<T>,
+    {
+        log::info!("Calling `{}.{command_name}`", self.name);
+        command
+            .as_ref()
+            .with_context(|| format!("{}.{command_name} is not implemented", self.name))
+            .and_then(command_action)
+            .with_context(|| format!("{}.{command_name} failed", self.name))
+    }
+
+    /// Install the package manager
     pub fn bootstrap(&self) -> Result<()> {
-        log::info!("Bootstrapping `{}`", self.name);
-        self.shell_bootstrap
-            .as_ref()
-            .with_context(|| format!("{}.shell_bootstrap is not implemented", self.name))
-            .and_then(ShellCommand::exec)
+        self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
     }
 
+    /// Install a package
     pub fn install(&self, package: &Package) -> Result<()> {
-        self.shell_install
-            .as_ref()
-            .with_context(|| format!("{}.shell_install is not implemented", self.name))
-            .and_then(|command| self.inject_package(command, package))
-            .and_then(|command| command.exec())
+        self.command(&self.shell_install, "shell_install", |command| {
+            self.inject_package(command, package)
+                .and_then(|command| command.exec())
+        })
     }
 
+    /// Uninstall a package
     pub fn uninstall(&self, package: &Package) -> Result<()> {
-        self.shell_uninstall
-            .as_ref()
-            .with_context(|| format!("{}.shell_uninstall is not implemented", self.name))
-            .and_then(|command| self.inject_package(command, package))
-            .and_then(|command| command.exec())
+        self.command(&self.shell_uninstall, "shell_uninstall", |command| {
+            self.inject_package(command, package)
+                .and_then(|command| command.exec())
+        })
     }
 
+    /// Check if a package is installed
     pub fn has(&self, package: &Package) -> bool {
-        self.shell_has
-            .as_ref()
-            .with_context(|| format!("{}.shell_has is not implemented", self.name))
-            .and_then(|command| self.inject_package(command, package))
-            .and_then(|command| command.exec_bool())
-            .unwrap_or_else(|error| {
-                log::warn!("{error}");
-                false
-            })
+        self.command(&self.shell_has, "shell_has", |command| {
+            self.inject_package(command, package)
+                .and_then(|command| command.exec_bool())
+        })
+        .unwrap_or_else(|error| {
+            log::warn!("{error}");
+            false
+        })
     }
 
     /// Check if package manager is installed
