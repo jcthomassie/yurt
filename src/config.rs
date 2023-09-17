@@ -1,6 +1,6 @@
 use crate::{
     context::Context,
-    specs::{BuildSpec, BuildUnit, ResolveInto},
+    specs::{BuildSpec, BuildUnit, Hook, ResolveInto},
     YurtArgs,
 };
 
@@ -22,14 +22,14 @@ lazy_static! {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct ResolvedConfig {
+pub struct ResolvedConfig<'c> {
     // Members should be treated as immutable
-    pub context: Context,
+    pub context: &'c Context,
     build: Vec<BuildUnit>,
     version: Option<VersionReq>,
 }
 
-impl ResolvedConfig {
+impl<'c> ResolvedConfig<'c> {
     #[inline]
     pub fn filter<P>(self, predicate: P) -> Self
     where
@@ -39,6 +39,30 @@ impl ResolvedConfig {
             build: self.build.into_iter().filter(predicate).collect(),
             ..self
         }
+    }
+
+    pub fn filter_args(self, args: &YurtArgs) -> Self {
+        match args {
+            YurtArgs {
+                include: Some(units),
+                ..
+            } => self.filter(|unit| unit.included_in(units)),
+            YurtArgs {
+                exclude: Some(units),
+                ..
+            } => self.filter(|unit| !unit.included_in(units)),
+            _ => self,
+        }
+    }
+
+    pub fn filter_nontrivial(self, context: &Context) -> Self {
+        self.filter(|unit| match unit {
+            BuildUnit::Repo(repo) => !repo.is_available(),
+            BuildUnit::Link(link) => !link.is_valid(),
+            BuildUnit::Package(package) => !package.is_installed(context),
+            BuildUnit::PackageManager(manager) => !manager.is_available(),
+            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
+        })
     }
 
     #[inline]
@@ -54,26 +78,6 @@ impl ResolvedConfig {
             version: self.version,
             build: self.build.into_iter().map(Into::into).collect(),
         }
-    }
-}
-
-impl TryFrom<&YurtArgs> for ResolvedConfig {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &YurtArgs) -> Result<Self> {
-        Config::try_from(args)
-            .and_then(|c| c.resolve(Context::from(args)))
-            .map(|r| match args {
-                YurtArgs {
-                    include: Some(units),
-                    ..
-                } => r.filter(|unit| unit.included_in(units)),
-                YurtArgs {
-                    exclude: Some(units),
-                    ..
-                } => r.filter(|unit| !unit.included_in(units)),
-                _ => r,
-            })
     }
 }
 
@@ -103,7 +107,7 @@ impl Config {
             })
     }
 
-    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+    pub fn resolve(self, context: &mut Context) -> Result<ResolvedConfig<'_>> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => Some(req),
@@ -114,7 +118,7 @@ impl Config {
         Ok(ResolvedConfig {
             build: self
                 .build
-                .resolve_into_new(&mut context)
+                .resolve_into_new(context)
                 .context("Failed to resolve build")?,
             version,
             context,
@@ -203,8 +207,13 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
-                        let resolved_yaml = ResolvedConfig::try_from(&test.get_args())
+                        let args = test.get_args();
+                        let mut context = Context::try_from(&args).unwrap();
+                        let config = Config::try_from(&args).unwrap();
+                        let resolved_yaml = config
+                            .resolve(&mut context)
                             .expect("Failed to resolve input build")
+                            .filter_args(&args)
                             .into_config()
                             .yaml()
                             .expect("Failed to generate resolved yaml");
@@ -250,8 +259,9 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
                         let args = test.get_args();
-                        assert!(Config::try_from(&args).is_ok());
-                        assert!(ResolvedConfig::try_from(&args).is_err());
+                        let mut context = Context::try_from(&args).unwrap();
+                        let config = Config::try_from(&args).unwrap();
+                        assert!(config.resolve(&mut context).is_err());
                     }
                 };
             }
