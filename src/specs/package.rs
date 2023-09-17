@@ -131,11 +131,6 @@ impl PackageManager {
             .with_context(|| format!("{}.{command_name} failed", self.name))
     }
 
-    /// Install the package manager
-    pub fn bootstrap(&self) -> Result<()> {
-        self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
-    }
-
     /// Install a package
     pub fn install(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_install, "shell_install", |command| {
@@ -164,17 +159,22 @@ impl PackageManager {
         })
     }
 
-    /// Check if package manager is installed
-    pub fn is_available(&self) -> bool {
-        which_has(&self.name)
+    /// Install the package manager and perform setup
+    pub fn bootstrap(&self) -> Result<()> {
+        self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
     }
 
     /// Install the package manager if not already installed
     pub fn require(&self) -> Result<()> {
-        match self.is_available() {
-            true => Ok(()),
-            false => self.bootstrap(),
+        if self.is_available() {
+            return Ok(());
         }
+        self.bootstrap()
+    }
+
+    /// Check if package manager is installed
+    pub fn is_available(&self) -> bool {
+        which_has(&self.name)
     }
 }
 
