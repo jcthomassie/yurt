@@ -138,8 +138,8 @@ fn show_build(args: &YurtArgs, raw: bool, nontrivial: bool) -> Result<()> {
             res = res.filter(|unit| match unit {
                 BuildUnit::Repo(repo) => !repo.is_available(),
                 BuildUnit::Link(link) => !link.is_valid(),
-                BuildUnit::Install(package) => !package.is_installed(&context),
-                BuildUnit::Require(manager) => !manager.is_available(),
+                BuildUnit::Package(package) => !package.is_installed(&context),
+                BuildUnit::PackageManager(manager) => !manager.is_available(),
                 BuildUnit::Hook(hook) => hook.applies(Hook::Install),
             });
         }
@@ -178,15 +178,15 @@ fn main() -> Result<()> {
                 BuildUnit::Repo(repo) => repo.require().map(drop),
                 BuildUnit::Link(link) => link.link(clean),
                 BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
-                BuildUnit::Install(package) => package.install(&build.context),
-                BuildUnit::Require(manager) => manager.require(),
+                BuildUnit::Package(package) => package.install(&build.context),
+                BuildUnit::PackageManager(manager) => manager.require(),
             })
         }),
         YurtAction::Uninstall => ResolvedConfig::try_from(&args).and_then(|build| {
             build.for_each_unit(|unit| match unit {
                 BuildUnit::Link(link) => link.unlink(),
                 BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
-                BuildUnit::Install(package) => package.uninstall(&build.context),
+                BuildUnit::Package(package) => package.uninstall(&build.context),
                 _ => Ok(()),
             })
         }),

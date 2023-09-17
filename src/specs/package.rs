@@ -66,7 +66,7 @@ impl Package {
 
 impl Resolve for Package {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
-        Ok(BuildUnit::Install(Self {
+        Ok(BuildUnit::Package(Self {
             name: context.parse_str(&self.name)?,
             managers: match self.managers.is_empty() {
                 false => self
@@ -163,7 +163,7 @@ impl PackageManager {
 impl Resolve for PackageManager {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         context.managers.insert(self.name.clone(), self.clone());
-        Ok(BuildUnit::Require(self))
+        Ok(BuildUnit::PackageManager(self))
     }
 }
 
@@ -289,7 +289,7 @@ mod tests {
         context.variables.try_push("key", "value").unwrap();
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
         assert_eq!(package.name, "value");
     }
 
@@ -299,7 +299,7 @@ mod tests {
         let mut context = Context::default();
         // No managers remain
         let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
         assert!(package.managers.is_empty());
     }
 
@@ -320,7 +320,7 @@ mod tests {
             .insert("brew".to_string(), CONTEXT.managers["brew"].clone());
         // Overlap remains
         let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Install);
+        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
         assert_eq!(package.managers, vec!["brew"]);
     }
 }

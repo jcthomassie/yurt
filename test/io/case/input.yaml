@@ -5,8 +5,7 @@ build:
         - !locale { user: user_a }
         - !locale { user: user_b }
       include:
-      - !install
-        - name: not_package
+      - !package { name: not_package }
     # Default case
     - condition: !default
       include:
@@ -16,26 +15,22 @@ build:
             - !locale { user: user_a }
             - !locale { user: user_b }
           include:
-            - !require
-              - name: choco
+            - !package_manager { name: choco }
         # Negative case
         - condition: !bool false
           when: false
           include:
-            - !install
-              - name: package_0
-      - !install
-        - name: package_1
+            - !package { name: package_0 }
+      - !package
+          name: package_1
           managers: [ apt, apt-get ]
           aliases: { apt: package_1-alias }
   - !case
     - condition: !eval bad-command
       when: false
       include:
-        - !install
-          - name: package_2
+        - !package { name: package_2 }
     # Break on first match
     - condition: !bool true
       include:
-        - !install
-          - name: not_package
+        - !package { name: not_package }

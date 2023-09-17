@@ -1,6 +1,6 @@
 build:
-- !require
-  - name: cargo
+- !package_manager
+  name: cargo
 - !link
-  - source: a
-    target: b
+  source: a
+  target: b

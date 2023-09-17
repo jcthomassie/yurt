@@ -50,18 +50,9 @@ impl ResolvedConfig {
     }
 
     pub fn into_config(self) -> Config {
-        let mut build: Vec<BuildSpec> = Vec::new();
-        for unit in self.build {
-            if let Some(spec) = build.last_mut() {
-                if spec.absorb(&unit) {
-                    continue;
-                }
-            }
-            build.push(unit.into());
-        }
         Config {
             version: self.version,
-            build,
+            build: self.build.into_iter().map(Into::into).collect(),
         }
     }
 }

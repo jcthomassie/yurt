@@ -6,5 +6,5 @@ build:
         letter: [ a, b, c ]
       include:
       - !link
-        - target: dir_${{ matrix.letter }}/target_${{ matrix.number }}
+          target: dir_${{ matrix.letter }}/target_${{ matrix.number }}
           source: dir_${{ matrix.letter }}/source_${{ matrix.number }}

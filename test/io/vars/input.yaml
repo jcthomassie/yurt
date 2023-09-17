@@ -4,7 +4,9 @@ build:
       alpha: package_2
       beta: package_3
       gamma: package_4
-  - !install
-    - name: ${{ vars.alpha }}
-    - name: ${{ vars.beta }}
-    - name: ${{ vars.gamma }}
+  - !package
+      name: ${{ vars.alpha }}
+  - !package
+      name: ${{ vars.beta }}
+  - !package
+      name: ${{ vars.gamma }}

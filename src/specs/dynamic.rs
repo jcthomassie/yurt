@@ -303,17 +303,19 @@ mod tests {
                 - "${{ outer.key }}_c"
             include:
               - !link
-                - source: ${{ matrix.inner }}
+                  source: ${{ matrix.inner }}
                   target: const
         "#).unwrap();
         #[rustfmt::skip]
         let values: Vec<BuildSpec> = serde_yaml::from_str(r#"
             - !link
-              - source: value_a
+                source: value_a
                 target: const
-              - source: value_b
+            - !link
+                source: value_b
                 target: const
-              - source: value_c
+            - !link
+                source: value_c
                 target: const
         "#).unwrap();
         assert_eq!(
