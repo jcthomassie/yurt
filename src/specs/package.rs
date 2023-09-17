@@ -204,37 +204,124 @@ fn which_has(name: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lazy_static::lazy_static;
 
-    fn package_manager(name: &str) -> PackageManager {
-        PackageManager {
-            name: name.to_string(),
-            shell_bootstrap: None,
-            shell_install: None,
-            shell_uninstall: None,
-            shell_has: None,
-        }
-    }
-
-    lazy_static! {
-        static ref CONTEXT: Context = {
-            let mut c = Context::default();
-            for manager in [
-                package_manager("apt"),
-                package_manager("apt-get"),
-                package_manager("brew"),
-                package_manager("cargo"),
-                package_manager("choco"),
-                package_manager("pkg"),
-                package_manager("yum"),
-            ] {
-                c.managers.insert(manager.name.clone(), manager);
+    macro_rules! unpack {
+        ($value:expr, BuildUnit::$variant:ident) => {
+            if let BuildUnit::$variant(ref unwrapped) = $value {
+                unwrapped
+            } else {
+                panic!("Failed to unpack build unit");
             }
-            c
         };
     }
 
-    // TODO test default package managers
+    mod manager {
+        use super::*;
+
+        fn package_manager(name: &str) -> PackageManager {
+            PackageManager {
+                name: name.to_string(),
+                shell_bootstrap: None,
+                shell_install: None,
+                shell_uninstall: None,
+                shell_has: None,
+            }
+        }
+        #[test]
+        fn empty_bootstrap() {
+            package_manager("made-up-name").bootstrap().unwrap_err();
+        }
+
+        #[test]
+        fn alias() {
+            let not_aliased = package_manager("not_aliased");
+            let aliased = package_manager("aliased");
+            let package = Package {
+                name: "name".to_string(),
+                managers: vec![aliased.name.clone()],
+                aliases: {
+                    let mut map = IndexMap::new();
+                    map.insert(aliased.name.clone(), "alias".into());
+                    map
+                },
+            };
+            assert_eq!(package.alias(&aliased), "alias");
+            assert_eq!(package.alias(&not_aliased), "name");
+        }
+
+        #[test]
+        fn prune_empty() {
+            let package: Package = serde_yaml::from_str("name: some-package").unwrap();
+            let mut context = Context::default();
+            // No managers remain
+            let resolved = package.resolve(&mut context).unwrap();
+            let package = unpack!(resolved, BuildUnit::Package);
+            assert!(package.managers.is_empty());
+        }
+
+        #[test]
+        fn prune_some() {
+            #[rustfmt::skip]
+            let package: Package = serde_yaml::from_str("
+                name: some-package
+                managers: [ apt, brew ]
+            ").unwrap();
+            // Add partially overlapping managers
+            let mut context = Context::default();
+            context
+                .managers
+                .insert("cargo".into(), package_manager("cargo"));
+            context
+                .managers
+                .insert("brew".into(), package_manager("brew"));
+            // Overlap remains
+            let resolved = package.resolve(&mut context).unwrap();
+            let package = unpack!(resolved, BuildUnit::Package);
+            assert_eq!(package.managers, vec!["brew"]);
+        }
+
+        #[test]
+        fn bootstrap_not_implemented() {
+            let package_manager: PackageManager =
+                serde_yaml::from_str("name: arbitrary_manager").unwrap();
+            package_manager.bootstrap().unwrap_err();
+        }
+
+        #[test]
+        fn install_not_implemented() {
+            let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
+            let package_manager: PackageManager =
+                serde_yaml::from_str("name: arbitrary_manager").unwrap();
+            package_manager.install(&package).unwrap_err();
+        }
+
+        #[test]
+        fn uninstall_not_implemented() {
+            let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
+            let package_manager: PackageManager =
+                serde_yaml::from_str("name: arbitrary_manager").unwrap();
+            package_manager.uninstall(&package).unwrap_err();
+        }
+
+        #[test]
+        fn has_not_implemented() {
+            let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
+            let package_manager: PackageManager =
+                serde_yaml::from_str("name: arbitrary_manager").unwrap();
+            assert!(!package_manager.has(&package));
+        }
+
+        #[test]
+        fn has_package_not_installed() {
+            let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
+            #[rustfmt::skip]
+            let package_manager: PackageManager = serde_yaml::from_str("
+                name: cargo
+                shell_has: cargo install --list | grep '^${{ package }} v'
+            ").unwrap();
+            assert!(!package_manager.has(&package));
+        }
+    }
 
     #[test]
     fn which_has_cargo() {
@@ -247,98 +334,35 @@ mod tests {
     }
 
     #[test]
-    fn alias_for_manager() {
-        let mut managers = CONTEXT.managers.clone();
-        let aliased = managers.remove("brew").unwrap();
-        let package = Package {
-            name: "name".to_string(),
-            managers: CONTEXT.managers.keys().cloned().collect(),
-            aliases: {
-                let mut map = IndexMap::new();
-                map.insert(aliased.name.clone(), "alias".into());
-                map
-            },
-        };
-        assert_eq!(package.alias(&aliased), "alias");
-        for manager in managers.values() {
-            assert_eq!(package.alias(manager), "name");
-        }
-    }
-
-    #[test]
     fn check_installed() {
+        let context = Context::default();
         assert!(Package {
             name: "cargo".to_string(),
-            managers: CONTEXT.managers.keys().cloned().collect(),
+            managers: context.managers.keys().cloned().collect(),
             aliases: IndexMap::new(),
         }
-        .is_installed(&CONTEXT));
+        .is_installed(&context));
     }
 
     #[test]
     fn check_not_installed() {
+        let context = Context::default();
         assert!(!Package {
             name: "some_missing_package".to_string(),
-            managers: CONTEXT.managers.keys().cloned().collect(),
+            managers: context.managers.keys().cloned().collect(),
             aliases: IndexMap::new()
         }
-        .is_installed(&CONTEXT));
-    }
-
-    macro_rules! unpack {
-        (@unit $value:expr, BuildUnit::$variant:ident) => {
-            if let BuildUnit::$variant(ref unwrapped) = $value {
-                unwrapped
-            } else {
-                panic!("Failed to unpack build unit");
-            }
-        };
-        (@unit_vec $value:expr, BuildUnit::$variant:ident) => {
-            {
-                unpack!(@unit ($value), BuildUnit::$variant)
-            }
-        };
+        .is_installed(&context));
     }
 
     #[test]
     fn package_name_substitution() {
-        let spec: Package = serde_yaml::from_str("name: ${{ key }}").unwrap();
+        let package: Package = serde_yaml::from_str("name: ${{ key }}").unwrap();
         let mut context = Context::default();
         context.variables.try_push("key", "value").unwrap();
         // No managers remain
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
+        let resolved = package.resolve(&mut context).unwrap();
+        let package = unpack!(resolved, BuildUnit::Package);
         assert_eq!(package.name, "value");
-    }
-
-    #[test]
-    fn package_manager_prune_empty() {
-        let spec: Package = serde_yaml::from_str("name: some-package").unwrap();
-        let mut context = Context::default();
-        // No managers remain
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
-        assert!(package.managers.is_empty());
-    }
-
-    #[test]
-    fn package_manager_prune_some() {
-        #[rustfmt::skip]
-        let spec: Package = serde_yaml::from_str("
-            name: some-package
-            managers: [ apt, brew ]
-        ").unwrap();
-        // Add partially overlapping managers
-        let mut context = Context::default();
-        context
-            .managers
-            .insert("cargo".to_string(), CONTEXT.managers["cargo"].clone());
-        context
-            .managers
-            .insert("brew".to_string(), CONTEXT.managers["brew"].clone());
-        // Overlap remains
-        let resolved = spec.resolve(&mut context).unwrap();
-        let package = unpack!(@unit_vec resolved, BuildUnit::Package);
-        assert_eq!(package.managers, vec!["brew"]);
     }
 }
