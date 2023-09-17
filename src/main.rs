@@ -137,7 +137,7 @@ fn main() -> Result<()> {
 
     log::info!("{:?}", &args.action);
     let mut context = Context::try_from(&args)?;
-    let mut config = Config::try_from(&args)?;
+    let config = Config::try_from(&args)?;
     let result = match args.action {
         YurtAction::Show {
             raw, context: true, ..
@@ -150,14 +150,16 @@ fn main() -> Result<()> {
         YurtAction::Show {
             raw, nontrivial, ..
         } => {
-            if !raw {
+            let config = if raw {
+                config
+            } else {
                 let resolved = config.resolve(&mut context)?.filter_args(&args);
-                config = if nontrivial {
+                if nontrivial {
                     let context = resolved.context;
                     resolved.filter_nontrivial(context).into_config()
                 } else {
                     resolved.into_config()
-                };
+                }
             };
             writeln!(io::stdout(), "{}", config.yaml()?).context("Failed to write yaml to stdout")
         }
