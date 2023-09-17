@@ -99,11 +99,13 @@ impl Config {
             })
     }
 
-    fn from_url<U: reqwest::IntoUrl>(url: U) -> Result<Self> {
-        reqwest::blocking::get(url)
+    fn from_url(url: &str) -> Result<Self> {
+        minreq::get(url)
+            .send()
             .context("Failed to reach remote build file")
             .and_then(|response| {
-                serde_yaml::from_reader(response).context("Failed to deserialize remote build file")
+                serde_yaml::from_reader(response.as_bytes())
+                    .context("Failed to deserialize remote build file")
             })
     }
 
