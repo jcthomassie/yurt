@@ -131,22 +131,17 @@ mod tests {
     use super::*;
     use crate::context::Context;
     use crate::specs::BuildSpec;
-    use lazy_static::lazy_static;
     use pretty_assertions::assert_eq;
 
-    lazy_static! {
-        static ref CONTEXT: Context = Context::default();
-    }
-
     mod condition {
-        use crate::specs::dynamic::Condition;
+        use super::*;
         use pretty_assertions::assert_eq;
 
         macro_rules! yaml_condition {
             ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {
                 let cond: Condition = serde_yaml::from_str($yaml).expect("Deserialization failed");
                 assert!(matches!(cond, $enum_pattern));
-                assert_eq!(cond.evaluate(&super::CONTEXT).unwrap(), $evaluation);
+                assert_eq!(cond.evaluate(&Context::default()).unwrap(), $evaluation);
             };
         }
 
@@ -214,7 +209,7 @@ mod tests {
             when: Some(true),
             include: "something",
         };
-        assert!(case.evaluate(&CONTEXT).unwrap());
+        assert!(case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
@@ -224,7 +219,7 @@ mod tests {
             when: Some(true),
             include: "something",
         };
-        assert!(!case.evaluate(&CONTEXT).unwrap());
+        assert!(!case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
@@ -234,7 +229,7 @@ mod tests {
             when: Some(false),
             include: "something",
         };
-        assert!(case.evaluate(&CONTEXT).unwrap());
+        assert!(case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
@@ -244,7 +239,7 @@ mod tests {
             when: Some(false),
             include: "something",
         };
-        assert!(!case.evaluate(&CONTEXT).unwrap());
+        assert!(!case.evaluate(&Context::default()).unwrap());
     }
 
     #[test]
