@@ -1,21 +1,26 @@
 build:
-- !install
-  - name: package_a
-  - name: package_b
-- !require
+- !package
+  name: package_a
+- !package
+  name: package_b
+- !package_manager
+  name: cargo
+- !package_manager
+  name: apt
+- !package
+  name: package_c
+  managers:
+  - cargo
+- !package
+  name: package_d
+  managers:
+  - apt
+- !package
+  name: package_e
+- !package
+  name: package_f
+  managers:
   - cargo
   - apt
-- !install
-  - name: package_c
-    managers:
-    - cargo
-  - name: package_d
-    managers:
-    - apt
-  - name: package_e
-  - name: package_f
-    managers:
-    - cargo
-    - apt
-    aliases:
-      cargo: pack-f
+  aliases:
+    cargo: pack-f

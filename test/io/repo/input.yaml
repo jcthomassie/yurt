@@ -7,7 +7,8 @@ build:
       path: /home/repo_2
       url: https://github.com/user/repo_2.git
   - !link
-      - source: /repo_1
-        target: ${{ repo#repo_1.path }}
-      - source: /repo_2
-        target: ${{ repo.path }} # takes last value
+      source: /repo_1
+      target: ${{ repo#repo_1.path }}
+  - !link
+      source: /repo_2
+      target: ${{ repo.path }} # takes last value

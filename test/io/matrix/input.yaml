@@ -2,9 +2,13 @@
 build:
   - !matrix
       values:
-        number: [ 1, 2, 3 ]
-        letter: [ a, b, c ]
+        - letter: a
+          number: 1
+        - letter: b
+          number: 2
+        - letter: c
+          number: 3
       include:
       - !link
-        - target: dir_${{ matrix.letter }}/target_${{ matrix.number }}
+          target: dir_${{ matrix.letter }}/target_${{ matrix.number }}
           source: dir_${{ matrix.letter }}/source_${{ matrix.number }}

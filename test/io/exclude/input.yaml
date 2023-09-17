@@ -6,7 +6,6 @@ build:
         shell: custom-shell
         command: something
   - !link
-    - source: a
+      source: a
       target: b
-  - !install
-    - name: p
+  - !package { name: p }

@@ -50,17 +50,19 @@ Build parameters are specified via a YAML file. Cases can be arbitrarily nested.
 - `!case` list of conditional steps; breaks after first match
   - `condition` criteria for the case to be accepted
   - `include` build steps to include if the condition is met
-- `!link` list of symlinks to be applied
+- `!link` symlink to be applied
+  - `source` link origin path
+  - `target` link destination path (real file)
 - `!hook` shell command to run on specified actions
   - `on` actions to run the hook on
   - `exec`
     - `shell` shell to run the command with
     - `command` command to run
-- `!install` list of packages to install
+- `!package` package to install
   - `name` package name
-  - `managers` (optional) list of package managers that provide the package
+  - `managers` (optional) list of package manager names that provide the package
   - `aliases` (optional) package aliases for specific package managers
-- `!require` list of package managers to bootstrap
+- `!package_manager` package manager to bootstrap
 
 Some build steps (such as `require` and `vars`) modify the resolver state.
 The order of build steps may change the resolved values.
@@ -80,17 +82,14 @@ build:
   - !case
     - condition: !locale { distro: ubuntu }
       include:
-        - !require
-          - apt
-          - apt-get
+        - !package_manager { name: apt }
+        - !package_manager { name: apt-get }
     - condition: !locale { platform: windows }
       include:
-        - !require
-          - choco
+        - !package_manager { name: choco }
     - condition: !default
       include:
-        - !require
-          - brew
+        - !package_manager { name: brew }
         # Run a command with a specific shell
         - !hook
             on: [ install ]
@@ -106,21 +105,23 @@ build:
         echo "doing another thing"
 
   # Install packages
-  - !install
-    - name: bat
-    - name: git
+  - !package { name: bat }
+  - !package
+      name: git
       managers:
       - apt
       - choco
-    - name: delta
+  - !package
+      name: delta
       aliases:
         brew: git-delta
         cargo: git-delta
 
   # Apply symlinks
   - !link
-    - target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
+      target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
       source: ~/.zshrc
-    - target: ${{ repo#dotfiles.path }}/.gitconfig
+  - !link
+      target: ${{ repo#dotfiles.path }}/.gitconfig
       source: ~/.gitconfig
 ```

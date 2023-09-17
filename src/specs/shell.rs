@@ -6,7 +6,7 @@ use std::{env, ffi::OsStr, path::Path, process::Command};
 
 pub mod command {
     use anyhow::{Context as _, Result};
-    use std::process::{Command, Output, Stdio};
+    use std::process::{Command, Output};
 
     fn check_output(output: &Output, command_tag: impl std::fmt::Debug) -> Result<()> {
         output
@@ -35,32 +35,6 @@ pub mod command {
     #[inline]
     pub fn call(command: &mut Command) -> Result<()> {
         call_unchecked(command).and_then(|out| check_output(&out, command))
-    }
-
-    pub fn pipe_unchecked(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<Output> {
-        log::debug!("Calling piped command: `{cmd_a:?} | {cmd_b:?}`");
-        let mut proc_a = cmd_a
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::null())
-            .spawn()
-            .context("Failed to spawn primary pipe command")?;
-        let pipe = proc_a.stdout.take().context("Failed to create pipe")?;
-        let proc_b = cmd_b
-            .stdin(pipe)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .context("Failed to spawn secondary pipe command")?;
-        proc_b
-            .wait_with_output()
-            .with_context(|| format!("Failed to run piped command: `{cmd_a:?} | {cmd_b:?}`"))
-    }
-
-    #[inline]
-    pub fn pipe(cmd_a: &mut Command, cmd_b: &mut Command) -> Result<()> {
-        pipe_unchecked(cmd_a, cmd_b)
-            .and_then(|out| check_output(&out, format!("{cmd_a:?} | {cmd_b:?}")))
     }
 }
 
@@ -122,15 +96,6 @@ impl Shell {
     pub fn exec_bool(&self, command: &str) -> Result<bool> {
         command::call_bool(&mut self._exec(command))
     }
-
-    /// Use curl to fetch remote script and pipe into shell
-    #[inline]
-    pub fn exec_remote(&self, curl_args: &[&str]) -> Result<()> {
-        command::pipe(
-            Command::new("curl").args(curl_args),
-            &mut Command::new(&self.command),
-        )
-    }
 }
 
 impl Default for Shell {
@@ -174,8 +139,8 @@ impl From<Shell> for String {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(from = "ShellCommandSpec")]
 pub struct ShellCommand {
-    shell: Shell,
-    command: String,
+    pub shell: Shell,
+    pub command: String,
 }
 
 impl ShellCommand {
@@ -283,45 +248,6 @@ mod tests {
         #[test]
         fn call_bool_failure() {
             assert!(command::call_bool(&mut Command::new("made_up_command")).is_err());
-        }
-
-        #[test]
-        #[cfg(unix)]
-        fn pipe_unchecked_success() {
-            let out = command::pipe_unchecked(
-                Command::new("echo").arg("hello world!"),
-                Command::new("xargs").args(["-L", "1", "echo"]),
-            )
-            .unwrap();
-            assert!(out.status.success());
-            assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
-        }
-
-        #[test]
-        fn pipe_success() {
-            #[cfg(windows)]
-            {
-                command::pipe(Command::new("cmd").arg("/c"), Command::new("cmd").arg("/c"))
-                    .expect("Pipe returned error");
-            }
-
-            #[cfg(not(windows))]
-            {
-                command::pipe(
-                    Command::new("echo").arg("hello world"),
-                    Command::new("xargs").args(["-L", "1", "echo"]),
-                )
-                .expect("Pipe returned error");
-            }
-        }
-
-        #[test]
-        fn pipe_failure() {
-            assert!(command::pipe(
-                Command::new("fuck").arg("this"),
-                Command::new("doesn't").arg("work")
-            )
-            .is_err());
         }
     }
 

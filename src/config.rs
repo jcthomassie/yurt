@@ -22,14 +22,14 @@ lazy_static! {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct ResolvedConfig {
+pub struct ResolvedConfig<'c> {
     // Members should be treated as immutable
-    pub context: Context,
+    pub context: &'c Context,
     build: Vec<BuildUnit>,
     version: Option<VersionReq>,
 }
 
-impl ResolvedConfig {
+impl<'c> ResolvedConfig<'c> {
     #[inline]
     pub fn filter<P>(self, predicate: P) -> Self
     where
@@ -42,46 +42,33 @@ impl ResolvedConfig {
     }
 
     #[inline]
-    pub fn for_each_unit<F>(self, f: F) -> Result<()>
+    pub fn for_each_unit<F>(&self, f: F) -> Result<()>
     where
-        F: FnMut(BuildUnit) -> Result<()>,
+        F: FnMut(&BuildUnit) -> Result<()>,
     {
-        self.build.into_iter().try_for_each(f)
+        self.build.iter().try_for_each(f)
     }
 
     pub fn into_config(self) -> Config {
-        let mut build: Vec<BuildSpec> = Vec::new();
-        for unit in self.build {
-            if let Some(spec) = build.last_mut() {
-                if spec.absorb(&unit) {
-                    continue;
-                }
-            }
-            build.push(unit.into());
-        }
         Config {
             version: self.version,
-            build,
+            build: self.build.into_iter().map(Into::into).collect(),
         }
     }
-}
 
-impl TryFrom<&YurtArgs> for ResolvedConfig {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &YurtArgs) -> Result<Self> {
+    pub fn resolve_from(args: &YurtArgs, context: &'c mut Context) -> Result<Self> {
         Config::try_from(args)
-            .and_then(|c| c.resolve(Context::from(args)))
-            .map(|r| match args {
+            .and_then(|config| config.resolve(context))
+            .map(|resolved| match args {
                 YurtArgs {
                     include: Some(units),
                     ..
-                } => r.filter(|unit| unit.included_in(units)),
+                } => resolved.filter(|unit| unit.included_in(units)),
                 YurtArgs {
                     exclude: Some(units),
                     ..
-                } => r.filter(|unit| !unit.included_in(units)),
-                _ => r,
+                } => resolved.filter(|unit| !unit.included_in(units)),
+                _ => resolved,
             })
     }
 }
@@ -104,15 +91,17 @@ impl Config {
             })
     }
 
-    fn from_url<U: reqwest::IntoUrl>(url: U) -> Result<Self> {
-        reqwest::blocking::get(url)
+    fn from_url(url: &str) -> Result<Self> {
+        minreq::get(url)
+            .send()
             .context("Failed to reach remote build file")
             .and_then(|response| {
-                serde_yaml::from_reader(response).context("Failed to deserialize remote build file")
+                serde_yaml::from_reader(response.as_bytes())
+                    .context("Failed to deserialize remote build file")
             })
     }
 
-    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+    fn resolve(self, context: &mut Context) -> Result<ResolvedConfig<'_>> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => Some(req),
@@ -123,7 +112,7 @@ impl Config {
         Ok(ResolvedConfig {
             build: self
                 .build
-                .resolve_into_new(&mut context)
+                .resolve_into_new(context)
                 .context("Failed to resolve build")?,
             version,
             context,
@@ -212,7 +201,9 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
-                        let resolved_yaml = ResolvedConfig::try_from(&test.get_args())
+                        let args = test.get_args();
+                        let mut context = Context::from(&args);
+                        let resolved_yaml = ResolvedConfig::resolve_from(&args, &mut context)
                             .expect("Failed to resolve input build")
                             .into_config()
                             .yaml()
@@ -259,8 +250,9 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
                         let args = test.get_args();
-                        assert!(Config::try_from(&args).is_ok());
-                        assert!(ResolvedConfig::try_from(&args).is_err());
+                        let mut context = Context::from(&args);
+                        let config = Config::try_from(&args).unwrap();
+                        assert!(config.resolve(&mut context).is_err());
                     }
                 };
             }

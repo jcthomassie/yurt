@@ -1,9 +1,9 @@
 ---
 build:
-  - !require
-    - cargo
+  - !package_manager
+      name: cargo
   - !link
-    - source: a
+      source: a
       target: b
-  - !install
-    - name: p
+  - !package
+      name: p

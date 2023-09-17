@@ -1,5 +1,7 @@
 build:
-- !install
-  - name: package_a
-  - name: package_b
-  - name: package_c
+- !package
+  name: package_a
+- !package
+  name: package_b
+- !package
+  name: package_c
