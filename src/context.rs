@@ -168,11 +168,11 @@ pub mod parse {
     }
 
     impl Key {
-        pub fn get(&self) -> Result<String> {
+        pub fn value(&self) -> Result<String> {
             match self {
                 Self::EnvVar(var) => ::std::env::var(var)
                     .with_context(|| format!("Failed to get environment variable: {var}")),
-                _ => Err(anyhow!("Failed to get key: {:?}", self)),
+                _ => Err(anyhow!("Failed to get value for key: {:?}", self)),
             }
         }
     }
@@ -251,7 +251,7 @@ pub mod parse {
         /// Get the last value for `key` from the stack.
         /// Uses `Key::get()` as a fallback if unset.
         pub fn try_get(&self, key: &Key) -> Result<String> {
-            self.get(key).map_or_else(|| key.get(), Ok)
+            self.get(key).map_or_else(|| key.value(), Ok)
         }
 
         /// Get the last value for `key` from the stack
@@ -353,9 +353,9 @@ pub mod tests {
 
         #[test]
         fn key_get_envvar() {
-            assert!(Key::EnvVar("key".to_string()).get().is_err());
+            assert!(Key::EnvVar("key".to_string()).value().is_err());
             ::std::env::set_var("key", "value");
-            assert_eq!(Key::EnvVar("key".to_string()).get().unwrap(), "value");
+            assert_eq!(Key::EnvVar("key".to_string()).value().unwrap(), "value");
         }
 
         macro_rules! test_replace {
