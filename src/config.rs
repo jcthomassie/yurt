@@ -128,10 +128,10 @@ impl TryFrom<&YurtArgs> for Config {
     type Error = anyhow::Error;
 
     fn try_from(args: &YurtArgs) -> Result<Self> {
-        if let Some(ref url) = args.yaml_url {
+        if let Some(ref url) = args.file_url {
             Self::from_url(url)
         } else {
-            Self::from_path(match args.yaml {
+            Self::from_path(match args.file {
                 Some(ref path) => path.clone(),
                 None => env::var("YURT_BUILD_FILE")
                     .map(PathBuf::from)
@@ -173,7 +173,7 @@ pub mod tests {
             fn get_args(&self) -> YurtArgs {
                 let mut args = vec![
                     "yurt".to_string(),
-                    "--yaml".to_string(),
+                    "--file".to_string(),
                     self.input_path.to_str().unwrap().to_owned(),
                 ];
                 if self.args_path.is_file() {

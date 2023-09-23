@@ -13,13 +13,13 @@ Build instructions are specified via YAML. Features include symlink application,
 Install from local build file:
 
 ```shell
-yurt --yaml "~/build.yaml" install
+yurt --file "~/build.yaml" install
 ```
 
 Install from remote build file:
 
 ```shell
-yurt --yaml-url "https://raw.githubusercontent.com/jcthomassie/dotfiles/HEAD/build.yaml" install
+yurt --file-url "https://raw.githubusercontent.com/jcthomassie/dotfiles/HEAD/build.yaml" install
 ```
 
 Print resolved build steps and exit:

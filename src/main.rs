@@ -26,8 +26,8 @@ use std::{
 #[command(author, version, about, long_about = None)]
 #[command(arg_required_else_help(true))]
 #[command(group(
-    ArgGroup::new("yaml_file")
-        .args(["yaml", "yaml_url"])
+    ArgGroup::new("build_source")
+        .args(["file", "file_url"])
 ))]
 #[command(group(
     ArgGroup::new("filter")
@@ -35,15 +35,15 @@ use std::{
 ))]
 pub struct YurtArgs {
     /// YAML build file path
-    #[arg(long, short, value_name = "FILE")]
-    yaml: Option<PathBuf>,
+    #[arg(long, short = 'f', value_name = "FILE")]
+    file: Option<PathBuf>,
 
     /// YAML build file URL
-    #[arg(long, value_name = "URL")]
-    yaml_url: Option<String>,
+    #[arg(long, short = 'u', value_name = "URL")]
+    file_url: Option<String>,
 
     /// Logging level
-    #[arg(long, short)]
+    #[arg(long)]
     log: Option<String>,
 
     /// Allow yurt to run as root user
