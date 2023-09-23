@@ -77,6 +77,7 @@ where
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
+#[serde(transparent)]
 pub struct Vars(IndexMap<String, String>);
 
 impl ObjectKey for Vars {
