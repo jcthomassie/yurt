@@ -178,11 +178,12 @@ enum ShellCommandSpec {
     Struct { shell: Shell, command: String },
 }
 
-#[derive(Deserialize, Serialize, Copy, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Hook {
     Install,
     Uninstall,
+    Custom(String),
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -193,8 +194,8 @@ pub struct ShellHook {
 
 impl ShellHook {
     #[inline]
-    pub fn applies(&self, hook: Hook) -> bool {
-        self.on.contains(&hook)
+    pub fn applies(&self, hook: &Hook) -> bool {
+        self.on.contains(hook)
     }
 
     #[inline]
@@ -203,7 +204,7 @@ impl ShellHook {
     }
 
     #[inline]
-    pub fn exec_for(&self, hook: Hook) -> Result<()> {
+    pub fn exec_for(&self, hook: &Hook) -> Result<()> {
         self.applies(hook).then(|| self.exec()).unwrap_or(Ok(()))
     }
 }
@@ -280,7 +281,6 @@ mod tests {
         fn from_env() {
             let shell = Shell::from_env();
             match env::var("SHELL") {
-                // Other shells should be added as needed
                 Ok(_) => assert_ne!(shell.kind, ShellKind::Empty),
                 Err(_) => assert_eq!(shell, Shell::default()),
             }

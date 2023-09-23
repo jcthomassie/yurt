@@ -116,6 +116,12 @@ enum YurtAction {
 
     /// Uninstall the resolved build
     Uninstall,
+
+    /// Run a custom build hook
+    Custom {
+        /// Name of the custom hook to run
+        name: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -161,7 +167,7 @@ fn main() -> Result<()> {
                             BuildUnit::Link(link) => !link.is_valid(),
                             BuildUnit::Package(package) => !package.is_installed(context),
                             BuildUnit::PackageManager(manager) => !manager.is_available(),
-                            BuildUnit::Hook(hook) => hook.applies(Hook::Install),
+                            BuildUnit::Hook(hook) => hook.applies(&Hook::Install),
                         })
                         .into_config()
                 } else {
@@ -175,7 +181,7 @@ fn main() -> Result<()> {
                 build.for_each_unit(|unit| match unit {
                     BuildUnit::Repo(repo) => repo.require().map(drop),
                     BuildUnit::Link(link) => link.link(clean),
-                    BuildUnit::Hook(hook) => hook.exec_for(Hook::Install),
+                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
                     BuildUnit::Package(package) => package.install(build.context),
                     BuildUnit::PackageManager(manager) => manager.require(),
                 })
@@ -184,8 +190,15 @@ fn main() -> Result<()> {
             .and_then(|build| {
                 build.for_each_unit(|unit| match unit {
                     BuildUnit::Link(link) => link.unlink(),
-                    BuildUnit::Hook(hook) => hook.exec_for(Hook::Uninstall),
+                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
                     BuildUnit::Package(package) => package.uninstall(build.context),
+                    _ => Ok(()),
+                })
+            }),
+        YurtAction::Custom { ref name } => ResolvedConfig::resolve_from(&args, &mut context) //
+            .and_then(|build| {
+                build.for_each_unit(|unit| match unit {
+                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Custom(name.clone())),
                     _ => Ok(()),
                 })
             }),

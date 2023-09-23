@@ -1,0 +1,7 @@
+---
+build:
+  - !hook
+      on: [ !install , !uninstall , !custom other ]
+      exec:
+        shell: /path/to/custom-shell
+        command: echo "called from custom shell"

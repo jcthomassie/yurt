@@ -221,6 +221,7 @@ pub mod tests {
             test_case!(repo);
             test_case!(exclude);
             test_case!(include);
+            test_case!(shell);
         }
 
         mod invalid_parse {
