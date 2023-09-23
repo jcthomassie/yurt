@@ -91,20 +91,20 @@ enum YurtAction {
     /// Show the resolved build
     #[command(group(
         ArgGroup::new("modifier")
-            .args(["raw", "nontrivial"])
+            .args(["raw", "hook"])
     ))]
     Show {
         /// Print unresolved config/context
         #[arg(long, short)]
         raw: bool,
 
-        /// Hide trivial build units
-        #[arg(long, short)]
-        nontrivial: bool,
-
         /// Print the build context
         #[arg(long, short)]
         context: bool,
+
+        /// Show non-trivial units for the specified hook
+        #[arg(long)]
+        hook: Option<Hook>,
     },
 
     /// Install the resolved build
@@ -117,10 +117,10 @@ enum YurtAction {
     /// Uninstall the resolved build
     Uninstall,
 
-    /// Run a custom build hook
-    Custom {
-        /// Name of the custom hook to run
-        name: String,
+    /// Run resolved build hooks
+    Hook {
+        /// Type of hook to run
+        hook: Hook,
     },
 }
 
@@ -153,21 +153,36 @@ fn main() -> Result<()> {
             writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
         }
         YurtAction::Show {
-            raw, nontrivial, ..
+            raw,
+            hook: ref hook_arg,
+            ..
         } => {
             let config = if raw {
                 Config::try_from(&args)?
             } else {
                 let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
-                if nontrivial {
+                if let Some(hook_arg) = hook_arg {
                     let context = resolved.context;
                     resolved
-                        .filter(|unit| match unit {
-                            BuildUnit::Repo(repo) => !repo.is_available(),
-                            BuildUnit::Link(link) => !link.is_valid(),
-                            BuildUnit::Package(package) => !package.is_installed(context),
-                            BuildUnit::PackageManager(manager) => !manager.is_available(),
-                            BuildUnit::Hook(hook) => hook.applies(&Hook::Install),
+                        .filter(|unit| {
+                            let expect = matches!(hook_arg, Hook::Install);
+                            match hook_arg {
+                                Hook::Install | Hook::Uninstall => match unit {
+                                    BuildUnit::Repo(repo) => repo.is_available() != expect,
+                                    BuildUnit::Link(link) => link.is_valid() != expect,
+                                    BuildUnit::Package(package) => {
+                                        package.is_installed(context) != expect
+                                    }
+                                    BuildUnit::PackageManager(manager) => {
+                                        manager.is_available() != expect
+                                    }
+                                    BuildUnit::Hook(hook) => hook.applies(hook_arg),
+                                },
+                                Hook::Custom(_) => match unit {
+                                    BuildUnit::Hook(hook) => hook.applies(hook_arg),
+                                    _ => false,
+                                },
+                            }
                         })
                         .into_config()
                 } else {
@@ -195,10 +210,10 @@ fn main() -> Result<()> {
                     _ => Ok(()),
                 })
             }),
-        YurtAction::Custom { ref name } => ResolvedConfig::resolve_from(&args, &mut context) //
+        YurtAction::Hook { hook: ref arg } => ResolvedConfig::resolve_from(&args, &mut context) //
             .and_then(|build| {
                 build.for_each_unit(|unit| match unit {
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Custom(name.clone())),
+                    BuildUnit::Hook(hook) => hook.exec_for(arg),
                     _ => Ok(()),
                 })
             }),

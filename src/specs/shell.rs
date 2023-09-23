@@ -186,6 +186,16 @@ pub enum Hook {
     Custom(String),
 }
 
+impl From<String> for Hook {
+    fn from(value: String) -> Self {
+        match value.as_str() {
+            "install" => Self::Install,
+            "uninstall" => Self::Uninstall,
+            _ => Self::Custom(value),
+        }
+    }
+}
+
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ShellHook {
     on: Vec<Hook>,
