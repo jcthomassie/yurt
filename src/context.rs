@@ -136,7 +136,7 @@ impl LocaleSpec {
 pub mod parse {
     use anyhow::{anyhow, Context as _, Result};
     use lazy_static::lazy_static;
-    use regex::{Captures, Regex};
+    use regex::Regex;
     use std::collections::HashMap;
 
     lazy_static! {
@@ -197,7 +197,7 @@ pub mod parse {
                     Ok(Self::ObjectAttr { object, attr })
                 }
             } else {
-                unreachable!("RE_KEY regex is malformed")
+                unreachable!("RE_KEY regex capture group is unimplemented: {captures:?}")
             }
         }
     }
@@ -280,16 +280,17 @@ pub mod parse {
     where
         F: Fn(Key) -> Result<String>,
     {
-        // Build iterator of replaced values
-        let values: Result<Vec<String>> = RE_KEY_WRAPPER
-            .captures_iter(input)
-            .map(|caps| Key::try_from(&caps["key"]).and_then(&f))
-            .collect();
-        let mut values_iter = values?.into_iter();
-        // Build new string with replacements
-        Ok(RE_KEY_WRAPPER
-            .replace_all(input, |_: &Captures| values_iter.next().unwrap())
-            .to_string())
+        let mut buffer = String::with_capacity(input.len());
+        let mut buffer_index = 0;
+        for caps in RE_KEY_WRAPPER.captures_iter(input) {
+            let value = Key::try_from(&caps["key"]).and_then(&f)?;
+            let range = caps.get(0).unwrap().range();
+            buffer.push_str(&input[buffer_index..range.start]);
+            buffer.push_str(&value);
+            buffer_index = range.end;
+        }
+        buffer.push_str(&input[buffer_index..]);
+        Ok(buffer)
     }
 }
 
