@@ -1,4 +1,3 @@
----
 build:
   - !hook
       on: [ !install , !uninstall , !custom other ]

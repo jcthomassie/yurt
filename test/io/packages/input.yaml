@@ -1,4 +1,3 @@
----
 build:
   - !package { name: package_a }
   - !package { name: package_b }

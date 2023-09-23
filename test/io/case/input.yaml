@@ -1,4 +1,3 @@
----
 build:
   - !case
     - condition: !all
