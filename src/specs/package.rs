@@ -100,6 +100,10 @@ pub struct PackageManager {
 }
 
 impl PackageManager {
+    /// Inject the alias of `package` into `command`.
+    /// ```
+    /// "apt install ${{ package.alias }}" -> "apt install my-package-alias"
+    /// ```
     fn inject_package(&self, command: &ShellCommand, package: &Package) -> Result<ShellCommand> {
         lazy_static! {
             static ref PACKAGE_KEY: parse::Key = Package::object_key("alias");
@@ -131,7 +135,7 @@ impl PackageManager {
             .with_context(|| format!("{}.{command_name} failed", self.name))
     }
 
-    /// Install a package
+    /// Install `package` by running `shell_install`
     pub fn install(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_install, "shell_install", |command| {
             self.inject_package(command, package)
@@ -139,7 +143,7 @@ impl PackageManager {
         })
     }
 
-    /// Uninstall a package
+    /// Uninstall `package` by running `shell_uninstall`
     pub fn uninstall(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_uninstall, "shell_uninstall", |command| {
             self.inject_package(command, package)
@@ -147,7 +151,7 @@ impl PackageManager {
         })
     }
 
-    /// Check if a package is installed
+    /// Check if `package` is installed by running `shell_has`
     pub fn has(&self, package: &Package) -> bool {
         self.command(&self.shell_has, "shell_has", |command| {
             self.inject_package(command, package)
@@ -159,7 +163,7 @@ impl PackageManager {
         })
     }
 
-    /// Install the package manager and perform setup
+    /// Install the package manager by running `shell_bootstrap`
     pub fn bootstrap(&self) -> Result<()> {
         self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
     }

@@ -153,17 +153,18 @@ pub mod parse {
 
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Key {
-        Var(String),    // ${{ var }}
-        EnvVar(String), // ${{ env:var }}
-        ObjectAttr {
-            object: String,
-            attr: String,
-        }, // ${{ object.attr }}
+        /// `${{ var }}`
+        Var(String),
+        /// `${{ env:var }}`
+        EnvVar(String),
+        /// `${{ object.attr }}`
+        ObjectAttr { object: String, attr: String },
+        /// `${{ object#id.attr }}`
         ObjectInstanceAttr {
             object: String,
             id: String,
             attr: String,
-        }, // ${{ object#id.attr }}
+        },
     }
 
     impl Key {
