@@ -80,16 +80,20 @@ build:
 
   # Specify package managers
   - !case
-    - condition: !locale { distro: ubuntu }
-      include:
-        - !package_manager { name: apt }
-        - !package_manager { name: apt-get }
     - condition: !locale { platform: windows }
       include:
-        - !package_manager { name: choco }
+        - !package_manager
+            name: choco
+            shell_install: choco install -y ${{ package.alias }}
+            shell_uninstall: choco uninstall -y ${{ package.alias }}
     - condition: !default
       include:
-        - !package_manager { name: brew }
+        - !package_manager
+            name: brew
+            shell_bootstrap: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+            shell_has: brew list ${{ package.alias }}
+            shell_install: brew install -y ${{ package.alias }}
+            shell_uninstall: brew uninstall -y ${{ package.alias }}
         # Run a command with a specific shell
         - !hook
             on: [ install ]
