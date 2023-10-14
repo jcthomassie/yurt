@@ -2,25 +2,25 @@ use crate::specs::PackageManager;
 use crate::YurtArgs;
 
 use anyhow::Result;
-use console::Term;
 use indexmap::IndexMap;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct Context {
-    pub term: Term,
     pub locale: Locale,
     pub managers: IndexMap<String, PackageManager>,
     pub variables: parse::KeyStack,
     home_dir: String,
+    progresses: MultiProgress,
 }
 
 impl Context {
     pub fn new(locale: Locale) -> Self {
         Self {
             locale,
-            term: Term::stderr(),
+            progresses: MultiProgress::new(),
             managers: IndexMap::new(),
             variables: parse::KeyStack::new(),
             home_dir: dirs::home_dir()
@@ -39,6 +39,28 @@ impl Context {
     pub fn parse_path(&self, input: &str) -> Result<String> {
         parse::replace(input, |key| self.variables.try_get(&key))
             .map(|s| s.replace('~', &self.home_dir))
+    }
+
+    pub fn progress_bar(&self, len: usize) -> ProgressBar {
+        self.progresses.add(
+            ProgressBar::new(len as u64).with_style(
+                ProgressStyle::with_template(
+                    "{msg:.bold.cyan} {wide_bar} {pos}/{len} [{elapsed_precise}]",
+                )
+                .unwrap(),
+            ),
+        )
+    }
+
+    pub fn progress_task<M>(&self, msg: M) -> ProgressBar
+    where
+        M: Into<std::borrow::Cow<'static, str>>,
+    {
+        self.progresses.add(
+            ProgressBar::new_spinner()
+                .with_style(ProgressStyle::with_template("{msg:.bold.cyan} {spinner}").unwrap())
+                .with_message(msg),
+        )
     }
 }
 
