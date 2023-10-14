@@ -2,12 +2,14 @@ use crate::specs::PackageManager;
 use crate::YurtArgs;
 
 use anyhow::Result;
+use console::Term;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct Context {
+    pub term: Term,
     pub locale: Locale,
     pub managers: IndexMap<String, PackageManager>,
     pub variables: parse::KeyStack,
@@ -18,6 +20,7 @@ impl Context {
     pub fn new(locale: Locale) -> Self {
         Self {
             locale,
+            term: Term::stderr(),
             managers: IndexMap::new(),
             variables: parse::KeyStack::new(),
             home_dir: dirs::home_dir()

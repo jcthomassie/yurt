@@ -15,11 +15,11 @@ use self::{
 };
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
+use console::style;
+use indicatif::{ProgressBar, ProgressBarIter, ProgressIterator, ProgressStyle};
 use std::{
-    env,
     io::{self, Write},
     path::PathBuf,
-    time::Instant,
 };
 
 #[derive(Parser, Debug)]
@@ -42,13 +42,13 @@ pub struct YurtArgs {
     #[arg(long, short = 'u', value_name = "URL")]
     file_url: Option<String>,
 
-    /// Logging level
-    #[arg(long)]
-    log: Option<String>,
-
     /// Allow yurt to run as root user
     #[arg(long)]
     root: bool,
+
+    /// Reduce output verbosity
+    #[arg(long, short = 'q')]
+    quiet: bool,
 
     /// Override target username
     #[arg(long, value_name = "USER")]
@@ -124,16 +124,22 @@ enum YurtAction {
     },
 }
 
+fn iter_progress<M, T>(message: M, vec: &Vec<T>) -> ProgressBarIter<std::slice::Iter<T>>
+where
+    M: Into<std::borrow::Cow<'static, str>>,
+{
+    let style =
+        ProgressStyle::with_template("{msg:.bold.cyan} {wide_bar} {pos}/{len} [{elapsed_precise}]")
+            .unwrap();
+    vec.iter().progress_with(
+        ProgressBar::new(vec.len() as u64)
+            .with_message(message)
+            .with_style(style),
+    )
+}
+
 fn main() -> Result<()> {
-    let timer = Instant::now();
     let args = YurtArgs::parse();
-
-    if let Some(level) = &args.log {
-        env::set_var("RUST_LOG", level);
-    }
-    env_logger::init();
-    log::debug!("{:#?}", &args);
-
     if !&args.root && whoami::username() == "root" {
         bail!(
             "Running as root user requires the `--root` argument. \
@@ -141,84 +147,88 @@ fn main() -> Result<()> {
         );
     }
 
-    log::info!("{:?}", &args.action);
     let mut context = Context::from(&args);
-    let result = match args.action {
+    context.term.hide_cursor()?;
+    if !args.quiet {
+        writeln!(&context.term, "{:#?}", style(&args).dim())?;
+    }
+
+    match args.action {
         YurtAction::Show {
-            raw, context: true, ..
+            context: true, raw, ..
         } => {
             if !raw {
                 ResolvedConfig::resolve_from(&args, &mut context)?;
             }
-            writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
+            writeln!(io::stdout(), "{context:#?}")
+        }
+        YurtAction::Show { raw: true, .. } => {
+            writeln!(io::stdout(), "{}", Config::try_from(&args)?.yaml()?)
         }
         YurtAction::Show {
-            raw,
-            hook: ref hook_arg,
-            ..
+            hook: ref hook_arg, ..
         } => {
-            let config = if raw {
-                Config::try_from(&args)?
-            } else {
-                let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
-                if let Some(hook_arg) = hook_arg {
-                    let context = resolved.context;
-                    resolved
-                        .filter(|unit| {
-                            let expect = matches!(hook_arg, Hook::Install);
-                            match hook_arg {
-                                Hook::Install | Hook::Uninstall => match unit {
-                                    BuildUnit::Repo(repo) => repo.is_available() != expect,
-                                    BuildUnit::Link(link) => link.is_valid() != expect,
-                                    BuildUnit::Package(package) => {
-                                        package.is_installed(context) != expect
-                                    }
-                                    BuildUnit::PackageManager(manager) => {
-                                        manager.is_available() != expect
-                                    }
-                                    BuildUnit::Hook(hook) => hook.applies(hook_arg),
-                                },
-                                Hook::Custom(_) => match unit {
-                                    BuildUnit::Hook(hook) => hook.applies(hook_arg),
-                                    _ => false,
-                                },
-                            }
-                        })
-                        .into_config()
-                } else {
-                    resolved.into_config()
-                }
+            let mut resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
+            if let Some(hook_arg) = hook_arg {
+                let context = resolved.context;
+                resolved = resolved.filter(|unit| {
+                    let expect = matches!(hook_arg, Hook::Install);
+                    match hook_arg {
+                        Hook::Install | Hook::Uninstall => match unit {
+                            BuildUnit::Repo(repo) => repo.is_available() != expect,
+                            BuildUnit::Link(link) => link.is_valid() != expect,
+                            BuildUnit::Package(package) => package.is_installed(context) != expect,
+                            BuildUnit::PackageManager(manager) => manager.is_available() != expect,
+                            BuildUnit::Hook(hook) => hook.applies(hook_arg),
+                        },
+                        Hook::Custom(_) => match unit {
+                            BuildUnit::Hook(hook) => hook.applies(hook_arg),
+                            _ => false,
+                        },
+                    }
+                });
             };
-            writeln!(io::stdout(), "{}", config.yaml()?).context("Failed to write yaml to stdout")
+            writeln!(io::stdout(), "{}", resolved.into_config().yaml()?)
         }
-        YurtAction::Install { clean } => ResolvedConfig::resolve_from(&args, &mut context)
-            .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
-                    BuildUnit::Repo(repo) => repo.require().map(drop),
-                    BuildUnit::Link(link) => link.link(clean),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
-                    BuildUnit::Package(package) => package.install(build.context),
-                    BuildUnit::PackageManager(manager) => manager.require(),
-                })
-            }),
-        YurtAction::Uninstall => ResolvedConfig::resolve_from(&args, &mut context) //
-            .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
-                    BuildUnit::Link(link) => link.unlink(),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
-                    BuildUnit::Package(package) => package.uninstall(build.context),
-                    _ => Ok(()),
-                })
-            }),
-        YurtAction::Hook { hook: ref arg } => ResolvedConfig::resolve_from(&args, &mut context) //
-            .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
+        YurtAction::Install { clean } => {
+            let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
+            iter_progress("Installing", &resolved.build).try_for_each(|unit| match unit {
+                BuildUnit::Repo(repo) => repo.require().map(drop),
+                BuildUnit::Link(link) => link.link(clean),
+                BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
+                BuildUnit::Package(package) => package.install(&context),
+                BuildUnit::PackageManager(manager) => manager.require(),
+            })?;
+            writeln!(
+                &context.term,
+                "{}",
+                style("Install finished").bold().green()
+            )
+        }
+        YurtAction::Uninstall => {
+            let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
+            iter_progress("Uninstalling", &resolved.build).try_for_each(|unit| match unit {
+                BuildUnit::Link(link) => link.unlink(),
+                BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
+                BuildUnit::Package(package) => package.uninstall(&context),
+                _ => Ok(()),
+            })?;
+            writeln!(
+                &context.term,
+                "{}",
+                style("Uninstall finished").bold().green()
+            )
+        }
+        YurtAction::Hook { hook: ref arg } => {
+            let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
+            iter_progress(format!("Running {arg:?}"), &resolved.build).try_for_each(|unit| {
+                match unit {
                     BuildUnit::Hook(hook) => hook.exec_for(arg),
                     _ => Ok(()),
-                })
-            }),
+                }
+            })?;
+            writeln!(&context.term, "{}", style("Hook finished").bold().green())
+        }
     }
-    .with_context(|| format!("Action failed: {:?}", args.action));
-    log::debug!("Runtime: {:?}", timer.elapsed());
-    result
+    .with_context(|| format!("Action failed: {:?}", args.action))
 }
