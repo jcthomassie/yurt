@@ -41,6 +41,7 @@ impl Context {
             .map(|s| s.replace('~', &self.home_dir))
     }
 
+    // TODO: abstract formatting boilerplate into Context
     pub fn progress_bar(&self, len: usize) -> ProgressBar {
         self.progresses.add(
             ProgressBar::new(len as u64).with_style(

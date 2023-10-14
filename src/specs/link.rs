@@ -1,6 +1,7 @@
 use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
+use console::style;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
 
@@ -54,19 +55,41 @@ impl Link {
     }
 
     /// Try to create link if it does not already exist
-    pub fn link(&self, clean: bool) -> Result<()> {
+    pub fn link(&self, context: &Context, clean: bool) -> Result<()> {
+        let progress = context.progress_task(format!(
+            "{} {}",
+            style("Linking").bold().cyan(),
+            style(self).dim()
+        ));
         if clean {
             self.clean()?;
+            progress.println(format!(
+                "{} {:?}",
+                style("Removed").yellow().dim(),
+                style(&self.source).dim()
+            ));
         }
         match self.status() {
-            Status::Valid => Ok(()),
+            Status::Valid => {
+                progress.println(format!(
+                    "{} {}",
+                    style("Skipped").bold().green().dim(),
+                    style(self).dim()
+                ));
+                Ok(())
+            }
             Status::NullSource => {
-                log::info!("Linking {self}");
                 if let Some(dir) = self.source.parent() {
                     fs::create_dir_all(dir)?;
                 }
                 symlink::symlink_auto(&self.target, &self.source)
-                    .with_context(|| format!("Failed to apply symlink: {self}"))
+                    .with_context(|| format!("Failed to apply symlink: {self}"))?;
+                progress.println(format!(
+                    "{} {:?}",
+                    style("Linked").bold().green().dim(),
+                    style(self).dim()
+                ));
+                Ok(())
             }
             Status::NullTarget => Err(anyhow!("Link target does not exist")),
             Status::InvalidSource(e) => Err(e.context("Invalid link source")),
@@ -93,11 +116,8 @@ impl Link {
     /// Remove any conflicting files/links at source
     pub fn clean(&self) -> Result<()> {
         match self.status() {
-            Status::InvalidSource(_) | Status::InvalidTarget(_) => {
-                log::info!("Removing {:?}", &self.source);
-                fs::remove_file(&self.source)
-                    .with_context(|| format!("Failed to clean link source: {self}"))
-            }
+            Status::InvalidSource(_) | Status::InvalidTarget(_) => fs::remove_file(&self.source)
+                .with_context(|| format!("Failed to clean link source: {self}")),
             _ => Ok(()),
         }
     }

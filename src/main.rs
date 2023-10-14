@@ -198,7 +198,7 @@ fn main() -> Result<()> {
             )
             .try_for_each(|unit| match unit {
                 BuildUnit::Repo(repo) => repo.require().map(drop),
-                BuildUnit::Link(link) => link.link(clean),
+                BuildUnit::Link(link) => link.link(&context, clean),
                 BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
                 BuildUnit::Package(package) => package.install(&context),
                 BuildUnit::PackageManager(manager) => manager.require(),
