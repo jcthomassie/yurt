@@ -25,7 +25,7 @@ lazy_static! {
 pub struct ResolvedConfig {
     // Members should be treated as immutable
     pub context: Context,
-    build: Vec<BuildUnit>,
+    pub build: Vec<BuildUnit>, // TODO rename
     version: Option<VersionReq>,
 }
 
@@ -43,16 +43,6 @@ impl ResolvedConfig {
                 .collect(),
             ..self
         }
-    }
-
-    #[inline]
-    pub fn for_each_unit<F>(&self, f: F) -> Result<()>
-    where
-        F: Fn(&BuildUnit, &Context) -> Result<()>,
-    {
-        self.build
-            .iter()
-            .try_for_each(|unit| f(unit, &self.context))
     }
 
     pub fn into_config(self) -> Config {

@@ -1,7 +1,9 @@
 use crate::specs::PackageManager;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
+use console::style;
 use indexmap::IndexMap;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -11,12 +13,14 @@ pub struct Context {
     pub managers: IndexMap<String, PackageManager>,
     pub variables: parse::KeyStack,
     home_dir: String,
+    progresses: MultiProgress,
 }
 
 impl Context {
     pub fn new(locale: Locale) -> Self {
         Self {
             locale,
+            progresses: MultiProgress::new(),
             managers: IndexMap::new(),
             variables: parse::KeyStack::new(),
             home_dir: dirs::home_dir()
@@ -35,6 +39,69 @@ impl Context {
     pub fn parse_path(&self, input: &str) -> Result<String> {
         parse::replace(input, |key| self.variables.try_get(&key))
             .map(|s| s.replace('~', &self.home_dir))
+    }
+
+    pub fn progress_bar(&self, len: usize) -> ProgressBar {
+        self.progresses.add(
+            ProgressBar::new(len as u64).with_style(
+                ProgressStyle::with_template(
+                    "{msg:.bold.cyan} {wide_bar} {pos}/{len} [{elapsed_precise}]",
+                )
+                .unwrap(),
+            ),
+        )
+    }
+
+    pub fn progress_task(&self) -> ProgressBar {
+        self.progresses.add(ProgressBar::new_spinner().with_style(
+            ProgressStyle::with_template("{prefix:>10.bold.cyan} {msg} {spinner}").unwrap(),
+        ))
+    }
+
+    fn write_message(
+        &self,
+        task: impl std::fmt::Display,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.progresses
+            .println(format!("{task:>10} {item} {msg}"))
+            .context("Failed to write to console")
+    }
+
+    #[inline]
+    pub fn write_skip(&self, task: &str, item: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().green().dim(), style(item).dim(), "")
+    }
+
+    #[inline]
+    pub fn write_success(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().green(), item, style(msg).dim())
+    }
+
+    #[inline]
+    pub fn write_warning(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().yellow(), item, style(msg).dim())
+    }
+
+    #[inline]
+    pub fn write_error(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().red(), item, style(msg).dim())
     }
 }
 

@@ -17,11 +17,11 @@ use self::{
 };
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
+use console::style;
+use indicatif::{ProgressFinish, ProgressIterator};
 use std::{
-    env,
     io::{self, Write},
     path::PathBuf,
-    time::Instant,
 };
 
 #[derive(Subcommand, Debug)]
@@ -78,13 +78,13 @@ pub struct YurtArgs {
     #[arg(long, short = 'u', value_name = "URL")]
     file_url: Option<String>,
 
-    /// Logging level
-    #[arg(long)]
-    log: Option<String>,
-
     /// Allow yurt to run as root user
     #[arg(long)]
     root: bool,
+
+    /// Reduce output verbosity
+    #[arg(long, short = 'q')]
+    quiet: bool,
 
     /// Override target username
     #[arg(long, value_name = "USER")]
@@ -163,7 +163,31 @@ impl YurtArgs {
             })
     }
 
+    fn execute_build(
+        &self,
+        msg: &'static str,
+        msg_finish: &'static str,
+        action: impl Fn(&BuildUnit, &Context) -> Result<()>,
+    ) -> Result<()> {
+        let resolved = self.get_resolved_config()?;
+        let progress = resolved
+            .context
+            .progress_bar(resolved.build.len())
+            .with_message(msg)
+            .with_finish(ProgressFinish::WithMessage(
+                format!("{}", style(msg_finish).green().bold()).into(),
+            ));
+        resolved
+            .build
+            .into_iter()
+            .progress_with(progress)
+            .try_for_each(|unit| action(&unit, &resolved.context))
+    }
+
     fn execute(&self) -> Result<()> {
+        if !self.quiet {
+            writeln!(io::stderr(), "{:#?}", style(&self).dim())?;
+        }
         match self.action {
             // $ yurt show --context
             YurtAction::Show {
@@ -217,46 +241,44 @@ impl YurtArgs {
                     .context("Failed to write yaml to stdout")
             }
             // $ yurt install
-            YurtAction::Install { clean } => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, context| match unit {
+            YurtAction::Install { clean } => self.execute_build(
+                "Installing",
+                "Install finished",
+                |unit, context| match unit {
                     BuildUnit::Repo(repo) => repo.require().map(drop),
-                    BuildUnit::Link(link) => link.link(clean),
+                    BuildUnit::Link(link) => link.link(context, clean),
                     BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
                     BuildUnit::Package(package) => package.install(context),
                     BuildUnit::PackageManager(manager) => manager.require(),
-                })
-            }),
+                },
+            ),
             // $ yurt uninstall
-            YurtAction::Uninstall => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, context| match unit {
-                    BuildUnit::Link(link) => link.unlink(),
+            YurtAction::Uninstall => self.execute_build(
+                "Uninstalling",
+                "Uninstall finished",
+                |unit, context| match unit {
+                    BuildUnit::Link(link) => link.unlink(context),
                     BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
                     BuildUnit::Package(package) => package.uninstall(context),
                     _ => Ok(()),
-                })
-            }),
+                },
+            ),
             // $ yurt hook
-            YurtAction::Hook { hook: ref arg } => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, _| match unit {
+            YurtAction::Hook { hook: ref arg } => self.execute_build(
+                "Hook", //
+                "Hook finished",
+                |unit, _| match unit {
                     BuildUnit::Hook(hook) => hook.exec_for(arg),
                     _ => Ok(()),
-                })
-            }),
+                },
+            ),
         }
     }
 }
 
 #[doc(hidden)]
 fn main() -> Result<()> {
-    let timer = Instant::now();
     let args = YurtArgs::parse();
-
-    if let Some(level) = &args.log {
-        env::set_var("RUST_LOG", level);
-    }
-    env_logger::init();
-    log::debug!("{:#?}", &args);
-
     if !&args.root && whoami::username() == "root" {
         bail!(
             "Running as root user requires the `--root` argument. \
@@ -264,10 +286,6 @@ fn main() -> Result<()> {
         );
     }
 
-    log::info!("{:?}", &args.action);
-    let result = args
-        .execute()
-        .with_context(|| format!("Action failed: {:?}", args.action));
-    log::debug!("Runtime: {:?}", timer.elapsed());
-    result
+    args.execute()
+        .with_context(|| format!("Action failed: {:?}", args.action))
 }
