@@ -81,7 +81,6 @@ impl Shell {
         }
     }
 
-    #[inline]
     fn _exec(&self, command: &str) -> Command {
         let mut cmd = Command::new(&self.command);
         cmd.arg(match self.kind {
@@ -92,10 +91,12 @@ impl Shell {
         cmd
     }
 
+    #[inline]
     pub fn exec(&self, command: &str) -> Result<()> {
         command::call(&mut self._exec(command))
     }
 
+    #[inline]
     pub fn exec_bool(&self, command: &str) -> Result<bool> {
         command::call_bool(&mut self._exec(command))
     }

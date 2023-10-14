@@ -203,7 +203,6 @@ impl Resolve for PackageManager {
 }
 
 /// Check if a command is available locally
-#[inline]
 fn which_has(name: &str) -> bool {
     #[cfg(unix)]
     let mut cmd = Command::new("which");
