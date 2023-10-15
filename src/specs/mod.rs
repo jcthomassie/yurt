@@ -4,8 +4,9 @@ mod package;
 mod repo;
 mod shell;
 
-pub use self::package::PackageManager;
-pub use self::shell::Hook;
+use anyhow::Result;
+use serde::{Deserialize, Serialize};
+
 use self::{
     dynamic::{Case, Matrix, Vars},
     link::Link,
@@ -13,11 +14,8 @@ use self::{
     repo::Repo,
     shell::ShellHook,
 };
-
+pub use self::{package::PackageManager, shell::Hook};
 use crate::context::Context;
-
-use anyhow::Result;
-use serde::{Deserialize, Serialize};
 
 pub trait Resolve {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit>;

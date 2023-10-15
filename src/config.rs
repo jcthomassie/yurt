@@ -1,7 +1,8 @@
-use crate::{
-    context::Context,
-    specs::{BuildSpec, BuildUnit, ResolveInto},
-    YurtArgs,
+use std::{
+    env,
+    fs::File,
+    io::BufReader,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -9,11 +10,11 @@ use clap::crate_version;
 use lazy_static::lazy_static;
 use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
-use std::{
-    env,
-    fs::File,
-    io::BufReader,
-    path::{Path, PathBuf},
+
+use crate::{
+    context::Context,
+    specs::{BuildSpec, BuildUnit, ResolveInto},
+    YurtArgs,
 };
 
 lazy_static! {
@@ -138,10 +139,11 @@ pub mod tests {
     use super::*;
 
     mod yaml {
-        use super::*;
+        use std::{fs::read_to_string, path::PathBuf};
+
         use clap::Parser;
-        use std::fs::read_to_string;
-        use std::path::PathBuf;
+
+        use super::*;
 
         struct TestData {
             input_path: PathBuf,

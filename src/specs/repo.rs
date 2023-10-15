@@ -1,11 +1,11 @@
+use anyhow::{Context as _, Result};
+use git2::Repository;
+use serde::{Deserialize, Serialize};
+
 use crate::{
     context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
 };
-
-use anyhow::{Context as _, Result};
-use git2::Repository;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {

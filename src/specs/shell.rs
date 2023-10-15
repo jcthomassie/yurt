@@ -1,12 +1,14 @@
-use crate::specs::{BuildUnit, Context, Resolve};
+use std::{env, ffi::OsStr, path::Path, process::Command};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::{env, ffi::OsStr, path::Path, process::Command};
+
+use crate::specs::{BuildUnit, Context, Resolve};
 
 pub mod command {
-    use anyhow::{Context as _, Result};
     use std::process::{Command, Output};
+
+    use anyhow::{Context as _, Result};
 
     fn check_output(output: &Output, command_tag: impl std::fmt::Debug) -> Result<()> {
         output

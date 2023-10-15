@@ -8,18 +8,20 @@ mod config;
 mod context;
 mod specs;
 
-use self::{
-    config::{Config, ResolvedConfig},
-    context::Context,
-    specs::{BuildUnit, BuildUnitKind, Hook},
+use std::{
+    io::{self, Write},
+    path::PathBuf,
 };
+
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
 use console::style;
 use indicatif::{ProgressBarIter, ProgressFinish, ProgressIterator};
-use std::{
-    io::{self, Write},
-    path::PathBuf,
+
+use self::{
+    config::{Config, ResolvedConfig},
+    context::Context,
+    specs::{BuildUnit, BuildUnitKind, Hook},
 };
 
 #[derive(Parser, Debug)]
