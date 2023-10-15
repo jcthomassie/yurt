@@ -124,17 +124,17 @@ enum YurtAction {
     },
 }
 
-fn iter_progress<'c>(
-    msg: &'c str,
-    msg_finish: &'c str,
+fn iter_progress(
+    msg: &'static str,
+    msg_finish: &'static str,
     resolved: ResolvedConfig,
 ) -> ProgressBarIter<std::vec::IntoIter<BuildUnit>> {
     let progress = resolved
         .context
         .progress_bar(resolved.build.len())
-        .with_message(format!("{}", style(msg).bold().cyan()))
+        .with_message(msg)
         .with_finish(ProgressFinish::WithMessage(
-            format!("{}", style(msg_finish).bold().green()).into(),
+            format!("{}", style(msg_finish).green().bold()).into(),
         ));
     resolved.build.into_iter().progress_with(progress)
 }

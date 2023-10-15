@@ -1,7 +1,6 @@
 use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
-use console::style;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
 
@@ -56,40 +55,23 @@ impl Link {
 
     /// Try to create link if it does not already exist
     pub fn link(&self, context: &Context, clean: bool) -> Result<()> {
-        let progress = context.progress_task(format!(
-            "{} {}",
-            style("Linking").bold().cyan(),
-            style(self).dim()
-        ));
+        context
+            .progress_task()
+            .with_prefix("Link")
+            .with_message(format!("{self}"));
         if clean {
+            context.write_warning("Link", format!("removing {:?}", &self.source))?;
             self.clean()?;
-            progress.println(format!(
-                "{} {:?}",
-                style("Removed").yellow().dim(),
-                style(&self.source).dim()
-            ));
         }
         match self.status() {
-            Status::Valid => {
-                progress.println(format!(
-                    "{} {}",
-                    style("Skipped").bold().green().dim(),
-                    style(self).dim()
-                ));
-                Ok(())
-            }
+            Status::Valid => context.write_skip("Link", format!("skipped {self}")),
             Status::NullSource => {
                 if let Some(dir) = self.source.parent() {
                     fs::create_dir_all(dir)?;
                 }
                 symlink::symlink_auto(&self.target, &self.source)
                     .with_context(|| format!("Failed to apply symlink: {self}"))?;
-                progress.println(format!(
-                    "{} {:?}",
-                    style("Linked").bold().green().dim(),
-                    style(self).dim()
-                ));
-                Ok(())
+                context.write_success("Link", format!("installed {self}"))
             }
             Status::NullTarget => Err(anyhow!("Link target does not exist")),
             Status::InvalidSource(e) => Err(e.context("Invalid link source")),

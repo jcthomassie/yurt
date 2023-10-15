@@ -5,7 +5,6 @@ use crate::specs::{
 };
 
 use anyhow::{anyhow, Context as _, Result};
-use console::style;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -41,30 +40,18 @@ impl Package {
     }
 
     pub fn install(&self, context: &Context) -> Result<()> {
-        let progress = context.progress_task(format!(
-            "{} {}",
-            style("Installing").bold().cyan(),
-            &self.name
-        ));
+        let progress = context
+            .progress_task()
+            .with_prefix("Package")
+            .with_message(format!("installing {}", self.name));
         if self.is_installed(context) {
-            progress.println(format!(
-                "{} {}",
-                style("Skipped").dim().bold().green(),
-                style(&self.name).dim()
-            ));
-            Ok(())
+            context.write_skip("Package", format!("{} already installed", self.name))
         } else {
             for manager in self.iter_managers(context) {
-                progress.set_message(format!(
-                    "{} {} {} {}",
-                    style("Installing").bold().cyan(),
-                    style(&self.name),
-                    style("with").dim(),
-                    style(&manager.name),
-                ));
+                progress.set_message(format!("installing {} with {}", self.name, manager.name));
                 match manager.install(self) {
                     Ok(()) => return Ok(()),
-                    Err(error) => progress.println(format!("{} {error}", style("ERROR").red())),
+                    Err(error) => context.write_error("Package", error)?,
                 };
             }
             Err(anyhow!("Package unavailable: {}", self.name))

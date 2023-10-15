@@ -1,7 +1,8 @@
 use crate::specs::PackageManager;
 use crate::YurtArgs;
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
+use console::style;
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
@@ -41,7 +42,6 @@ impl Context {
             .map(|s| s.replace('~', &self.home_dir))
     }
 
-    // TODO: abstract formatting boilerplate into Context
     pub fn progress_bar(&self, len: usize) -> ProgressBar {
         self.progresses.add(
             ProgressBar::new(len as u64).with_style(
@@ -53,15 +53,40 @@ impl Context {
         )
     }
 
-    pub fn progress_task<M>(&self, msg: M) -> ProgressBar
-    where
-        M: Into<std::borrow::Cow<'static, str>>,
-    {
-        self.progresses.add(
-            ProgressBar::new_spinner()
-                .with_style(ProgressStyle::with_template("{msg:.bold.cyan} {spinner}").unwrap())
-                .with_message(msg),
-        )
+    pub fn progress_task(&self) -> ProgressBar {
+        self.progresses.add(ProgressBar::new_spinner().with_style(
+            ProgressStyle::with_template("{prefix:>10.bold.cyan} {msg} {spinner}").unwrap(),
+        ))
+    }
+
+    fn write_message(
+        &self,
+        msg_l: impl std::fmt::Display,
+        msg_r: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.progresses
+            .println(format!("{msg_l:>10} {msg_r}"))
+            .context("Failed to write to console")
+    }
+
+    #[inline]
+    pub fn write_skip(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().dim().green(), style(msg).dim())
+    }
+
+    #[inline]
+    pub fn write_success(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().green(), msg)
+    }
+
+    #[inline]
+    pub fn write_warning(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().dim().yellow(), style(msg).dim())
+    }
+
+    #[inline]
+    pub fn write_error(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().red(), msg)
     }
 }
 
