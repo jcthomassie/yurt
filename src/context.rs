@@ -1,11 +1,12 @@
-use crate::specs::PackageManager;
+use std::path::Path;
 
 use anyhow::{Context as _, Result};
 use console::style;
 use indexmap::IndexMap;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+
+use crate::specs::PackageManager;
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -184,10 +185,11 @@ impl LocaleSpec {
 }
 
 pub mod parse {
+    use std::collections::HashMap;
+
     use anyhow::{anyhow, Context as _, Result};
     use lazy_static::lazy_static;
     use regex::Regex;
-    use std::collections::HashMap;
 
     lazy_static! {
         static ref RE_KEY_WRAPPER: Regex = Regex::new(r"\$\{\{(?P<key>[^{}]*)\}\}").unwrap();
@@ -346,10 +348,11 @@ pub mod parse {
 
 #[cfg(test)]
 pub mod tests {
-    use super::*;
-    use crate::YurtArgs;
     use clap::Parser;
     use pretty_assertions::assert_eq;
+
+    use super::*;
+    use crate::YurtArgs;
 
     mod parse {
         use super::super::parse::{replace, Key};

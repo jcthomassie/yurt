@@ -1,12 +1,12 @@
+use anyhow::{bail, Result};
+use indexmap::IndexMap;
+use serde::{Deserialize, Serialize};
+
 use crate::{
     context::{parse::ObjectKey, Context, LocaleSpec},
     specs::{shell::ShellCommand, BuildUnit, ResolveInto},
     yaml_example_doc,
 };
-
-use anyhow::{bail, Result};
-use indexmap::IndexMap;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
@@ -146,14 +146,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::context::Context;
-    use crate::specs::BuildSpec;
     use pretty_assertions::assert_eq;
 
+    use super::*;
+    use crate::{context::Context, specs::BuildSpec};
+
     mod condition {
-        use super::*;
         use pretty_assertions::assert_eq;
+
+        use super::*;
 
         macro_rules! yaml_condition {
             ($yaml:expr, $enum_pattern:pat, $evaluation:literal) => {

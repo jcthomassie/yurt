@@ -1,9 +1,12 @@
-use crate::specs::{BuildUnit, Context, Resolve};
-use crate::yaml_example_doc;
+use std::{fmt, fs, path::PathBuf};
 
 use anyhow::{anyhow, Context as _, Error, Result};
 use serde::{Deserialize, Serialize};
-use std::{fmt, fs, path::PathBuf};
+
+use crate::{
+    specs::{BuildUnit, Context, Resolve},
+    yaml_example_doc,
+};
 
 #[derive(Debug)]
 enum Status {
@@ -129,8 +132,9 @@ impl Resolve for Link {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs::File;
+
+    use super::*;
 
     fn fixture() -> (tempfile::TempDir, Link) {
         let dir = tempfile::tempdir().expect("Failed to create tempdir");

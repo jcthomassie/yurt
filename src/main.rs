@@ -10,18 +10,20 @@ mod context;
 mod docs;
 mod specs;
 
-use self::{
-    config::{Config, ResolvedConfig},
-    context::{Context, Locale},
-    specs::{BuildUnit, BuildUnitKind, Hook},
+use std::{
+    io::{self, Write},
+    path::PathBuf,
 };
+
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
 use console::style;
 use indicatif::{ProgressFinish, ProgressIterator};
-use std::{
-    io::{self, Write},
-    path::PathBuf,
+
+use self::{
+    config::{Config, ResolvedConfig},
+    context::{Context, Locale},
+    specs::{BuildUnit, BuildUnitKind, Hook},
 };
 
 #[derive(Subcommand, Debug)]

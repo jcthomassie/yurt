@@ -1,16 +1,19 @@
-use crate::context::parse::{self, ObjectKey};
-use crate::specs::{
-    shell::{command, ShellCommand},
-    BuildUnit, Context, Resolve,
-};
-use crate::yaml_example_doc;
+use std::process::Command;
 
 use anyhow::{anyhow, Context as _, Result};
 use console::style;
 use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use std::process::Command;
+
+use crate::{
+    context::parse::{self, ObjectKey},
+    specs::{
+        shell::{command, ShellCommand},
+        BuildUnit, Context, Resolve,
+    },
+    yaml_example_doc,
+};
 
 /// Installable binary package.
 #[doc = yaml_example_doc!("package.yaml")]
