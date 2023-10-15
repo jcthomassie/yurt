@@ -56,8 +56,7 @@ impl Link {
     /// Try to create link if it does not already exist
     pub fn link(&self, context: &Context, clean: bool) -> Result<()> {
         if clean {
-            context.write_warning("Link", self.source.to_string_lossy(), "removed")?;
-            self.clean()?;
+            self.clean(context)?;
         }
         match self.status() {
             Status::Valid => context.write_skip("Link", self),
@@ -92,10 +91,13 @@ impl Link {
     }
 
     /// Remove any conflicting files/links at source
-    pub fn clean(&self) -> Result<()> {
+    pub fn clean(&self, context: &Context) -> Result<()> {
         match self.status() {
-            Status::InvalidSource(_) | Status::InvalidTarget(_) => fs::remove_file(&self.source)
-                .with_context(|| format!("Failed to clean link source: {self}")),
+            Status::InvalidSource(_) | Status::InvalidTarget(_) => {
+                fs::remove_file(&self.source)
+                    .with_context(|| format!("Failed to clean link source: {self}"))?;
+                context.write_warning("Link", self.source.to_string_lossy(), "removed")
+            }
             _ => Ok(()),
         }
     }
@@ -226,7 +228,8 @@ mod tests {
         let (_dir, link) = fixture();
         File::create(&link.target).expect("Failed to create tempfile");
         File::create(&link.source).expect("Failed to create tempfile");
-        link.clean().expect("Failed to clean link");
+        link.clean(&Context::default())
+            .expect("Failed to clean link");
         link.link(&Context::default(), false)
             .expect("Failed to apply link");
     }
@@ -238,7 +241,8 @@ mod tests {
         File::create(&link.target).expect("Failed to create tempfile");
         File::create(&wrong).expect("Failed to create tempfile");
         symlink::symlink_file(&wrong, &link.source).expect("Failed to create symlink");
-        link.clean().expect("Failed to clean link");
+        link.clean(&Context::default())
+            .expect("Failed to clean link");
         link.link(&Context::default(), false)
             .expect("Failed to apply link");
     }
@@ -251,7 +255,8 @@ mod tests {
         File::create(&wrong).expect("Failed to create tempfile");
         symlink::symlink_file(&wrong, &link.source).expect("Failed to create symlink");
         fs::remove_file(&wrong).expect("Failed to delete target");
-        link.clean().expect("Failed to clean link");
+        link.clean(&Context::default())
+            .expect("Failed to clean link");
         link.link(&Context::default(), false)
             .expect("Failed to apply link");
     }
