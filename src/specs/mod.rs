@@ -78,14 +78,18 @@ pub enum BuildUnit {
 }
 
 impl BuildUnit {
-    pub fn included_in(&self, units: &[BuildUnitKind]) -> bool {
+    pub fn kind(&self) -> BuildUnitKind {
         match self {
-            Self::Repo(_) => units.contains(&BuildUnitKind::Repo),
-            Self::Link(_) => units.contains(&BuildUnitKind::Link),
-            Self::Hook(_) => units.contains(&BuildUnitKind::Hook),
-            Self::Package(_) => units.contains(&BuildUnitKind::Package),
-            Self::PackageManager(_) => units.contains(&BuildUnitKind::PackageManager),
+            Self::Repo(_) => BuildUnitKind::Repo,
+            Self::Link(_) => BuildUnitKind::Link,
+            Self::Hook(_) => BuildUnitKind::Hook,
+            Self::Package(_) => BuildUnitKind::Package,
+            Self::PackageManager(_) => BuildUnitKind::PackageManager,
         }
+    }
+
+    pub fn included_in(&self, units: &[BuildUnitKind]) -> bool {
+        units.contains(&self.kind())
     }
 }
 
