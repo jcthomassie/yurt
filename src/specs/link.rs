@@ -1,6 +1,7 @@
 use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
+use console::style;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
 
@@ -58,20 +59,20 @@ impl Link {
         context
             .progress_task()
             .with_prefix("Link")
-            .with_message(format!("{self}"));
+            .with_message(format!("{} {}", self, style("linking").dim()));
         if clean {
-            context.write_warning("Link", format!("removing {:?}", &self.source))?;
+            context.write_warning("Link", self.source.to_string_lossy(), "removed")?;
             self.clean()?;
         }
         match self.status() {
-            Status::Valid => context.write_skip("Link", format!("skipped {self}")),
+            Status::Valid => context.write_success("Link", self, "skipped"),
             Status::NullSource => {
                 if let Some(dir) = self.source.parent() {
                     fs::create_dir_all(dir)?;
                 }
                 symlink::symlink_auto(&self.target, &self.source)
                     .with_context(|| format!("Failed to apply symlink: {self}"))?;
-                context.write_success("Link", format!("installed {self}"))
+                context.write_success("Link", self, "installed")
             }
             Status::NullTarget => Err(anyhow!("Link target does not exist")),
             Status::InvalidSource(e) => Err(e.context("Invalid link source")),
@@ -107,7 +108,12 @@ impl Link {
 
 impl fmt::Display for Link {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} -> {:?}", &self.source, &self.target)
+        write!(
+            f,
+            "{} >> {}",
+            &self.source.to_string_lossy(),
+            &self.target.to_string_lossy()
+        )
     }
 }
 

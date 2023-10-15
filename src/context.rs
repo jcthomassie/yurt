@@ -61,32 +61,43 @@ impl Context {
 
     fn write_message(
         &self,
-        msg_l: impl std::fmt::Display,
-        msg_r: impl std::fmt::Display,
+        task: impl std::fmt::Display,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
     ) -> Result<()> {
         self.progresses
-            .println(format!("{msg_l:>10} {msg_r}"))
+            .println(format!("{task:>10} {item} {msg}"))
             .context("Failed to write to console")
     }
 
     #[inline]
-    pub fn write_skip(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
-        self.write_message(style(task).bold().dim().green(), style(msg).dim())
+    pub fn write_success(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().green(), item, style(msg).dim())
     }
 
     #[inline]
-    pub fn write_success(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
-        self.write_message(style(task).bold().green(), msg)
+    pub fn write_warning(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().yellow(), item, style(msg).dim())
     }
 
     #[inline]
-    pub fn write_warning(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
-        self.write_message(style(task).bold().dim().yellow(), style(msg).dim())
-    }
-
-    #[inline]
-    pub fn write_error(&self, task: &str, msg: impl std::fmt::Display) -> Result<()> {
-        self.write_message(style(task).bold().red(), msg)
+    pub fn write_error(
+        &self,
+        task: &str,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+    ) -> Result<()> {
+        self.write_message(style(task).bold().red(), item, style(msg).dim())
     }
 }
 
