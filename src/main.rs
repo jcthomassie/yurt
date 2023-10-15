@@ -212,7 +212,7 @@ fn main() -> Result<()> {
                 ResolvedConfig::resolve_from(&args, &mut context)?,
             )
             .try_for_each(|unit| match unit {
-                BuildUnit::Link(link) => link.unlink(),
+                BuildUnit::Link(link) => link.unlink(&context),
                 BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
                 BuildUnit::Package(package) => package.uninstall(&context),
                 _ => Ok(()),

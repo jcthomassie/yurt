@@ -46,7 +46,7 @@ impl Package {
             .with_prefix("Package")
             .with_message(format!("{} {}", self.name, style("installing").dim()));
         if self.is_installed(context) {
-            context.write_success("Package", &self.name, "skipped")
+            context.write_skip("Package", &self.name)
         } else {
             for manager in self.iter_managers(context) {
                 progress.set_message(format!(

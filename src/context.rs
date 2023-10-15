@@ -71,6 +71,11 @@ impl Context {
     }
 
     #[inline]
+    pub fn write_skip(&self, task: &str, item: impl std::fmt::Display) -> Result<()> {
+        self.write_message(style(task).bold().green().dim(), style(item).dim(), "")
+    }
+
+    #[inline]
     pub fn write_success(
         &self,
         task: &str,

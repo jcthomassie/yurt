@@ -1,7 +1,6 @@
 use crate::specs::{BuildUnit, Context, Resolve};
 
 use anyhow::{anyhow, Context as _, Error, Result};
-use console::style;
 use serde::{Deserialize, Serialize};
 use std::{fmt, fs, path::PathBuf};
 
@@ -56,16 +55,12 @@ impl Link {
 
     /// Try to create link if it does not already exist
     pub fn link(&self, context: &Context, clean: bool) -> Result<()> {
-        context
-            .progress_task()
-            .with_prefix("Link")
-            .with_message(format!("{} {}", self, style("linking").dim()));
         if clean {
             context.write_warning("Link", self.source.to_string_lossy(), "removed")?;
             self.clean()?;
         }
         match self.status() {
-            Status::Valid => context.write_success("Link", self, "skipped"),
+            Status::Valid => context.write_skip("Link", self),
             Status::NullSource => {
                 if let Some(dir) = self.source.parent() {
                     fs::create_dir_all(dir)?;
@@ -81,16 +76,16 @@ impl Link {
     }
 
     /// Try to remove link if it exists
-    pub fn unlink(&self) -> Result<()> {
+    pub fn unlink(&self, context: &Context) -> Result<()> {
         match self.status() {
             Status::Valid => {
-                log::info!("Unlinking {self}");
                 if self.target.is_file() {
                     symlink::remove_symlink_file(&self.source)
                 } else {
                     symlink::remove_symlink_dir(&self.source)
                 }
-                .with_context(|| format!("Failed to remove symlink: {self}"))
+                .with_context(|| format!("Failed to remove symlink: {self}"))?;
+                context.write_success("Link", self, "removed")
             }
             _ => Ok(()),
         }
@@ -221,7 +216,8 @@ mod tests {
         // Link and unlink once
         link.link(&Context::default(), false)
             .expect("Failed to create link");
-        link.unlink().expect("Failed to remove link");
+        link.unlink(&Context::default())
+            .expect("Failed to remove link");
         assert!(!link.source.exists());
     }
 
