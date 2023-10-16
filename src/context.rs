@@ -55,7 +55,7 @@ impl Context {
 
     pub fn progress_task(&self) -> ProgressBar {
         self.progresses.add(ProgressBar::new_spinner().with_style(
-            ProgressStyle::with_template("{prefix:>10.bold.cyan} {msg} {spinner}").unwrap(),
+            ProgressStyle::with_template("    {prefix:.bold.cyan} {msg} {spinner}").unwrap(),
         ))
     }
 
