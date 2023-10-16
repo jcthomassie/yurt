@@ -1,7 +1,10 @@
+use std::fmt;
+
 use anyhow::{Context as _, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
+use super::BuildUnitInterface;
 use crate::{
     context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
@@ -29,10 +32,6 @@ impl Repo {
             .with_context(|| format!("Failed to clone git repository: {self:?}"))
     }
 
-    pub fn require(&self) -> Result<Repository> {
-        self.open().or_else(|_| self.clone())
-    }
-
     pub fn is_available(&self) -> bool {
         self.open().is_ok()
     }
@@ -46,8 +45,20 @@ impl Repo {
     }
 }
 
-impl ObjectKey for Repo {
-    const OBJECT_NAME: &'static str = "repo";
+impl BuildUnitInterface for Repo {
+    fn unit_install(&self, _context: &Context) -> Result<bool> {
+        if self.is_available() {
+            Ok(false)
+        } else {
+            self.clone()?;
+            Ok(true)
+        }
+    }
+
+    fn unit_uninstall(&self, _context: &Context) -> Result<bool> {
+        // TODO delete repo
+        Ok(false)
+    }
 }
 
 impl Resolve for Repo {
@@ -66,6 +77,16 @@ impl Resolve for Repo {
                 .push(Self::object_instance_key(attr, new_id), value.to_string());
         }
         Ok(BuildUnit::Repo(new))
+    }
+}
+
+impl ObjectKey for Repo {
+    const OBJECT_NAME: &'static str = "repo";
+}
+
+impl fmt::Display for Repo {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name().unwrap_or("?"))
     }
 }
 

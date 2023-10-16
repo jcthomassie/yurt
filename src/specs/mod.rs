@@ -4,6 +4,8 @@ mod package;
 mod repo;
 mod shell;
 
+use std::fmt;
+
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
@@ -66,6 +68,12 @@ pub enum BuildUnitKind {
     PackageManager,
 }
 
+impl fmt::Display for BuildUnitKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 /// Single resolved build step
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuildUnit {
@@ -87,8 +95,30 @@ impl BuildUnit {
         }
     }
 
+    pub fn interface(self) -> Box<dyn BuildUnitInterface> {
+        match self {
+            Self::Repo(repo) => Box::from(repo),
+            Self::Link(link) => Box::from(link),
+            Self::Hook(hook) => Box::from(hook),
+            Self::Package(package) => Box::from(package),
+            Self::PackageManager(manager) => Box::from(manager),
+        }
+    }
+
     pub fn included_in(&self, units: &[BuildUnitKind]) -> bool {
         units.contains(&self.kind())
+    }
+}
+
+pub trait BuildUnitInterface: std::fmt::Display {
+    fn unit_install(&self, context: &Context) -> Result<bool>;
+    fn unit_uninstall(&self, context: &Context) -> Result<bool>;
+    fn unit_hook(&self, context: &Context, hook: &Hook) -> Result<bool> {
+        match hook {
+            Hook::Install => self.unit_install(context),
+            Hook::Uninstall => self.unit_uninstall(context),
+            Hook::Custom(_) => Ok(false),
+        }
     }
 }
 

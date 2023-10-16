@@ -1,8 +1,9 @@
-use std::{env, ffi::OsStr, path::Path, process::Command};
+use std::{env, ffi::OsStr, fmt, path::Path, process::Command};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use super::BuildUnitInterface;
 use crate::{
     specs::{BuildUnit, Context, Resolve},
     yaml_example_doc,
@@ -230,8 +231,27 @@ impl ShellHook {
     }
 
     #[inline]
-    pub fn exec_for(&self, hook: &Hook) -> Result<()> {
-        self.applies(hook).then(|| self.exec()).unwrap_or(Ok(()))
+    pub fn exec_for(&self, hook: &Hook) -> Result<bool> {
+        if self.applies(hook) {
+            self.exec()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+}
+
+impl BuildUnitInterface for ShellHook {
+    fn unit_install(&self, _context: &Context) -> Result<bool> {
+        self.exec_for(&Hook::Install)
+    }
+
+    fn unit_uninstall(&self, _context: &Context) -> Result<bool> {
+        self.exec_for(&Hook::Uninstall)
+    }
+
+    fn unit_hook(&self, _context: &Context, hook: &Hook) -> Result<bool> {
+        self.exec_for(hook)
     }
 }
 
@@ -244,6 +264,12 @@ impl Resolve for ShellHook {
             },
             ..self
         }))
+    }
+}
+
+impl fmt::Display for ShellHook {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.exec.command)
     }
 }
 

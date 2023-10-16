@@ -12,13 +12,15 @@ mod specs;
 
 use std::{
     io::{self, Write},
+    iter::Map,
     path::PathBuf,
 };
 
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
 use console::style;
-use indicatif::{ProgressFinish, ProgressIterator};
+use indicatif::{ProgressBarIter, ProgressFinish, ProgressIterator};
+use specs::BuildUnitInterface;
 
 use self::{
     config::{Config, ResolvedConfig},
@@ -169,21 +171,29 @@ impl YurtArgs {
         &self,
         msg: &'static str,
         msg_finish: &'static str,
-        action: impl Fn(&BuildUnit, &Context) -> Result<()>,
+        msg_item_finish: &str,
+        action: impl Fn(&dyn BuildUnitInterface, &Context) -> Result<bool>,
     ) -> Result<()> {
-        let resolved = self.get_resolved_config()?;
-        let progress = resolved
-            .context
-            .progress_bar(resolved.build.len())
+        let ResolvedConfig { context, build, .. } = self.get_resolved_config()?;
+        let progress = context
+            .progress_bar(build.len())
             .with_message(msg)
             .with_finish(ProgressFinish::WithMessage(
                 format!("{}", style(msg_finish).green().bold()).into(),
             ));
-        resolved
-            .build
+        build
             .into_iter()
             .progress_with(progress)
-            .try_for_each(|unit| action(&unit, &resolved.context))
+            .try_for_each(|unit| {
+                let kind = unit.kind();
+                let interface = unit.interface();
+                context.write_result(
+                    kind,
+                    interface.as_ref(),
+                    msg_item_finish,
+                    action(interface.as_ref(), &context),
+                )
+            })
     }
 
     fn execute(&self) -> Result<()> {
@@ -246,33 +256,22 @@ impl YurtArgs {
             YurtAction::Install { clean } => self.execute_build(
                 "Installing",
                 "Install finished",
-                |unit, context| match unit {
-                    BuildUnit::Repo(repo) => repo.require().map(drop),
-                    BuildUnit::Link(link) => link.link(context, clean),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
-                    BuildUnit::Package(package) => package.install(context),
-                    BuildUnit::PackageManager(manager) => manager.require(),
-                },
+                "installed",
+                |unit, context| unit.unit_install(context),
             ),
             // $ yurt uninstall
             YurtAction::Uninstall => self.execute_build(
                 "Uninstalling",
                 "Uninstall finished",
-                |unit, context| match unit {
-                    BuildUnit::Link(link) => link.unlink(context),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
-                    BuildUnit::Package(package) => package.uninstall(context),
-                    _ => Ok(()),
-                },
+                "uninstalled",
+                |unit, context| unit.unit_uninstall(context),
             ),
             // $ yurt hook
             YurtAction::Hook { hook: ref arg } => self.execute_build(
                 "Hook", //
                 "Hook finished",
-                |unit, _| match unit {
-                    BuildUnit::Hook(hook) => hook.exec_for(arg),
-                    _ => Ok(()),
-                },
+                &format!("{arg:?}"),
+                |unit, context| unit.unit_hook(context, arg),
             ),
         }
     }

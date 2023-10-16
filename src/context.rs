@@ -59,50 +59,58 @@ impl Context {
         ))
     }
 
-    fn write_message(
+    fn write_message(&self, msg: impl AsRef<str>) -> Result<()> {
+        self.progresses
+            .println(msg)
+            .context("Failed to write to console")
+    }
+
+    pub fn write_result(
+        &self,
+        task: impl std::fmt::Display,
+        item: impl std::fmt::Display,
+        msg: impl std::fmt::Display,
+        result: Result<bool>,
+    ) -> Result<()> {
+        match result {
+            Ok(true) => self.write_message(format!(
+                "{} {item} {}",
+                style(format!("{task:>10}")).bold().green(),
+                style(msg).dim()
+            )),
+            Ok(false) => self.write_message(format!(
+                "{} {}",
+                style(format!("{task:>10}")).bold().green(),
+                style(item).dim(),
+            )),
+            Err(error) => self.write_error(task, item, error),
+        }
+    }
+
+    pub fn write_warning(
         &self,
         task: impl std::fmt::Display,
         item: impl std::fmt::Display,
         msg: impl std::fmt::Display,
     ) -> Result<()> {
-        self.progresses
-            .println(format!("{task:>10} {item} {msg}"))
-            .context("Failed to write to console")
+        self.write_message(format!(
+            "{} {item} {}",
+            style(format!("{task:>10}")).bold().yellow(),
+            style(msg).dim()
+        ))
     }
 
-    #[inline]
-    pub fn write_skip(&self, task: &str, item: impl std::fmt::Display) -> Result<()> {
-        self.write_message(style(task).bold().green().dim(), style(item).dim(), "")
-    }
-
-    #[inline]
-    pub fn write_success(
-        &self,
-        task: &str,
-        item: impl std::fmt::Display,
-        msg: impl std::fmt::Display,
-    ) -> Result<()> {
-        self.write_message(style(task).bold().green(), item, style(msg).dim())
-    }
-
-    #[inline]
-    pub fn write_warning(
-        &self,
-        task: &str,
-        item: impl std::fmt::Display,
-        msg: impl std::fmt::Display,
-    ) -> Result<()> {
-        self.write_message(style(task).bold().yellow(), item, style(msg).dim())
-    }
-
-    #[inline]
     pub fn write_error(
         &self,
-        task: &str,
+        task: impl std::fmt::Display,
         item: impl std::fmt::Display,
         msg: impl std::fmt::Display,
     ) -> Result<()> {
-        self.write_message(style(task).bold().red(), item, style(msg).dim())
+        self.write_message(format!(
+            "{} {item} {}",
+            style(format!("{task:>10}")).bold().red(),
+            style(msg).dim()
+        ))
     }
 }
 
