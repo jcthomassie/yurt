@@ -197,7 +197,7 @@ pub mod parse {
 
     use anyhow::{anyhow, Context as _, Result};
     use lazy_static::lazy_static;
-    use regex::Regex;
+    use regex_lite::Regex;
 
     lazy_static! {
         static ref RE_KEY_WRAPPER: Regex = Regex::new(r"\$\{\{(?P<key>[^{}]*)\}\}").unwrap();

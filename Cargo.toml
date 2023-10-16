@@ -20,7 +20,7 @@ indexmap = { version = "2.2.6", features = ["serde"] }
 indicatif = "0.17.8"
 lazy_static = "1.4.0"
 minreq = { version = "2.11.2", features = ["https-rustls"] }
-regex = "1.10.4"
+regex-lite = "0.1.5"
 semver = { version = "1.0.23", features = ["serde"] }
 serde = { version = "1.0.202", features = ["derive"] }
 serde_yaml = "0.9.34"
