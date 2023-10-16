@@ -70,7 +70,11 @@ pub enum BuildUnitKind {
 
 impl fmt::Display for BuildUnitKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
+        if let Some(fmt::Alignment::Right) = f.align() {
+            write!(f, "{:>16}", format!("{self:?}"))
+        } else {
+            write!(f, "{self:?}")
+        }
     }
 }
 
