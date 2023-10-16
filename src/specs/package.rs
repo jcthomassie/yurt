@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use super::BuildUnitInterface;
+use super::{BuildUnitInterface, BuildUnitKind};
 use crate::{
     context::parse::{self, ObjectKey},
     specs::{
@@ -47,7 +47,9 @@ impl Package {
     }
 
     pub fn is_installed(&self, context: &Context) -> bool {
-        self.iter_managers(context).any(|manager| manager.has(self)) || which_has(&self.name)
+        self.iter_managers(context)
+            .any(|manager| manager.has(self, context))
+            || which_has(&self.name)
     }
 }
 
@@ -67,7 +69,7 @@ impl BuildUnitInterface for Package {
                     style("installing with").dim(),
                     manager.name
                 ));
-                match manager.install_package(self) {
+                match manager.install(self, context) {
                     Ok(()) => return Ok(true),
                     Err(error) => context.write_error("Package", &self.name, error)?,
                 };
@@ -79,8 +81,8 @@ impl BuildUnitInterface for Package {
     fn unit_uninstall(&self, context: &Context) -> Result<bool> {
         let mut uninstalled = false;
         for manager in self.iter_managers(context) {
-            if manager.has(self) {
-                manager.uninstall_package(self)?;
+            if manager.has(self, context) {
+                manager.uninstall(self, context)?;
                 uninstalled = true;
             }
         }
@@ -156,6 +158,7 @@ impl PackageManager {
 
     fn command<F, T>(
         &self,
+        context: &Context,
         command: &Option<ShellCommand>,
         command_name: &str,
         command_action: F,
@@ -163,7 +166,10 @@ impl PackageManager {
     where
         F: Fn(&ShellCommand) -> Result<T>,
     {
-        log::info!("Calling `{}.{command_name}`", self.name);
+        context
+            .progress_task()
+            .with_prefix("Executing")
+            .with_message(format!("{}.{command_name}", self.name));
         command
             .as_ref()
             .with_context(|| format!("{}.{command_name} is not implemented", self.name))
@@ -172,36 +178,44 @@ impl PackageManager {
     }
 
     /// Install `package` by running [`shell_install`][Self::shell_install]
-    pub fn install_package(&self, package: &Package) -> Result<()> {
-        self.command(&self.shell_install, "shell_install", |command| {
+    pub fn install_package(&self, package: &Package, context: &Context) -> Result<()> {
+        self.command(context, &self.shell_install, "shell_install", |command| {
             self.inject_package(command, package)
                 .and_then(|command| command.exec())
         })
     }
 
     /// Uninstall `package` by running [`shell_uninstall`][Self::shell_uninstall]
-    pub fn uninstall_package(&self, package: &Package) -> Result<()> {
-        self.command(&self.shell_uninstall, "shell_uninstall", |command| {
-            self.inject_package(command, package)
-                .and_then(|command| command.exec())
-        })
+    pub fn uninstall_package(&self, package: &Package, context: &Context) -> Result<()> {
+        self.command(
+            context,
+            &self.shell_uninstall,
+            "shell_uninstall",
+            |command| {
+                self.inject_package(command, package)
+                    .and_then(|command| command.exec())
+            },
+        )
     }
 
     /// Check if `package` is installed by running [`shell_has`][Self::shell_has]
-    pub fn has(&self, package: &Package) -> bool {
-        self.command(&self.shell_has, "shell_has", |command| {
+    pub fn has(&self, package: &Package, context: &Context) -> bool {
+        self.command(context, &self.shell_has, "shell_has", |command| {
             self.inject_package(command, package)
                 .and_then(|command| command.exec_bool())
         })
-        .unwrap_or_else(|error| {
-            log::warn!("{error}");
-            false
-        })
+        .map_err(|error| context.write_error(BuildUnitKind::PackageManager, self, error))
+        .unwrap_or(false)
     }
 
     /// Install the package manager by running [`shell_bootstrap`][Self::shell_bootstrap]
-    pub fn bootstrap(&self) -> Result<()> {
-        self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
+    pub fn bootstrap(&self, context: &Context) -> Result<()> {
+        self.command(
+            context,
+            &self.shell_bootstrap,
+            "shell_bootstrap",
+            ShellCommand::exec,
+        )
     }
 
     /// Check if package manager is installed
@@ -211,11 +225,11 @@ impl PackageManager {
 }
 
 impl BuildUnitInterface for PackageManager {
-    fn unit_install(&self, _context: &Context) -> Result<bool> {
+    fn unit_install(&self, context: &Context) -> Result<bool> {
         if self.is_available() {
             Ok(false)
         } else {
-            self.bootstrap()?;
+            self.bootstrap(context)?;
             Ok(true)
         }
     }
@@ -244,13 +258,7 @@ fn which_has(name: &str) -> bool {
     let mut cmd = Command::new("which");
     #[cfg(windows)]
     let mut cmd = Command::new("where");
-    match command::call_bool(cmd.arg(name)) {
-        Ok(has) => has,
-        Err(err) => {
-            log::warn!("{err}");
-            false
-        }
-    }
+    command::call_bool(cmd.arg(name)).unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -281,7 +289,9 @@ mod tests {
         }
         #[test]
         fn empty_bootstrap() {
-            package_manager("made-up-name").bootstrap().unwrap_err();
+            package_manager("made-up-name")
+                .bootstrap(&Context::default())
+                .unwrap_err();
         }
 
         #[test]
@@ -336,7 +346,7 @@ mod tests {
         fn bootstrap_not_implemented() {
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            package_manager.bootstrap().unwrap_err();
+            package_manager.bootstrap(&Context::default()).unwrap_err();
         }
 
         #[test]
@@ -344,7 +354,9 @@ mod tests {
             let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            package_manager.install_package(&package).unwrap_err();
+            package_manager
+                .install(&package, &Context::default())
+                .unwrap_err();
         }
 
         #[test]
@@ -352,7 +364,9 @@ mod tests {
             let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            package_manager.uninstall_package(&package).unwrap_err();
+            package_manager
+                .uninstall(&package, &Context::default())
+                .unwrap_err();
         }
 
         #[test]
@@ -360,7 +374,7 @@ mod tests {
             let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            assert!(!package_manager.has(&package));
+            assert!(!package_manager.has(&package, &Context::default()));
         }
 
         #[test]
@@ -371,7 +385,7 @@ mod tests {
                 name: cargo
                 shell_has: cargo install --list | grep '^${{ package }} v'
             ").unwrap();
-            assert!(!package_manager.has(&package));
+            assert!(!package_manager.has(&package, &Context::default()));
         }
     }
 

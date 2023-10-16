@@ -26,8 +26,7 @@ pub mod command {
             })
     }
 
-    pub fn call_unchecked(command: &mut Command) -> Result<Output> {
-        log::debug!("Calling command: `{command:?}`");
+    fn call_unchecked(command: &mut Command) -> Result<Output> {
         command
             .output()
             .with_context(|| format!("Failed to run command: `{command:?}`"))
@@ -278,19 +277,6 @@ mod tests {
     mod command {
         #[allow(clippy::wildcard_imports)]
         use super::super::*;
-
-        #[test]
-        #[cfg(unix)]
-        fn call_unchecked_success() {
-            let out = command::call_unchecked(Command::new("echo").arg("hello world!")).unwrap();
-            assert!(out.status.success());
-            assert_eq!(String::from_utf8_lossy(&out.stdout), "hello world!\n");
-        }
-
-        #[test]
-        fn call_unchecked_failure() {
-            assert!(command::call_unchecked(&mut Command::new("made_up_command")).is_err());
-        }
 
         #[test]
         #[cfg(unix)]
