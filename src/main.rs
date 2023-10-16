@@ -12,14 +12,13 @@ mod specs;
 
 use std::{
     io::{self, Write},
-    iter::Map,
     path::PathBuf,
 };
 
 use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
 use console::style;
-use indicatif::{ProgressBarIter, ProgressFinish, ProgressIterator};
+use indicatif::{ProgressFinish, ProgressIterator};
 use specs::BuildUnitInterface;
 
 use self::{

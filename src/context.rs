@@ -74,13 +74,13 @@ impl Context {
     ) -> Result<()> {
         match result {
             Ok(true) => self.write_message(format!(
-                "{} {item} {}",
-                style(format!("{task:>10}")).bold().green(),
+                "    {} {item} {}",
+                style(task).bold().green(),
                 style(msg).dim()
             )),
             Ok(false) => self.write_message(format!(
-                "{} {}",
-                style(format!("{task:>10}")).bold().green(),
+                "    {} {}",
+                style(task).bold().green().dim(),
                 style(item).dim(),
             )),
             Err(error) => self.write_error(task, item, error),
@@ -94,8 +94,8 @@ impl Context {
         msg: impl std::fmt::Display,
     ) -> Result<()> {
         self.write_message(format!(
-            "{} {item} {}",
-            style(format!("{task:>10}")).bold().yellow(),
+            "    {} {item} {}",
+            style(task).bold().yellow(),
             style(msg).dim()
         ))
     }
@@ -107,8 +107,8 @@ impl Context {
         msg: impl std::fmt::Display,
     ) -> Result<()> {
         self.write_message(format!(
-            "{} {item} {}",
-            style(format!("{task:>10}")).bold().red(),
+            "    {} {item} {}",
+            style(task).bold().red(),
             style(msg).dim()
         ))
     }
