@@ -1,4 +1,4 @@
-use std::process::Command;
+use std::{fmt, process::Command};
 
 use anyhow::{anyhow, Context as _, Result};
 use console::style;
@@ -6,6 +6,7 @@ use indexmap::IndexMap;
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
+use super::BuildUnitInterface;
 use crate::{
     context::parse::{self, ObjectKey},
     specs::{
@@ -42,14 +43,16 @@ impl Package {
     pub fn is_installed(&self, context: &Context) -> bool {
         self.iter_managers(context).any(|manager| manager.has(self)) || which_has(&self.name)
     }
+}
 
-    pub fn install(&self, context: &Context) -> Result<()> {
+impl BuildUnitInterface for Package {
+    fn unit_install(&self, context: &Context) -> Result<bool> {
         let progress = context
             .progress_task()
             .with_prefix("Package")
             .with_message(format!("{} {}", self.name, style("installing").dim()));
         if self.is_installed(context) {
-            context.write_skip("Package", &self.name)
+            Ok(false)
         } else {
             for manager in self.iter_managers(context) {
                 progress.set_message(format!(
@@ -58,8 +61,8 @@ impl Package {
                     style("installing with").dim(),
                     manager.name
                 ));
-                match manager.install(self) {
-                    Ok(()) => return Ok(()),
+                match manager.install_package(self) {
+                    Ok(()) => return Ok(true),
                     Err(error) => context.write_error("Package", &self.name, error)?,
                 };
             }
@@ -67,13 +70,15 @@ impl Package {
         }
     }
 
-    pub fn uninstall(&self, context: &Context) -> Result<()> {
+    fn unit_uninstall(&self, context: &Context) -> Result<bool> {
+        let mut uninstalled = false;
         for manager in self.iter_managers(context) {
             if manager.has(self) {
-                manager.uninstall(self)?;
+                manager.uninstall_package(self)?;
+                uninstalled = true;
             }
         }
-        Ok(())
+        Ok(uninstalled)
     }
 }
 
@@ -96,6 +101,12 @@ impl Resolve for Package {
 
 impl ObjectKey for Package {
     const OBJECT_NAME: &'static str = "package";
+}
+
+impl fmt::Display for Package {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
@@ -148,7 +159,7 @@ impl PackageManager {
     }
 
     /// Install `package` by running `shell_install`
-    pub fn install(&self, package: &Package) -> Result<()> {
+    pub fn install_package(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_install, "shell_install", |command| {
             self.inject_package(command, package)
                 .and_then(|command| command.exec())
@@ -156,7 +167,7 @@ impl PackageManager {
     }
 
     /// Uninstall `package` by running `shell_uninstall`
-    pub fn uninstall(&self, package: &Package) -> Result<()> {
+    pub fn uninstall_package(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_uninstall, "shell_uninstall", |command| {
             self.inject_package(command, package)
                 .and_then(|command| command.exec())
@@ -180,17 +191,24 @@ impl PackageManager {
         self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
     }
 
-    /// Install the package manager if not already installed
-    pub fn require(&self) -> Result<()> {
-        if self.is_available() {
-            return Ok(());
-        }
-        self.bootstrap()
-    }
-
     /// Check if package manager is installed
     pub fn is_available(&self) -> bool {
         which_has(&self.name)
+    }
+}
+
+impl BuildUnitInterface for PackageManager {
+    fn unit_install(&self, _context: &Context) -> Result<bool> {
+        if self.is_available() {
+            Ok(false)
+        } else {
+            self.bootstrap()?;
+            Ok(true)
+        }
+    }
+
+    fn unit_uninstall(&self, _context: &Context) -> Result<bool> {
+        Ok(false)
     }
 }
 
@@ -198,6 +216,12 @@ impl Resolve for PackageManager {
     fn resolve(self, context: &mut Context) -> Result<BuildUnit> {
         context.managers.insert(self.name.clone(), self.clone());
         Ok(BuildUnit::PackageManager(self))
+    }
+}
+
+impl fmt::Display for PackageManager {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -307,7 +331,7 @@ mod tests {
             let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            package_manager.install(&package).unwrap_err();
+            package_manager.install_package(&package).unwrap_err();
         }
 
         #[test]
@@ -315,7 +339,7 @@ mod tests {
             let package: Package = serde_yaml::from_str("name: arbitrary_package").unwrap();
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
-            package_manager.uninstall(&package).unwrap_err();
+            package_manager.uninstall_package(&package).unwrap_err();
         }
 
         #[test]

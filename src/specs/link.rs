@@ -3,6 +3,7 @@ use std::{fmt, fs, path::PathBuf};
 use anyhow::{anyhow, Context as _, Error, Result};
 use serde::{Deserialize, Serialize};
 
+use super::{BuildUnitInterface, BuildUnitKind};
 use crate::specs::{BuildUnit, Context, Resolve};
 
 #[derive(Debug)]
@@ -54,20 +55,39 @@ impl Link {
         matches!(self.status(), Status::Valid)
     }
 
+    /// Remove any conflicting files/links at source
+    pub fn clean(&self, context: &Context) -> Result<()> {
+        match self.status() {
+            Status::InvalidSource(_) | Status::InvalidTarget(_) => {
+                fs::remove_file(&self.source)
+                    .with_context(|| format!("Failed to clean link source: {self}"))?;
+                context.write_warning(
+                    BuildUnitKind::Link,
+                    self.source.to_string_lossy(),
+                    "removed",
+                )
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
+impl BuildUnitInterface for Link {
     /// Try to create link if it does not already exist
-    pub fn link(&self, context: &Context, clean: bool) -> Result<()> {
-        if clean {
+    fn unit_install(&self, context: &Context) -> Result<bool> {
+        // TODO improve clean handling
+        if false {
             self.clean(context)?;
         }
         match self.status() {
-            Status::Valid => context.write_skip("Link", self),
+            Status::Valid => Ok(false),
             Status::NullSource => {
                 if let Some(dir) = self.source.parent() {
                     fs::create_dir_all(dir)?;
                 }
                 symlink::symlink_auto(&self.target, &self.source)
                     .with_context(|| format!("Failed to apply symlink: {self}"))?;
-                context.write_success("Link", self, "installed")
+                Ok(true)
             }
             Status::NullTarget => Err(anyhow!("Link target does not exist")),
             Status::InvalidSource(e) => Err(e.context("Invalid link source")),
@@ -76,7 +96,7 @@ impl Link {
     }
 
     /// Try to remove link if it exists
-    pub fn unlink(&self, context: &Context) -> Result<()> {
+    fn unit_uninstall(&self, _context: &Context) -> Result<bool> {
         match self.status() {
             Status::Valid => {
                 if self.target.is_file() {
@@ -85,21 +105,9 @@ impl Link {
                     symlink::remove_symlink_dir(&self.source)
                 }
                 .with_context(|| format!("Failed to remove symlink: {self}"))?;
-                context.write_success("Link", self, "removed")
+                Ok(true)
             }
-            _ => Ok(()),
-        }
-    }
-
-    /// Remove any conflicting files/links at source
-    pub fn clean(&self, context: &Context) -> Result<()> {
-        match self.status() {
-            Status::InvalidSource(_) | Status::InvalidTarget(_) => {
-                fs::remove_file(&self.source)
-                    .with_context(|| format!("Failed to clean link source: {self}"))?;
-                context.write_warning("Link", self.source.to_string_lossy(), "removed")
-            }
-            _ => Ok(()),
+            _ => Ok(false),
         }
     }
 }
@@ -188,7 +196,7 @@ mod tests {
         let (_dir, link) = fixture();
         File::create(&link.target).expect("Failed to create tempfile");
         // Link once
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to create link");
         assert_eq!(
             link.source.read_link().expect("Failed to read link"),
@@ -205,7 +213,7 @@ mod tests {
         );
         File::create(&link.target).expect("Failed to create tempfile");
         // Link once
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to create link");
         assert_eq!(
             link.source.read_link().expect("Failed to read link"),
@@ -218,9 +226,9 @@ mod tests {
         let (_dir, link) = fixture();
         File::create(&link.target).expect("Failed to create tempfile");
         // Link and unlink once
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to create link");
-        link.unlink(&Context::default())
+        link.unit_uninstall(&Context::default())
             .expect("Failed to remove link");
         assert!(!link.source.exists());
     }
@@ -232,7 +240,7 @@ mod tests {
         File::create(&link.source).expect("Failed to create tempfile");
         link.clean(&Context::default())
             .expect("Failed to clean link");
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to apply link");
     }
 
@@ -245,7 +253,7 @@ mod tests {
         symlink::symlink_file(&wrong, &link.source).expect("Failed to create symlink");
         link.clean(&Context::default())
             .expect("Failed to clean link");
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to apply link");
     }
 
@@ -259,7 +267,7 @@ mod tests {
         fs::remove_file(&wrong).expect("Failed to delete target");
         link.clean(&Context::default())
             .expect("Failed to clean link");
-        link.link(&Context::default(), false)
+        link.unit_install(&Context::default())
             .expect("Failed to apply link");
     }
 }

@@ -10,6 +10,7 @@ mod specs;
 
 use std::{
     io::{self, Write},
+    iter::Map,
     path::PathBuf,
 };
 
@@ -17,6 +18,7 @@ use anyhow::{bail, Context as _, Result};
 use clap::{command, ArgGroup, Parser, Subcommand};
 use console::style;
 use indicatif::{ProgressBarIter, ProgressFinish, ProgressIterator};
+use specs::BuildUnitInterface;
 
 use self::{
     config::{Config, ResolvedConfig},
@@ -126,11 +128,11 @@ enum YurtAction {
     },
 }
 
-fn iter_progress(
+fn iter_units(
     msg: &'static str,
     msg_finish: &'static str,
     resolved: ResolvedConfig,
-) -> ProgressBarIter<std::vec::IntoIter<BuildUnit>> {
+) -> impl Iterator<Item = (BuildUnitKind, Box<dyn BuildUnitInterface>)> {
     let progress = resolved
         .context
         .progress_bar(resolved.build.len())
@@ -138,7 +140,11 @@ fn iter_progress(
         .with_finish(ProgressFinish::WithMessage(
             format!("{}", style(msg_finish).green().bold()).into(),
         ));
-    resolved.build.into_iter().progress_with(progress)
+    resolved
+        .build
+        .into_iter()
+        .map(|unit| (unit.kind(), unit.unwrap()))
+        .progress_with(progress)
 }
 
 fn main() -> Result<()> {
@@ -162,10 +168,11 @@ fn main() -> Result<()> {
             if !raw {
                 ResolvedConfig::resolve_from(&args, &mut context)?;
             }
-            writeln!(io::stdout(), "{context:#?}")
+            writeln!(io::stdout(), "{context:#?}").context("Failed to write context to console")
         }
         YurtAction::Show { raw: true, .. } => {
             writeln!(io::stdout(), "{}", Config::try_from(&args)?.yaml()?)
+                .context("Failed to write config to console")
         }
         YurtAction::Show {
             hook: ref hook_arg, ..
@@ -191,48 +198,36 @@ fn main() -> Result<()> {
                 });
             };
             writeln!(io::stdout(), "{}", resolved.into_config().yaml()?)
+                .context("Failed to write config to console")
         }
-        YurtAction::Install { clean } => {
-            iter_progress(
-                "Installing",
-                "Install finished",
-                ResolvedConfig::resolve_from(&args, &mut context)?,
-            )
-            .try_for_each(|unit| match unit {
-                BuildUnit::Repo(repo) => repo.require().map(drop),
-                BuildUnit::Link(link) => link.link(&context, clean),
-                BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
-                BuildUnit::Package(package) => package.install(&context),
-                BuildUnit::PackageManager(manager) => manager.require(),
-            })?;
-            Ok(())
-        }
-        YurtAction::Uninstall => {
-            iter_progress(
-                "Uninstalling",
-                "Uninstall finished",
-                ResolvedConfig::resolve_from(&args, &mut context)?,
-            )
-            .try_for_each(|unit| match unit {
-                BuildUnit::Link(link) => link.unlink(&context),
-                BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
-                BuildUnit::Package(package) => package.uninstall(&context),
-                _ => Ok(()),
-            })?;
-            Ok(())
-        }
-        YurtAction::Hook { hook: ref arg } => {
-            iter_progress(
-                "Hook",
-                "Hook finished",
-                ResolvedConfig::resolve_from(&args, &mut context)?,
-            )
-            .try_for_each(|unit| match unit {
-                BuildUnit::Hook(hook) => hook.exec_for(arg),
-                _ => Ok(()),
-            })?;
-            Ok(())
-        }
+        // TODO use clean
+        YurtAction::Install { clean: _ } => iter_units(
+            "Installing",
+            "Install finished",
+            ResolvedConfig::resolve_from(&args, &mut context)?,
+        )
+        .try_for_each(|(kind, interface)| {
+            let result = interface.unit_install(&context);
+            context.write_result(kind, interface, "installed", result)
+        }),
+        YurtAction::Uninstall => iter_units(
+            "Uninstalling",
+            "Uninstall finished",
+            ResolvedConfig::resolve_from(&args, &mut context)?,
+        )
+        .try_for_each(|(kind, interface)| {
+            let result = interface.unit_uninstall(&context);
+            context.write_result(kind, interface, "uninstalled", result)
+        }),
+        YurtAction::Hook { ref hook } => iter_units(
+            "Hook",
+            "Hook finished",
+            ResolvedConfig::resolve_from(&args, &mut context)?,
+        )
+        .try_for_each(|(kind, interface)| {
+            let result = interface.unit_hook(&context, hook);
+            context.write_result(kind, interface, format!("{hook:?}"), result)
+        }),
     }
     .with_context(|| format!("Action failed: {:?}", args.action))
 }
