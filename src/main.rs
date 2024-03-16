@@ -1,8 +1,4 @@
-//! Experimental cross-platform dotfile and package manager.
-//!
-//! Argument spec: [`YurtArgs`]
-//! Build file spec: [`Config`]
-
+#![doc = include_str!("../README.md")]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::match_bool,
