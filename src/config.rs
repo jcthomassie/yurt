@@ -79,6 +79,11 @@ impl<'c> ResolvedConfig<'c> {
 /// Some build steps (such as [`!vars`](BuildSpec::Vars) and
 /// [`!package_manager`](BuildSpec::PackageManager)) modify the resolver state.
 /// The order of build steps may change the resolved values.
+///
+/// # Example
+#[doc = "```yaml"]
+#[doc = include_str!("../examples/config.yaml")]
+#[doc = "```"]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
