@@ -1,6 +1,7 @@
 # 🛖yurt
 
 [![tests](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/tests.yaml)
+[![docs](https://github.com/jcthomassie/yurt/actions/workflows/docs.yaml/badge.svg)](https://github.com/jcthomassie/yurt/actions/workflows/docs.yaml)
 [![release](https://img.shields.io/github/v/release/jcthomassie/yurt?include_prereleases&label=release)](https://github.com/jcthomassie/yurt/releases/latest)
 
 Experimental cross-platform dotfile and package manager.
