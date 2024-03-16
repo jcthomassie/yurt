@@ -29,15 +29,11 @@ jobs:
         id: pages
         uses: actions/configure-pages@v4
 
-      - name: Cargo clean
-        run: cargo clean --doc
       - name: Cargo doc
         run: cargo doc --no-deps
 
       - name: Add redirect
         run: echo '<meta http-equiv="refresh" content="0;url=yurt/index.html">' > target/doc/index.html
-      - name: Remove lock file
-        run: rm target/doc/.lock
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
