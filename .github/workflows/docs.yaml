@@ -18,6 +18,7 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/configure-pages@v4
       - uses: actions/checkout@v4
       - uses: actions-rs/toolchain@v1
         with:
@@ -25,18 +26,15 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@v2
 
-      - name: Setup pages
-        id: pages
-        uses: actions/configure-pages@v4
-
       - name: Cargo doc
         run: cargo doc --no-deps
 
-      - name: Add redirect
+      - name: Remove target/doc/.lock
+        run: rm target/doc/.lock
+      - name: Redirect to target/doc/index.html
         run: echo '<meta http-equiv="refresh" content="0;url=yurt/index.html">' > target/doc/index.html
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: target/doc
 
@@ -48,5 +46,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy to GitHub Pages
-        uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v4
