@@ -73,6 +73,12 @@ impl<'c> ResolvedConfig<'c> {
     }
 }
 
+/// Top level yurt build file YAML object.
+///
+/// Order of build steps is preserved after resolution.
+/// Some build steps (such as [`!vars`](BuildSpec::Vars) and
+/// [`!package_manager`](BuildSpec::PackageManager)) modify the resolver state.
+/// The order of build steps may change the resolved values.
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
