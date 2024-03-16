@@ -14,9 +14,17 @@ enum Status {
 }
 
 /// Symbolic link representation (`source` -> `target`)
+///
+/// ```yaml
+/// - !link
+///     source: ~/.zshrc
+///     target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
+/// ```
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {
+    /// Path of the real source file
     source: PathBuf,
+    /// Path of the symbolic link
     target: PathBuf,
 }
 

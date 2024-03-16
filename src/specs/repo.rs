@@ -7,9 +7,18 @@ use anyhow::{Context as _, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
+/// `git` repository
+///
+/// ```yaml
+/// - !repo
+///     path: ~/dotfiles
+///     url: https://github.com/jcthomassie/dotfiles.git
+/// ```
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
+    /// Local file path
     path: String,
+    /// Remote source url
     url: String,
 }
 

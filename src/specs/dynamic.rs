@@ -10,13 +10,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 enum Condition {
+    /// Literal boolean
     Bool(bool),
+    /// `true` when [`!locale_spec`](LocaleSpec) matches local environment
     Locale(LocaleSpec),
+    /// `true` when [`!shell_command`](ShellCommand) exits successfully
     Eval(ShellCommand),
+    /// `true` when all inner [`conditions`](Condition) are `true`
     All(Vec<Condition>),
+    /// `true` when any inner [`conditions`](Condition) are `true`
     Any(Vec<Condition>),
-    /// Treated as the negation of !any
+    /// Equivalent to the negation of [`!any`](Condition::Any)
     Not(Vec<Condition>),
+    /// Equivalent to [`!bool true`](Condition::Bool)
     Default,
 }
 
@@ -45,9 +51,12 @@ impl Condition {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 struct CaseBranch<T> {
+    /// Boolean expression that is evaluated to determine inclusion
     condition: Condition,
+    /// Result of [`condition`] required for inclusion (default `true`)
     #[serde(skip_serializing_if = "Option::is_none")]
     when: Option<bool>,
+    /// Object to be included when [`condition`] output matches [`when`]
     include: T,
 }
 
@@ -59,6 +68,7 @@ impl<T> CaseBranch<T> {
     }
 }
 
+/// Expression that resolves the first matching [branch](CaseBranch).
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Case<T>(Vec<CaseBranch<T>>);
 
@@ -76,6 +86,7 @@ where
     }
 }
 
+/// Map of string substitutions
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(transparent)]
 pub struct Vars(IndexMap<String, String>);
@@ -93,9 +104,12 @@ impl ResolveInto for Vars {
     }
 }
 
+/// Object to include repeatedly for each value
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
+    /// Sequence of string substitution mappings
     values: Vec<IndexMap<String, String>>,
+    /// Object to be included
     include: T,
 }
 

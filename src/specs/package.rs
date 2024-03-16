@@ -10,12 +10,26 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
+/// Installable binary package
+///
+/// ```yaml
+/// !package
+///   name: pyenv
+///   aliases:
+///     choco: pyenv-win
+///   managers:
+///     - brew
+///     - choco
+/// ```
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
+    /// Primary identifier of the package
     name: String,
+    /// Subset of `!package_manager`s used to manage the package
     #[serde(default = "Vec::new")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     managers: Vec<String>,
+    /// Map of identifier overrides for certain `!package_manager`s
     #[serde(default = "IndexMap::new")]
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     aliases: IndexMap<String, String>,
@@ -86,15 +100,30 @@ impl ObjectKey for Package {
     const OBJECT_NAME: &'static str = "package";
 }
 
+/// Command line package manager.
+///
+/// ```yaml
+/// - !package_manager
+///     name: brew
+///     shell_bootstrap: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+///     shell_has: brew list ${{ package.alias }}
+///     shell_install: brew install -y ${{ package.alias }}
+///     shell_uninstall: brew uninstall -y ${{ package.alias }}
+/// ```
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct PackageManager {
+    /// Identifier referenced from `!package`
     name: String,
+    /// Command to self-install if unavailable
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_bootstrap: Option<ShellCommand>,
+    /// Command to install a `!package`
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_install: Option<ShellCommand>,
+    /// Command to uninstall a `!package`
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_uninstall: Option<ShellCommand>,
+    /// Command to check if a `!package` is already installed
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_has: Option<ShellCommand>,
 }
