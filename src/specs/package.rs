@@ -47,7 +47,7 @@ impl Package {
             for manager in self.iter_managers(context) {
                 log::info!("Installing {} with {}", self.name, manager.name);
                 match manager.install(self) {
-                    Ok(_) => return Ok(()),
+                    Ok(()) => return Ok(()),
                     Err(error) => log::error!("{error}"),
                 };
             }
