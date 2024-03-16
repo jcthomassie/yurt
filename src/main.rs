@@ -1,3 +1,8 @@
+//! Experimental cross-platform dotfile and package manager.
+//!
+//! Argument spec: [`YurtArgs`]
+//! Build file spec: [`Config`]
+
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::match_bool,
@@ -124,6 +129,7 @@ enum YurtAction {
     },
 }
 
+#[doc(hidden)]
 fn main() -> Result<()> {
     let timer = Instant::now();
     let args = YurtArgs::parse();
