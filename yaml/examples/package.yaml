@@ -1,0 +1,7 @@
+!package
+  name: pyenv
+  aliases:
+    choco: pyenv-win
+  managers:
+    - brew
+    - choco

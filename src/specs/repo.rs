@@ -1,15 +1,20 @@
 use crate::{
     context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
+    yaml_example_doc,
 };
 
 use anyhow::{Context as _, Result};
 use git2::Repository;
 use serde::{Deserialize, Serialize};
 
+/// `git` repository
+#[doc = yaml_example_doc!("repo.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
+    /// Local file path
     path: String,
+    /// Remote source url
     url: String,
 }
 

@@ -1,0 +1,57 @@
+version: "~0.8.0-dev"
+build:
+  # Require dotfile repo
+  - !repo
+      path: ~/dotfiles
+      url: https://github.com/jcthomassie/dotfiles.git
+
+  # Specify package managers
+  - !case
+    - condition: !locale { platform: windows }
+      include:
+        - !package_manager
+            name: choco
+            shell_install: choco install -y ${{ package.alias }}
+            shell_uninstall: choco uninstall -y ${{ package.alias }}
+    - condition: !default
+      include:
+        - !package_manager
+            name: brew
+            shell_bootstrap: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+            shell_has: brew list ${{ package.alias }}
+            shell_install: brew install -y ${{ package.alias }}
+            shell_uninstall: brew uninstall -y ${{ package.alias }}
+        # Run a command with a specific shell
+        - !hook
+            on: [ install ]
+            exec:
+              shell: /usr/bin/bash
+              command: brew bundle --file ${{ dotfiles.path }}/.brewfile
+
+  # Run a command with the system default shell
+  - !hook
+      on: [ install, uninstall ]
+      exec: |
+        echo "doing something"
+        echo "doing another thing"
+
+  # Install packages
+  - !package { name: bat }
+  - !package
+      name: git
+      managers:
+      - apt
+      - choco
+  - !package
+      name: delta
+      aliases:
+        brew: git-delta
+        cargo: git-delta
+
+  # Apply symlinks
+  - !link
+      target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
+      source: ~/.zshrc
+  - !link
+      target: ${{ repo#dotfiles.path }}/.gitconfig
+      source: ~/.gitconfig

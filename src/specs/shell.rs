@@ -1,4 +1,7 @@
-use crate::specs::{BuildUnit, Context, Resolve};
+use crate::{
+    specs::{BuildUnit, Context, Resolve},
+    yaml_example_doc,
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -136,10 +139,13 @@ impl From<Shell> for String {
     }
 }
 
+/// Executable shell command
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(from = "ShellCommandSpec")]
 pub struct ShellCommand {
+    /// Shell to run the command in
     pub shell: Shell,
+    /// Command string to pass to the shell
     pub command: String,
 }
 
@@ -181,8 +187,11 @@ enum ShellCommandSpec {
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "kebab-case")]
 pub enum Hook {
+    /// `yurt install`
     Install,
+    /// `yurt uninstall`
     Uninstall,
+    /// `yurt hook <custom_hook>`
     Custom(String),
 }
 
@@ -196,9 +205,13 @@ impl From<String> for Hook {
     }
 }
 
+/// Shell command that is run for a specific entrypoint.
+#[doc = yaml_example_doc!("hook.yaml")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ShellHook {
+    /// Set of [hooks](Hook) to run the command on
     on: Vec<Hook>,
+    /// [`ShellCommand`] to run.
     exec: ShellCommand,
 }
 

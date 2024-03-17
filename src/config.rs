@@ -1,7 +1,7 @@
 use crate::{
     context::Context,
     specs::{BuildSpec, BuildUnit, ResolveInto},
-    YurtArgs,
+    yaml_example_doc, YurtArgs,
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -73,6 +73,13 @@ impl<'c> ResolvedConfig<'c> {
     }
 }
 
+/// Top level yurt build file YAML object.
+///
+/// Order of build steps is preserved after resolution.
+/// Some build steps (such as [`!vars`](BuildSpec::Vars) and
+/// [`!package_manager`](BuildSpec::PackageManager)) modify the resolver state.
+/// The order of build steps may change the resolved values.
+#[doc = yaml_example_doc!("config.yaml")]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
@@ -159,7 +166,7 @@ pub mod tests {
 
         impl TestData {
             fn new(parts: &[&str]) -> Self {
-                let dir: PathBuf = [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
+                let dir: PathBuf = [&[env!("CARGO_MANIFEST_DIR"), "yaml", "tests"], parts]
                     .concat()
                     .iter()
                     .collect();

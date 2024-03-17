@@ -68,6 +68,7 @@ pub enum BuildUnitKind {
     PackageManager,
 }
 
+/// Single resolved build step
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuildUnit {
     Repo(Repo),
@@ -89,6 +90,7 @@ impl BuildUnit {
     }
 }
 
+/// Supported YAML build specifiers
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {

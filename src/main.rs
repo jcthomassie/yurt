@@ -1,3 +1,4 @@
+#![doc = include_str!("../README.md")]
 #![warn(clippy::all, clippy::pedantic)]
 #![allow(
     clippy::match_bool,
@@ -6,6 +7,7 @@
 )]
 mod config;
 mod context;
+mod docs;
 mod specs;
 
 use self::{
@@ -124,6 +126,7 @@ enum YurtAction {
     },
 }
 
+#[doc(hidden)]
 fn main() -> Result<()> {
     let timer = Instant::now();
     let args = YurtArgs::parse();
