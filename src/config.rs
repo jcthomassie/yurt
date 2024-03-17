@@ -166,7 +166,7 @@ pub mod tests {
 
         impl TestData {
             fn new(parts: &[&str]) -> Self {
-                let dir: PathBuf = [&[env!("CARGO_MANIFEST_DIR"), "test"], parts]
+                let dir: PathBuf = [&[env!("CARGO_MANIFEST_DIR"), "yaml", "tests"], parts]
                     .concat()
                     .iter()
                     .collect();

@@ -7,7 +7,7 @@ on:
     paths:
       - ".github/workflows/tests.yaml"
       - "src/**"
-      - "test/**"
+      - "yaml/**"
       - "Cargo.*"
 
   pull_request:
@@ -15,7 +15,7 @@ on:
     paths:
       - ".github/workflows/tests.yaml"
       - "src/**"
-      - "test/**"
+      - "yaml/**"
       - "Cargo.*"
 
 env:

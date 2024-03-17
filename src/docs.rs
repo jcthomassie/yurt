@@ -6,7 +6,11 @@ macro_rules! yaml_example_str {
     };
 
     ($name:expr) => {
-        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/examples/", $name))
+        include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/yaml/examples/",
+            $name
+        ))
     };
 }
 
