@@ -68,6 +68,7 @@ pub enum BuildUnitKind {
     PackageManager,
 }
 
+/// Single resolved build step
 #[derive(Debug, Clone, PartialEq)]
 pub enum BuildUnit {
     Repo(Repo),
@@ -93,21 +94,13 @@ impl BuildUnit {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
-    /// Tag: [`!vars`](Vars)
     Vars(Vars),
-    /// Tag: [`!case`](Case)
     Case(Case<Vec<BuildSpec>>),
-    /// Tag: [`!matrix`](Matrix)
     Matrix(Matrix<Vec<BuildSpec>>),
-    /// Tag: [`!repo`](Repo)
     Repo(Repo),
-    /// Tag: [`!link`](Link)
     Link(Link),
-    /// Tag: [`!shell_hook`](ShellHook)
     Hook(ShellHook),
-    /// Tag: [`!package`](Package)
     Package(Package),
-    /// Tag: [`!package_manager`](PackageManager)
     PackageManager(PackageManager),
 }
 

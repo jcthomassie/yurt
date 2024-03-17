@@ -15,10 +15,10 @@ macro_rules! yaml_example_str {
 macro_rules! yaml_example_doc {
     ($name:literal) => {
         concat!(
-            "\n\n#Example\n\n",
+            "\n\n# Example\n\n",
             "```yaml\n",
             $crate::yaml_example_str!($name),
-            "```\n"
+            "\n```\n"
         )
     };
 }
