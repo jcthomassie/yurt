@@ -3,7 +3,7 @@ use crate::specs::{
     shell::{command, ShellCommand},
     BuildUnit, Context, Resolve,
 };
-use crate::yaml_example;
+use crate::yaml_example_doc;
 
 use anyhow::{anyhow, Context as _, Result};
 use indexmap::IndexMap;
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 /// Installable binary package.
-#[doc = yaml_example!("../../examples/package.yaml")]
+#[doc = yaml_example_doc!("package.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
     /// Primary identifier of the package
@@ -93,7 +93,7 @@ impl ObjectKey for Package {
 }
 
 /// Command line package manager.
-#[doc = yaml_example!("../../examples/package_manager.yaml")]
+#[doc = yaml_example_doc!("package_manager.yaml")]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct PackageManager {
     /// Identifier referenced from `!package`

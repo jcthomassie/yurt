@@ -1,8 +1,25 @@
-/// Import an example YAML file into doc comment
+/// Import an example YAML file
 #[macro_export]
-macro_rules! yaml_example {
-    ($path:literal) => {
-        concat!("\n#Example\n", "```yaml\n", include_str!($path), "```\n")
+macro_rules! yaml_example_str {
+    ($name:ident) => {
+        yaml_example_str!(concat!(stringify!($name), ".yaml"))
+    };
+
+    ($name:expr) => {
+        include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/examples/", $name))
+    };
+}
+
+/// Import an example YAML file formatted for a doc comment
+#[macro_export]
+macro_rules! yaml_example_doc {
+    ($name:literal) => {
+        concat!(
+            "\n\n#Example\n\n",
+            "```yaml\n",
+            $crate::yaml_example_str!($name),
+            "```\n"
+        )
     };
 }
 
@@ -15,12 +32,8 @@ pub mod tests {
         ($name:ident, $yaml_type:ty) => {
             #[test]
             fn $name() {
-                serde_yaml::from_str::<$yaml_type>(include_str!(concat!(
-                    "../examples/",
-                    stringify!($name),
-                    ".yaml"
-                )))
-                .expect("Failed to parse yaml");
+                serde_yaml::from_str::<$yaml_type>(yaml_example_str!($name))
+                    .expect("Failed to parse yaml");
             }
         };
     }

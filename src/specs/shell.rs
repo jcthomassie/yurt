@@ -1,6 +1,6 @@
 use crate::{
     specs::{BuildUnit, Context, Resolve},
-    yaml_example,
+    yaml_example_doc,
 };
 
 use anyhow::Result;
@@ -206,7 +206,7 @@ impl From<String> for Hook {
 }
 
 /// Shell command that is run for a specific entrypoint.
-#[doc = yaml_example!("../../examples/hook.yaml")]
+#[doc = yaml_example_doc!("hook.yaml")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ShellHook {
     /// Set of [hooks](Hook) to run the command on
