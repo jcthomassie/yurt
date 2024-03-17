@@ -1,0 +1,7 @@
+!case
+  - condition: !locale { platform: windows }
+    include:
+      - !package { name: windows_only_package }
+  - condition: !default
+    include:
+      - !package { name: non_windows_package }

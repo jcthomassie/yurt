@@ -1,4 +1,7 @@
-use crate::specs::{BuildUnit, Context, Resolve};
+use crate::{
+    specs::{BuildUnit, Context, Resolve},
+    yaml_example,
+};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -203,6 +206,7 @@ impl From<String> for Hook {
 }
 
 /// Shell command that is run for a specific entrypoint.
+#[doc = yaml_example!("../../examples/hook.yaml")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ShellHook {
     /// Set of [hooks](Hook) to run the command on

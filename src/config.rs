@@ -1,7 +1,7 @@
 use crate::{
     context::Context,
     specs::{BuildSpec, BuildUnit, ResolveInto},
-    YurtArgs,
+    yaml_example, YurtArgs,
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -79,11 +79,7 @@ impl<'c> ResolvedConfig<'c> {
 /// Some build steps (such as [`!vars`](BuildSpec::Vars) and
 /// [`!package_manager`](BuildSpec::PackageManager)) modify the resolver state.
 /// The order of build steps may change the resolved values.
-///
-/// # Example
-#[doc = "```yaml"]
-#[doc = include_str!("../examples/config.yaml")]
-#[doc = "```"]
+#[doc = yaml_example!("../examples/config.yaml")]
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {

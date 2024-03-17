@@ -1,0 +1,6 @@
+!package_manager
+  name: brew
+  shell_bootstrap: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
+  shell_has: brew list ${{ package.alias }}
+  shell_install: brew install -y ${{ package.alias }}
+  shell_uninstall: brew uninstall -y ${{ package.alias }}

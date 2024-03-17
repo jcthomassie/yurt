@@ -1,4 +1,5 @@
 use crate::specs::{BuildUnit, Context, Resolve};
+use crate::yaml_example;
 
 use anyhow::{anyhow, Context as _, Error, Result};
 use serde::{Deserialize, Serialize};
@@ -14,12 +15,7 @@ enum Status {
 }
 
 /// Symbolic link representation (`source` -> `target`)
-///
-/// ```yaml
-/// - !link
-///     source: ~/.zshrc
-///     target: ${{ repo#dotfiles.path }}/.zsh/.zshrc
-/// ```
+#[doc = yaml_example!("../../examples/link.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {
     /// Path of the real source file

@@ -1,6 +1,7 @@
 use crate::{
     context::{parse::ObjectKey, Context},
     specs::{BuildUnit, Resolve},
+    yaml_example,
 };
 
 use anyhow::{Context as _, Result};
@@ -8,12 +9,7 @@ use git2::Repository;
 use serde::{Deserialize, Serialize};
 
 /// `git` repository
-///
-/// ```yaml
-/// - !repo
-///     path: ~/dotfiles
-///     url: https://github.com/jcthomassie/dotfiles.git
-/// ```
+#[doc = yaml_example!("../../examples/repo.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Repo {
     /// Local file path

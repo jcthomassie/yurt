@@ -1,6 +1,7 @@
 use crate::{
     context::{parse::ObjectKey, Context, LocaleSpec},
     specs::{shell::ShellCommand, BuildUnit, ResolveInto},
+    yaml_example,
 };
 
 use anyhow::{bail, Result};
@@ -87,6 +88,7 @@ where
 }
 
 /// Map of string substitutions
+#[doc = yaml_example!("../../examples/vars.yaml")]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(transparent)]
 pub struct Vars(IndexMap<String, String>);
@@ -105,6 +107,7 @@ impl ResolveInto for Vars {
 }
 
 /// Object to include repeatedly for each value
+#[doc = yaml_example!("../../examples/matrix.yaml")]
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Matrix<T> {
     /// Sequence of string substitution mappings

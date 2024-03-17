@@ -1,0 +1,10 @@
+!matrix
+  values:
+    - link_source: "source_1"
+      link_target: "target_1"
+    - link_source: "source_2"
+      link_target: "target_2"
+  include:
+    - !link
+        source: ${{ matrix.link_source }}
+        target: ${{ matrix.link_target }}

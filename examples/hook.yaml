@@ -1,0 +1,5 @@
+!hook
+  on: [ install, uninstall ]
+  exec: |
+    echo "doing something"
+    echo "doing another thing"

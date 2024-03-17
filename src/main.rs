@@ -7,6 +7,7 @@
 )]
 mod config;
 mod context;
+mod docs;
 mod specs;
 
 use self::{

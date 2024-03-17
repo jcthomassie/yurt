@@ -3,6 +3,7 @@ use crate::specs::{
     shell::{command, ShellCommand},
     BuildUnit, Context, Resolve,
 };
+use crate::yaml_example;
 
 use anyhow::{anyhow, Context as _, Result};
 use indexmap::IndexMap;
@@ -10,17 +11,8 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
-/// Installable binary package
-///
-/// ```yaml
-/// !package
-///   name: pyenv
-///   aliases:
-///     choco: pyenv-win
-///   managers:
-///     - brew
-///     - choco
-/// ```
+/// Installable binary package.
+#[doc = yaml_example!("../../examples/package.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Package {
     /// Primary identifier of the package
@@ -101,15 +93,7 @@ impl ObjectKey for Package {
 }
 
 /// Command line package manager.
-///
-/// ```yaml
-/// - !package_manager
-///     name: brew
-///     shell_bootstrap: curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh
-///     shell_has: brew list ${{ package.alias }}
-///     shell_install: brew install -y ${{ package.alias }}
-///     shell_uninstall: brew uninstall -y ${{ package.alias }}
-/// ```
+#[doc = yaml_example!("../../examples/package_manager.yaml")]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct PackageManager {
     /// Identifier referenced from `!package`
