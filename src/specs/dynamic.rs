@@ -276,10 +276,10 @@ mod tests {
     #[test]
     fn matrix_empty() {
         #[rustfmt::skip]
-        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r#"
+        let matrix: Matrix<Vec<BuildSpec>> = serde_yaml::from_str(r"
             values: []
             include: []
-        "#).unwrap();
+        ").unwrap();
         let mut context = Context::default();
         assert!(matrix.resolve_into_new(&mut context).is_err());
     }
@@ -300,7 +300,7 @@ mod tests {
                   target: const
         "#).unwrap();
         #[rustfmt::skip]
-        let values: Vec<BuildSpec> = serde_yaml::from_str(r#"
+        let values: Vec<BuildSpec> = serde_yaml::from_str(r"
             - !link
                 source: value_a
                 target: const
@@ -310,7 +310,7 @@ mod tests {
             - !link
                 source: value_c
                 target: const
-        "#).unwrap();
+        ").unwrap();
         assert_eq!(
             matrix.resolve_into_new(&mut context).unwrap(),
             values.resolve_into_new(&mut context).unwrap()

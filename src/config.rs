@@ -159,9 +159,9 @@ pub mod tests {
         use std::path::PathBuf;
 
         struct TestData {
-            input_path: PathBuf,
-            output_path: PathBuf,
-            args_path: PathBuf,
+            input: PathBuf,
+            output: PathBuf,
+            args: PathBuf,
         }
 
         impl TestData {
@@ -171,9 +171,9 @@ pub mod tests {
                     .iter()
                     .collect();
                 Self {
-                    input_path: dir.join("input.yaml"),
-                    output_path: dir.join("output.yaml"),
-                    args_path: dir.join("args"),
+                    input: dir.join("input.yaml"),
+                    output: dir.join("output.yaml"),
+                    args: dir.join("args"),
                 }
             }
 
@@ -181,11 +181,11 @@ pub mod tests {
                 let mut args = vec![
                     "yurt".to_string(),
                     "--file".to_string(),
-                    self.input_path.to_str().unwrap().to_owned(),
+                    self.input.to_str().unwrap().to_owned(),
                 ];
-                if self.args_path.is_file() {
+                if self.args.is_file() {
                     args.extend(
-                        read_to_string(&self.args_path)
+                        read_to_string(&self.args)
                             .unwrap()
                             .split(' ')
                             .map(String::from),
@@ -196,7 +196,7 @@ pub mod tests {
             }
 
             fn get_output_yaml(&self) -> String {
-                read_to_string(&self.output_path).expect("Failed to read output comparison")
+                read_to_string(&self.output).expect("Failed to read output comparison")
             }
         }
 
