@@ -54,10 +54,10 @@ impl Condition {
 struct CaseBranch<T> {
     /// Boolean expression that is evaluated to determine inclusion
     condition: Condition,
-    /// Result of [`condition`] required for inclusion (default `true`)
+    /// Result of [`condition`][Self::condition] required for inclusion (default `true`)
     #[serde(skip_serializing_if = "Option::is_none")]
     when: Option<bool>,
-    /// Object to be included when [`condition`] output matches [`when`]
+    /// Object to be included when [`condition`][Self::condition] output matches [`when`][Self::when]
     include: T,
 }
 
