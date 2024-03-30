@@ -22,21 +22,25 @@ lazy_static! {
 
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
-pub struct ResolvedConfig<'c> {
+pub struct ResolvedConfig {
     // Members should be treated as immutable
-    pub context: &'c Context,
+    pub context: Context,
     build: Vec<BuildUnit>,
     version: Option<VersionReq>,
 }
 
-impl<'c> ResolvedConfig<'c> {
+impl ResolvedConfig {
     #[inline]
     pub fn filter<P>(self, predicate: P) -> Self
     where
-        P: FnMut(&BuildUnit) -> bool,
+        P: Fn(&BuildUnit, &Context) -> bool,
     {
         Self {
-            build: self.build.into_iter().filter(predicate).collect(),
+            build: self
+                .build
+                .into_iter()
+                .filter(|unit| predicate(unit, &self.context))
+                .collect(),
             ..self
         }
     }
@@ -44,9 +48,11 @@ impl<'c> ResolvedConfig<'c> {
     #[inline]
     pub fn for_each_unit<F>(&self, f: F) -> Result<()>
     where
-        F: FnMut(&BuildUnit) -> Result<()>,
+        F: Fn(&BuildUnit, &Context) -> Result<()>,
     {
-        self.build.iter().try_for_each(f)
+        self.build
+            .iter()
+            .try_for_each(|unit| f(unit, &self.context))
     }
 
     pub fn into_config(self) -> Config {
@@ -55,19 +61,23 @@ impl<'c> ResolvedConfig<'c> {
             build: self.build.into_iter().map(Into::into).collect(),
         }
     }
+}
 
-    pub fn resolve_from(args: &YurtArgs, context: &'c mut Context) -> Result<Self> {
+impl TryFrom<&YurtArgs> for ResolvedConfig {
+    type Error = anyhow::Error;
+
+    fn try_from(args: &YurtArgs) -> Result<Self> {
         Config::try_from(args)
-            .and_then(|config| config.resolve(context))
+            .and_then(|config| config.resolve(Context::from(args)))
             .map(|resolved| match args {
                 YurtArgs {
                     include: Some(units),
                     ..
-                } => resolved.filter(|unit| unit.included_in(units)),
+                } => resolved.filter(|unit, _| unit.included_in(units)),
                 YurtArgs {
                     exclude: Some(units),
                     ..
-                } => resolved.filter(|unit| !unit.included_in(units)),
+                } => resolved.filter(|unit, _| !unit.included_in(units)),
                 _ => resolved,
             })
     }
@@ -102,7 +112,7 @@ impl Config {
         env::var("YURT_BUILD_FILE")
             .map(PathBuf::from)
             .context("Build file not specified")
-            .and_then(Self::from_git_path)
+            .and_then(Self::from_path)
     }
 
     fn from_url(url: &str) -> Result<Self> {
@@ -115,7 +125,7 @@ impl Config {
             })
     }
 
-    fn resolve(self, context: &mut Context) -> Result<ResolvedConfig<'_>> {
+    fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => Some(req),
@@ -126,7 +136,7 @@ impl Config {
         Ok(ResolvedConfig {
             build: self
                 .build
-                .resolve_into_new(context)
+                .resolve_into_new(&mut context)
                 .context("Failed to resolve build")?,
             version,
             context,
@@ -213,8 +223,7 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let args = test.get_args();
-                        let mut context = Context::from(&args);
-                        let resolved_yaml = ResolvedConfig::resolve_from(&args, &mut context)
+                        let resolved_yaml = ResolvedConfig::try_from(&args)
                             .expect("Failed to resolve input build")
                             .into_config()
                             .yaml()
@@ -262,9 +271,9 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
                         let args = test.get_args();
-                        let mut context = Context::from(&args);
+                        let context = Context::from(&args);
                         let config = Config::try_from(&args).unwrap();
-                        assert!(config.resolve(&mut context).is_err());
+                        assert!(config.resolve(context).is_err());
                     }
                 };
             }

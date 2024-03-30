@@ -145,16 +145,19 @@ fn main() -> Result<()> {
     }
 
     log::info!("{:?}", &args.action);
-    let mut context = Context::from(&args);
     let result = match args.action {
+        // $ yurt show --context
         YurtAction::Show {
             raw, context: true, ..
         } => {
-            if !raw {
-                ResolvedConfig::resolve_from(&args, &mut context)?;
-            }
+            let context = if raw {
+                Context::from(&args)
+            } else {
+                ResolvedConfig::try_from(&args)?.context
+            };
             writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
         }
+        // $ yurt show
         YurtAction::Show {
             raw,
             hook: ref hook_arg,
@@ -163,11 +166,10 @@ fn main() -> Result<()> {
             let config = if raw {
                 Config::try_from(&args)?
             } else {
-                let resolved = ResolvedConfig::resolve_from(&args, &mut context)?;
+                let resolved = ResolvedConfig::try_from(&args)?;
                 if let Some(hook_arg) = hook_arg {
-                    let context = resolved.context;
                     resolved
-                        .filter(|unit| {
+                        .filter(|unit, context| {
                             let expect = matches!(hook_arg, Hook::Install);
                             match hook_arg {
                                 Hook::Install | Hook::Uninstall => match unit {
@@ -194,28 +196,30 @@ fn main() -> Result<()> {
             };
             writeln!(io::stdout(), "{}", config.yaml()?).context("Failed to write yaml to stdout")
         }
-        YurtAction::Install { clean } => ResolvedConfig::resolve_from(&args, &mut context)
+        // $ yurt install
+        YurtAction::Install { clean } => ResolvedConfig::try_from(&args).and_then(|build| {
+            build.for_each_unit(|unit, context| match unit {
+                BuildUnit::Repo(repo) => repo.require().map(drop),
+                BuildUnit::Link(link) => link.link(clean),
+                BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
+                BuildUnit::Package(package) => package.install(context),
+                BuildUnit::PackageManager(manager) => manager.require(),
+            })
+        }),
+        // $ yurt uninstall
+        YurtAction::Uninstall => ResolvedConfig::try_from(&args) //
             .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
-                    BuildUnit::Repo(repo) => repo.require().map(drop),
-                    BuildUnit::Link(link) => link.link(clean),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
-                    BuildUnit::Package(package) => package.install(build.context),
-                    BuildUnit::PackageManager(manager) => manager.require(),
-                })
-            }),
-        YurtAction::Uninstall => ResolvedConfig::resolve_from(&args, &mut context) //
-            .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
+                build.for_each_unit(|unit, context| match unit {
                     BuildUnit::Link(link) => link.unlink(),
                     BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
-                    BuildUnit::Package(package) => package.uninstall(build.context),
+                    BuildUnit::Package(package) => package.uninstall(context),
                     _ => Ok(()),
                 })
             }),
-        YurtAction::Hook { hook: ref arg } => ResolvedConfig::resolve_from(&args, &mut context) //
+        // $ yurt hook
+        YurtAction::Hook { hook: ref arg } => ResolvedConfig::try_from(&args) //
             .and_then(|build| {
-                build.for_each_unit(|unit| match unit {
+                build.for_each_unit(|unit, _| match unit {
                     BuildUnit::Hook(hook) => hook.exec_for(arg),
                     _ => Ok(()),
                 })
