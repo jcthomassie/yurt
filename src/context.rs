@@ -1,5 +1,4 @@
 use crate::specs::PackageManager;
-use crate::YurtArgs;
 
 use anyhow::Result;
 use indexmap::IndexMap;
@@ -42,12 +41,6 @@ impl Context {
 impl Default for Context {
     fn default() -> Self {
         Self::new(Locale::default())
-    }
-}
-
-impl From<&YurtArgs> for Context {
-    fn from(args: &YurtArgs) -> Self {
-        Self::new(Locale::from(args))
     }
 }
 
@@ -95,16 +88,6 @@ impl Locale {
 impl Default for Locale {
     fn default() -> Self {
         Self::with_overrides(None, None, None)
-    }
-}
-
-impl From<&YurtArgs> for Locale {
-    fn from(args: &YurtArgs) -> Self {
-        Self::with_overrides(
-            args.override_user.clone(),
-            args.override_platform.clone(),
-            args.override_distro.clone(),
-        )
     }
 }
 
@@ -429,7 +412,9 @@ pub mod tests {
 
     #[inline]
     fn parse_locale(args: &[&str]) -> Locale {
-        Locale::from(&YurtArgs::try_parse_from(args).expect("Failed to parse args"))
+        YurtArgs::try_parse_from(args)
+            .expect("Failed to parse args")
+            .get_locale()
     }
 
     #[test]

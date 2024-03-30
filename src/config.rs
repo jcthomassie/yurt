@@ -1,7 +1,7 @@
 use crate::{
     context::Context,
     specs::{BuildSpec, BuildUnit, ResolveInto},
-    yaml_example_doc, YurtArgs,
+    yaml_example_doc,
 };
 
 use anyhow::{bail, Context as _, Result};
@@ -63,26 +63,6 @@ impl ResolvedConfig {
     }
 }
 
-impl TryFrom<&YurtArgs> for ResolvedConfig {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &YurtArgs) -> Result<Self> {
-        Config::try_from(args)
-            .and_then(|config| config.resolve(Context::from(args)))
-            .map(|resolved| match args {
-                YurtArgs {
-                    include: Some(units),
-                    ..
-                } => resolved.filter(|unit, _| unit.included_in(units)),
-                YurtArgs {
-                    exclude: Some(units),
-                    ..
-                } => resolved.filter(|unit, _| !unit.included_in(units)),
-                _ => resolved,
-            })
-    }
-}
-
 /// Top level yurt build file YAML object.
 ///
 /// Order of build steps is preserved after resolution.
@@ -99,7 +79,7 @@ pub struct Config {
 }
 
 impl Config {
-    fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         File::open(path)
             .map(BufReader::new)
             .context("Failed to open build file")
@@ -108,14 +88,14 @@ impl Config {
             })
     }
 
-    fn from_env() -> Result<Self> {
+    pub fn from_env() -> Result<Self> {
         env::var("YURT_BUILD_FILE")
             .map(PathBuf::from)
             .context("Build file not specified")
             .and_then(Self::from_path)
     }
 
-    fn from_url(url: &str) -> Result<Self> {
+    pub fn from_url(url: &str) -> Result<Self> {
         minreq::get(url)
             .send()
             .context("Failed to reach remote build file")
@@ -125,7 +105,7 @@ impl Config {
             })
     }
 
-    fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
+    pub fn resolve(self, mut context: Context) -> Result<ResolvedConfig> {
         // Check version
         let version = match self.version {
             Some(req) if req.matches(&VERSION) => Some(req),
@@ -148,26 +128,13 @@ impl Config {
     }
 }
 
-impl TryFrom<&YurtArgs> for Config {
-    type Error = anyhow::Error;
-
-    fn try_from(args: &YurtArgs) -> Result<Self> {
-        if let Some(ref url) = args.file_url {
-            Self::from_url(url)
-        } else if let Some(ref file) = args.file {
-            Self::from_path(file)
-        } else {
-            Self::from_env()
-        }
-    }
-}
-
 #[cfg(test)]
 pub mod tests {
     use super::*;
 
     mod yaml {
         use super::*;
+        use crate::YurtArgs;
         use clap::Parser;
         use std::fs::read_to_string;
         use std::path::PathBuf;
@@ -223,7 +190,8 @@ pub mod tests {
                     fn $name() {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let args = test.get_args();
-                        let resolved_yaml = ResolvedConfig::try_from(&args)
+                        let resolved_yaml = args
+                            .get_resolved_config()
                             .expect("Failed to resolve input build")
                             .into_config()
                             .yaml()
@@ -252,7 +220,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "parse", stringify!($name)]);
-                        assert!(Config::try_from(&test.get_args()).is_err());
+                        assert!(test.get_args().get_resolved_config().is_err());
                     }
                 };
             }
@@ -270,10 +238,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
-                        let args = test.get_args();
-                        let context = Context::from(&args);
-                        let config = Config::try_from(&args).unwrap();
-                        assert!(config.resolve(context).is_err());
+                        assert!(test.get_args().get_resolved_config().is_err());
                     }
                 };
             }
