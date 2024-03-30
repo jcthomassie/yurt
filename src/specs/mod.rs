@@ -95,8 +95,8 @@ impl BuildUnit {
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
     Vars(Vars),
-    Case(Case<Vec<BuildSpec>>),
-    Matrix(Matrix<Vec<BuildSpec>>),
+    Case(Case<Vec<Self>>),
+    Matrix(Matrix<Vec<Self>>),
     Repo(Repo),
     Link(Link),
     Hook(ShellHook),
@@ -105,7 +105,7 @@ pub enum BuildSpec {
 }
 
 impl From<BuildUnit> for BuildSpec {
-    fn from(unit: BuildUnit) -> BuildSpec {
+    fn from(unit: BuildUnit) -> Self {
         match unit {
             BuildUnit::Repo(repo) => Self::Repo(repo),
             BuildUnit::Link(link) => Self::Link(link),
