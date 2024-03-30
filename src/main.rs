@@ -68,7 +68,7 @@ pub struct YurtArgs {
     #[arg(
         value_enum,
         long,
-        short = 'I',
+        short = 'i',
         value_delimiter = ',',
         value_name = "TYPE"
     )]
@@ -78,7 +78,7 @@ pub struct YurtArgs {
     #[arg(
         value_enum,
         long,
-        short = 'E',
+        short = 'e',
         value_delimiter = ',',
         value_name = "TYPE"
     )]
