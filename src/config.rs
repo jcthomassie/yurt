@@ -98,6 +98,13 @@ impl Config {
             })
     }
 
+    fn from_env() -> Result<Self> {
+        env::var("YURT_BUILD_FILE")
+            .map(PathBuf::from)
+            .context("Build file not specified")
+            .and_then(Self::from_git_path)
+    }
+
     fn from_url(url: &str) -> Result<Self> {
         minreq::get(url)
             .send()
@@ -137,13 +144,10 @@ impl TryFrom<&YurtArgs> for Config {
     fn try_from(args: &YurtArgs) -> Result<Self> {
         if let Some(ref url) = args.file_url {
             Self::from_url(url)
+        } else if let Some(ref file) = args.file {
+            Self::from_path(file)
         } else {
-            Self::from_path(match args.file {
-                Some(ref path) => path.clone(),
-                None => env::var("YURT_BUILD_FILE")
-                    .map(PathBuf::from)
-                    .context("Build file not specified")?,
-            })
+            Self::from_env()
         }
     }
 }
