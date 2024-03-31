@@ -20,7 +20,12 @@ lazy_static! {
     static ref VERSION: Version = Version::parse(crate_version!()).unwrap();
 }
 
-#[allow(dead_code)]
+#[derive(Debug)]
+pub enum BuildUnitDiff<'u> {
+    Added(&'u BuildUnit),
+    Removed(&'u BuildUnit),
+}
+
 #[derive(Debug, Clone)]
 pub struct ResolvedConfig {
     // Members should be treated as immutable
@@ -55,6 +60,23 @@ impl ResolvedConfig {
             .try_for_each(|unit| f(unit, &self.context))
     }
 
+    pub fn for_each_unit_diff<F>(&self, base: &Self, f: F) -> Result<()>
+    where
+        F: Fn(BuildUnitDiff, &Context) -> Result<()>,
+    {
+        for unit in base.build.iter().rev() {
+            if !self.build.contains(unit) {
+                f(BuildUnitDiff::Removed(unit), &self.context)?;
+            }
+        }
+        for unit in &self.build {
+            if !base.build.contains(unit) {
+                f(BuildUnitDiff::Added(unit), &self.context)?;
+            }
+        }
+        Ok(())
+    }
+
     pub fn into_config(self) -> Config {
         Config {
             version: self.version,
@@ -81,11 +103,36 @@ pub struct Config {
 impl Config {
     pub fn from_path<P: AsRef<Path>>(path: P) -> Result<Self> {
         File::open(path)
-            .map(BufReader::new)
             .context("Failed to open build file")
+            .map(BufReader::new)
             .and_then(|reader| {
                 serde_yaml::from_reader(reader).context("Failed to deserialize build file")
             })
+    }
+
+    pub fn from_git_path<P: AsRef<Path>>(path: P) -> Result<Self> {
+        match path
+            .as_ref()
+            .to_str()
+            .context("Path is not valid unicode")?
+            .split(':')
+            .collect::<Vec<_>>()[..]
+        {
+            [path] => Self::from_path(path),
+            [git_ref, path] => {
+                let repo =
+                    git2::Repository::discover(path).context("Failed to locate repo root")?;
+                let rev = format!("{git_ref}:{path}");
+                let blob = repo
+                    .revparse_single(&rev)
+                    .with_context(|| format!("Reference is invalid: {rev}"))?
+                    .into_blob()
+                    .ok()
+                    .context("Reference is not a file")?;
+                serde_yaml::from_slice(blob.content()).context("Unable to parse blob content")
+            }
+            _ => bail!("Unsupported path format: {:?}", path.as_ref()),
+        }
     }
 
     pub fn from_env() -> Result<Self> {
@@ -191,7 +238,7 @@ pub mod tests {
                         let test = TestData::new(&["io", stringify!($name)]);
                         let args = test.get_args();
                         let resolved_yaml = args
-                            .get_resolved_config()
+                            .resolve(args.get_config().expect("Failed to get config"))
                             .expect("Failed to resolve input build")
                             .into_config()
                             .yaml()
@@ -220,7 +267,7 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "parse", stringify!($name)]);
-                        assert!(test.get_args().get_resolved_config().is_err());
+                        assert!(test.get_args().get_config().is_err());
                     }
                 };
             }
@@ -238,7 +285,10 @@ pub mod tests {
                     #[test]
                     fn $name() {
                         let test = TestData::new(&["invalid", "resolve", stringify!($name)]);
-                        assert!(test.get_args().get_resolved_config().is_err());
+                        let args = test.get_args();
+                        assert!(args
+                            .resolve(args.get_config().expect("Failed to parse config"))
+                            .is_err());
                     }
                 };
             }

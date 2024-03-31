@@ -60,6 +60,9 @@ enum YurtAction {
         /// Type of hook to run
         hook: Hook,
     },
+
+    /// Diff resolved build against another resolved build
+    Diff { base: PathBuf },
 }
 
 #[derive(Parser, Debug)]
@@ -138,29 +141,37 @@ impl YurtArgs {
     fn get_config(&self) -> Result<Config> {
         if let Some(ref url) = self.file_url {
             Config::from_url(url)
-        } else if let Some(ref file) = self.file {
-            Config::from_path(file)
+        } else if let Some(ref path) = self.file {
+            Config::from_path(path)
         } else {
             Config::from_env()
         }
     }
 
-    fn get_resolved_config(&self) -> Result<ResolvedConfig> {
-        self.get_config()
-            .and_then(|config| config.resolve(self.get_context()))
-            .map(|resolved| {
-                resolved
-                    .filter(|unit, _| {
-                        self.include
-                            .as_ref()
-                            .map_or(true, |kinds| unit.included_in(kinds))
-                    })
-                    .filter(|unit, _| {
-                        self.exclude
-                            .as_ref()
-                            .map_or(true, |kinds| !unit.included_in(kinds))
-                    })
+    fn resolve(&self, config: Config) -> Result<ResolvedConfig> {
+        Ok(config
+            .resolve(self.get_context())
+            .context("Failed to resolve config")?
+            .filter(|unit, _| {
+                self.include
+                    .as_ref()
+                    .map_or(true, |kinds| unit.included_in(kinds))
             })
+            .filter(|unit, _| {
+                self.exclude
+                    .as_ref()
+                    .map_or(true, |kinds| !unit.included_in(kinds))
+            })
+            .filter(|unit, context| {
+                match &self.action {
+                    YurtAction::Show { hook, .. } => hook.as_ref(),
+                    YurtAction::Hook { ref hook } => Some(hook),
+                    YurtAction::Install { .. } => Some(&Hook::Install),
+                    YurtAction::Uninstall { .. } => Some(&Hook::Uninstall),
+                    YurtAction::Diff { .. } => None,
+                }
+                .map_or(true, |hook| unit.should_apply(context, hook))
+            }))
     }
 
     fn execute(&self) -> Result<()> {
@@ -172,76 +183,40 @@ impl YurtArgs {
                 let context = if raw {
                     self.get_context()
                 } else {
-                    self.get_resolved_config()?.context
+                    self.get_config()
+                        .and_then(|config| self.resolve(config))?
+                        .context
                 };
                 writeln!(io::stdout(), "{context:#?}").context("Failed to write context to stdout")
             }
             // $ yurt show
-            YurtAction::Show {
-                raw,
-                hook: ref hook_arg,
-                ..
-            } => {
+            YurtAction::Show { raw, .. } => {
                 let config = if raw {
                     self.get_config()?
                 } else {
-                    let resolved = self.get_resolved_config()?;
-                    if let Some(hook_arg) = hook_arg {
-                        resolved
-                            .filter(|unit, context| {
-                                let expect = matches!(hook_arg, Hook::Install);
-                                match hook_arg {
-                                    Hook::Install | Hook::Uninstall => match unit {
-                                        BuildUnit::Repo(repo) => repo.is_available() != expect,
-                                        BuildUnit::Link(link) => link.is_valid() != expect,
-                                        BuildUnit::Package(package) => {
-                                            package.is_installed(context) != expect
-                                        }
-                                        BuildUnit::PackageManager(manager) => {
-                                            manager.is_available() != expect
-                                        }
-                                        BuildUnit::Hook(hook) => hook.applies(hook_arg),
-                                    },
-                                    Hook::Custom(_) => match unit {
-                                        BuildUnit::Hook(hook) => hook.applies(hook_arg),
-                                        _ => false,
-                                    },
-                                }
-                            })
-                            .into_config()
-                    } else {
-                        resolved.into_config()
-                    }
+                    self.resolve(self.get_config()?)?.into_config()
                 };
                 writeln!(io::stdout(), "{}", config.yaml()?)
                     .context("Failed to write yaml to stdout")
             }
             // $ yurt install
-            YurtAction::Install { clean } => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, context| match unit {
-                    BuildUnit::Repo(repo) => repo.require().map(drop),
-                    BuildUnit::Link(link) => link.link(clean),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Install),
-                    BuildUnit::Package(package) => package.install(context),
-                    BuildUnit::PackageManager(manager) => manager.require(),
-                })
-            }),
+            YurtAction::Install { clean } => self
+                .resolve(self.get_config()?)?
+                .for_each_unit(|unit, context| unit.install(context, clean)),
             // $ yurt uninstall
-            YurtAction::Uninstall => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, context| match unit {
-                    BuildUnit::Link(link) => link.unlink(),
-                    BuildUnit::Hook(hook) => hook.exec_for(&Hook::Uninstall),
-                    BuildUnit::Package(package) => package.uninstall(context),
-                    _ => Ok(()),
-                })
-            }),
+            YurtAction::Uninstall => self
+                .resolve(self.get_config()?)?
+                .for_each_unit(BuildUnit::uninstall),
             // $ yurt hook
-            YurtAction::Hook { hook: ref arg } => self.get_resolved_config().and_then(|build| {
-                build.for_each_unit(|unit, _| match unit {
-                    BuildUnit::Hook(hook) => hook.exec_for(arg),
-                    _ => Ok(()),
-                })
-            }),
+            YurtAction::Hook { ref hook } => self
+                .resolve(self.get_config()?)?
+                .for_each_unit(|unit, _| unit.hook(hook)),
+            // $ yurt diff
+            YurtAction::Diff { ref base } => self //
+                .resolve(self.get_config()?)?
+                .for_each_unit_diff(&self.resolve(Config::from_git_path(base)?)?, |unit, _| {
+                    writeln!(io::stdout(), "{unit:#?}").context("Failed to write diff to stdout")
+                }),
         }
     }
 }

@@ -88,6 +88,49 @@ impl BuildUnit {
             Self::PackageManager(_) => BuildUnitKind::PackageManager,
         })
     }
+
+    pub fn should_apply(&self, context: &Context, hook: &Hook) -> bool {
+        let should_install = matches!(hook, Hook::Install);
+        match hook {
+            Hook::Install | Hook::Uninstall => match self {
+                Self::Repo(repo) => repo.is_available() != should_install,
+                Self::Link(link) => link.is_valid() != should_install,
+                Self::Package(package) => package.is_installed(context) != should_install,
+                Self::PackageManager(manager) => manager.is_available() != should_install,
+                Self::Hook(shell_hook) => shell_hook.applies(hook),
+            },
+            Hook::Custom(_) => match self {
+                Self::Hook(shell_hook) => shell_hook.applies(hook),
+                _ => false,
+            },
+        }
+    }
+
+    pub fn install(&self, context: &Context, clean: bool) -> Result<()> {
+        match self {
+            Self::Repo(repo) => repo.require().map(drop),
+            Self::Link(link) => link.link(clean),
+            Self::Hook(hook) => hook.exec_for(&Hook::Install),
+            Self::Package(package) => package.install(context),
+            Self::PackageManager(manager) => manager.require(),
+        }
+    }
+
+    pub fn uninstall(&self, context: &Context) -> Result<()> {
+        match self {
+            Self::Link(link) => link.unlink(),
+            Self::Hook(hook) => hook.exec_for(&Hook::Uninstall),
+            Self::Package(package) => package.uninstall(context),
+            _ => Ok(()),
+        }
+    }
+
+    pub fn hook(&self, hook: &Hook) -> Result<()> {
+        match self {
+            Self::Hook(shell_hook) => shell_hook.exec_for(hook),
+            _ => Ok(()),
+        }
+    }
 }
 
 /// Supported YAML build specifiers
