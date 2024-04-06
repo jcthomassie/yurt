@@ -69,10 +69,6 @@ enum YurtAction {
     ArgGroup::new("build_source")
         .args(["file", "file_url"])
 ))]
-#[command(group(
-    ArgGroup::new("filter")
-        .args(["include", "exclude"])
-))]
 pub struct YurtArgs {
     /// YAML build file path
     #[arg(long, short = 'f', value_name = "FILE")]
@@ -152,16 +148,18 @@ impl YurtArgs {
     fn get_resolved_config(&self) -> Result<ResolvedConfig> {
         self.get_config()
             .and_then(|config| config.resolve(self.get_context()))
-            .map(|resolved| match self {
-                Self {
-                    include: Some(units),
-                    ..
-                } => resolved.filter(|unit, _| unit.included_in(units)),
-                Self {
-                    exclude: Some(units),
-                    ..
-                } => resolved.filter(|unit, _| !unit.included_in(units)),
-                _ => resolved,
+            .map(|resolved| {
+                resolved
+                    .filter(|unit, _| {
+                        self.include
+                            .as_ref()
+                            .map_or(true, |kinds| unit.included_in(kinds))
+                    })
+                    .filter(|unit, _| {
+                        self.exclude
+                            .as_ref()
+                            .map_or(true, |kinds| !unit.included_in(kinds))
+                    })
             })
     }
 
