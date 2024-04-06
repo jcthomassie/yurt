@@ -14,7 +14,7 @@ enum Status {
     InvalidTarget(Error),
 }
 
-/// Symbolic link representation (`source` -> `target`)
+/// Symbolic link representation ([`source`][Self::source] -> [`target`][Self::target])
 #[doc = yaml_example_doc!("link.yaml")]
 #[derive(Debug, PartialEq, Deserialize, Serialize, Clone)]
 pub struct Link {

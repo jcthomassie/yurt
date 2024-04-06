@@ -17,11 +17,11 @@ use std::process::Command;
 pub struct Package {
     /// Primary identifier of the package
     name: String,
-    /// Subset of `!package_manager`s used to manage the package
+    /// Subset of [`!package_manager`][PackageManager] used to manage the package
     #[serde(default = "Vec::new")]
     #[serde(skip_serializing_if = "Vec::is_empty")]
     managers: Vec<String>,
-    /// Map of identifier overrides for certain `!package_manager`s
+    /// Map of identifier overrides for certain [`!package_manager`][PackageManager]
     #[serde(default = "IndexMap::new")]
     #[serde(skip_serializing_if = "IndexMap::is_empty")]
     aliases: IndexMap<String, String>,
@@ -96,18 +96,18 @@ impl ObjectKey for Package {
 #[doc = yaml_example_doc!("package_manager.yaml")]
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq)]
 pub struct PackageManager {
-    /// Identifier referenced from `!package`
+    /// Identifier referenced from [`!package`][Package]
     name: String,
     /// Command to self-install if unavailable
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_bootstrap: Option<ShellCommand>,
-    /// Command to install a `!package`
+    /// Command to install a [`!package`][Package]
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_install: Option<ShellCommand>,
-    /// Command to uninstall a `!package`
+    /// Command to uninstall a [`!package`][Package]
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_uninstall: Option<ShellCommand>,
-    /// Command to check if a `!package` is already installed
+    /// Command to check if a [`!package`][Package] is already installed
     #[serde(skip_serializing_if = "Option::is_none")]
     shell_has: Option<ShellCommand>,
 }
@@ -148,7 +148,7 @@ impl PackageManager {
             .with_context(|| format!("{}.{command_name} failed", self.name))
     }
 
-    /// Install `package` by running `shell_install`
+    /// Install `package` by running [`shell_install`][Self::shell_install]
     pub fn install(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_install, "shell_install", |command| {
             self.inject_package(command, package)
@@ -156,7 +156,7 @@ impl PackageManager {
         })
     }
 
-    /// Uninstall `package` by running `shell_uninstall`
+    /// Uninstall `package` by running [`shell_uninstall`][Self::shell_uninstall]
     pub fn uninstall(&self, package: &Package) -> Result<()> {
         self.command(&self.shell_uninstall, "shell_uninstall", |command| {
             self.inject_package(command, package)
@@ -164,7 +164,7 @@ impl PackageManager {
         })
     }
 
-    /// Check if `package` is installed by running `shell_has`
+    /// Check if `package` is installed by running [`shell_has`][Self::shell_has]
     pub fn has(&self, package: &Package) -> bool {
         self.command(&self.shell_has, "shell_has", |command| {
             self.inject_package(command, package)
@@ -176,7 +176,7 @@ impl PackageManager {
         })
     }
 
-    /// Install the package manager by running `shell_bootstrap`
+    /// Install the package manager by running [`shell_bootstrap`][Self::shell_bootstrap]
     pub fn bootstrap(&self) -> Result<()> {
         self.command(&self.shell_bootstrap, "shell_bootstrap", ShellCommand::exec)
     }

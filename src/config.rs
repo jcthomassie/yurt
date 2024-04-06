@@ -66,8 +66,8 @@ impl ResolvedConfig {
 /// Top level yurt build file YAML object.
 ///
 /// Order of build steps is preserved after resolution.
-/// Some build steps (such as [`!vars`](BuildSpec::Vars) and
-/// [`!package_manager`](BuildSpec::PackageManager)) modify the resolver state.
+/// Some build steps (such as [`!vars`][BuildSpec::Vars] and
+/// [`!package_manager`][BuildSpec::PackageManager] modify the resolver state.
 /// The order of build steps may change the resolved values.
 #[doc = yaml_example_doc!("config.yaml")]
 #[derive(Debug, Deserialize, Serialize)]

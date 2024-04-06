@@ -209,7 +209,7 @@ impl From<String> for Hook {
 #[doc = yaml_example_doc!("hook.yaml")]
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct ShellHook {
-    /// Set of [hooks](Hook) to run the command on
+    /// Set of [hooks][Hook] to run the command on
     on: Vec<Hook>,
     /// [`ShellCommand`] to run.
     exec: ShellCommand,

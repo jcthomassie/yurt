@@ -188,7 +188,7 @@ pub mod parse {
     pub trait ObjectKey {
         const OBJECT_NAME: &'static str;
 
-        /// Create a `Key::ObjectAttr` using `Self::OBJECT_NAME`
+        /// Create a [`Key::ObjectAttr`] using [`Self::OBJECT_NAME`]
         fn object_key<A>(attr: A) -> Key
         where
             A: Into<String>,
@@ -199,7 +199,7 @@ pub mod parse {
             }
         }
 
-        /// Create a `Key::ObjectInstanceAttr` using `Self::OBJECT_NAME`
+        /// Create a [`Key::ObjectInstanceAttr`] using [`ObjectKey::OBJECT_NAME`]
         fn object_instance_key<A, I>(attr: A, id: I) -> Key
         where
             A: Into<String>,
@@ -232,7 +232,7 @@ pub mod parse {
         }
 
         /// Get the last value for `key` from the stack.
-        /// Uses `Key::get()` as a fallback if unset.
+        /// Uses [`Key::value()`] as a fallback if unset.
         pub fn try_get(&self, key: &Key) -> Result<String> {
             self.get(key).map_or_else(|| key.value(), Ok)
         }
