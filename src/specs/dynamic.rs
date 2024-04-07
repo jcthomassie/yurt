@@ -13,13 +13,13 @@ use serde::{Deserialize, Serialize};
 enum Condition {
     /// Literal boolean
     Bool(bool),
-    /// `true` when [`!locale_spec`][LocaleSpec] matches local environment
+    /// `true` when [locale][LocaleSpec] matches local environment
     Locale(LocaleSpec),
-    /// `true` when [`!shell_command`][ShellCommand] exits successfully
+    /// `true` when [shell command][ShellCommand] exits successfully
     Eval(ShellCommand),
-    /// `true` when all inner [`conditions`][Condition] are `true`
+    /// `true` when all inner [conditions][Condition] are `true`
     All(Vec<Condition>),
-    /// `true` when any inner [`conditions`][Condition] are `true`
+    /// `true` when any inner [conditions][Condition] are `true`
     Any(Vec<Condition>),
     /// Equivalent to the negation of [`!any`][Condition::Any]
     Not(Vec<Condition>),
