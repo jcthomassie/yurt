@@ -94,13 +94,21 @@ impl BuildUnit {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildSpec {
+    /// [`!vars`][Vars]
     Vars(Vars),
+    /// [`!case`][Case<Vec<Self>>]
     Case(Case<Vec<Self>>),
+    /// [`!matrix`][Matrix<Vec<Self>>]
     Matrix(Matrix<Vec<Self>>),
+    /// [`!repo`][Repo]
     Repo(Repo),
+    /// [`!link`][Link]
     Link(Link),
+    /// [`!hook`][ShellHook]
     Hook(ShellHook),
+    /// [`!package`][Package]
     Package(Package),
+    /// [`!package_manager`][PackageManager]
     PackageManager(PackageManager),
 }
 
