@@ -69,7 +69,7 @@ impl BuildUnitInterface for Package {
                     style("installing with").dim(),
                     manager.name
                 ));
-                match manager.install(self, context) {
+                match manager.install_package(self, context) {
                     Ok(()) => return Ok(true),
                     Err(error) => context.write_error("Package", &self.name, error)?,
                 };
@@ -82,7 +82,7 @@ impl BuildUnitInterface for Package {
         let mut uninstalled = false;
         for manager in self.iter_managers(context) {
             if manager.has(self, context) {
-                manager.uninstall(self, context)?;
+                manager.uninstall_package(self, context)?;
                 uninstalled = true;
             }
         }
@@ -355,7 +355,7 @@ mod tests {
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
             package_manager
-                .install(&package, &Context::default())
+                .install_package(&package, &Context::default())
                 .unwrap_err();
         }
 
@@ -365,7 +365,7 @@ mod tests {
             let package_manager: PackageManager =
                 serde_yaml::from_str("name: arbitrary_manager").unwrap();
             package_manager
-                .uninstall(&package, &Context::default())
+                .uninstall_package(&package, &Context::default())
                 .unwrap_err();
         }
 
